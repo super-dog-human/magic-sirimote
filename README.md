@@ -6,7 +6,7 @@ Thank you to the open-source Siri Remote and LG webOS communities—especially [
 
 This repository shares a working, owner-tested implementation and the lessons behind it. Development combined hands-on testing by the owner with implementation and investigation assisted by OpenAI Codex.
 
-> **Read this before installing:** this is an experimental reference release for a tested **A1513 Siri Remote + LG G3** setup. The demo, tests, and package builder can run now. A fresh installation on somebody else's TV still requires device-specific pairing, identity, permission, and startup checks. There is **no universal one-click installer**, and rebuilding the published source is not the same as validating it on your TV. The guide below marks that boundary explicitly.
+> **Read this before installing:** this is an experimental reference release for a tested **A1513 Siri Remote + LG G3** setup. The package builder and developer tests can run now. A fresh installation on somebody else's TV still requires device-specific pairing, identity, permission, and startup checks. There is **no universal one-click installer**, and rebuilding the published source is not the same as validating it on your TV. The guide below marks that boundary explicitly.
 
 ## Contents
 
@@ -14,8 +14,8 @@ This repository shares a working, owner-tested implementation and the lessons be
 - [How the pieces fit together](#how-the-pieces-fit-together)
 - [Using the remote](#using-the-remote)
 - [Before you begin](#before-you-begin)
-- [Step 1: Try it without touching your TV](#step-1-try-it-without-touching-your-tv)
-- [Step 2: Set up developer access](#step-2-set-up-developer-access)
+- [Step 1: Set up developer access](#step-1-set-up-developer-access)
+- [Step 2: Establish Bluetooth pairing](#step-2-establish-bluetooth-pairing)
 - [Step 3: Identify and check your devices](#step-3-identify-and-check-your-devices)
 - [Step 4: Build packages for your setup](#step-4-build-packages-for-your-setup)
 - [Step 5: Install and start on a verified setup](#step-5-install-and-start-on-a-verified-setup)
@@ -137,54 +137,28 @@ You need:
 - A compatible LG webOS TV. Only the G3 configuration above has been validated here.
 - The original LG remote.
 - A computer for preparation, on the same network as the TV.
+- For the diagnostic setup path used during development: an **A1513-compatible DCSD Lightning diagnostic cable** providing access to the remote’s serial console. A normal USB-to-Lightning charging cable cannot substitute for it. See the distinction below before obtaining hardware.
 - A macOS or Linux development environment, Python 3.9+, Node.js 18+, and Git. The exported workflow was tested on macOS; Linux/WSL host setup has not been independently verified.
 - Clang with an ARM target to build the small native launchers. The builder defaults to `clang`; set `CLANG` if yours is elsewhere.
 - Developer access to your own TV and an understanding of the [porting checkpoints](docs/PORTING.md).
 
 The source targets a **32-bit ARM Linux input layout** and uses Python, Node, and webOS libraries already present on the tested TV. Having a newer or more expensive LG TV is not sufficient to establish compatibility.
 
-A normal charging cable is not the special diagnostic cable used during investigation. Daily operation needs neither cable. The public release does not contain a general-purpose diagnostic-cable programmer.
+### When is the diagnostic cable needed?
 
-## Step 1: Try it without touching your TV
+| Situation | Cable requirement / evidence |
+| --- | --- |
+| Everyday operation after setup | No cable; the remote talks directly to the TV |
+| Reusing an already working TV pairing and IR configuration | The input program has no cable dependency; existing settings may be preserved |
+| Reproducing the pairing repair used during development | A DCSD cable was used to select the TV on the remote and verify the stored peer |
+| Reading/restoring IR settings or checking sensor shutdown when Bluetooth stopped responding | The diagnostic console was used during development |
+| Setting up a different, previously unpaired remote from scratch | A cable-free procedure has **not** been validated; this public release does not yet provide a complete first-time pairing/programming tool |
 
-Download or clone this repository and open a terminal in its directory. All commands in this section run on your computer.
+The verified console used **115200 baud, 8 data bits, no parity, 1 stop bit, no flow control**. A serial port appearing on the computer is not enough: the remote must actually answer with its `DIAG>` prompt and correct identity/version. Compatibility of other cables sold as “DCSD” is not established by this project. Buying a cable alone does not complete the missing setup tooling.
 
-```sh
-python3 src/demo.py
-```
+Clone or download this repository and open a terminal in its directory before following the steps below.
 
-Expected output includes:
-
-```text
-MENU
-  TV action: settings
-Microphone
-  TV action: back
-TV
-  TV action: home
-Play/Pause
-  TV action: playpause
-```
-
-This uses the actual button decoder with made-up input packets. It does not connect to Bluetooth, change a TV, or transmit infrared. A held button generates one action, not a stream of repeated clicks.
-
-Run the host tests:
-
-```sh
-python3 src/check.py
-```
-
-The tests cover swipe/click behavior, pointer/selection transitions, key release, input-device validation, and the startup service's bookkeeping. They simulate device operations; passing them is **not** a hardware compatibility result.
-
-You can also build an example without entering any personal device information:
-
-```sh
-python3 src/build.py --config config.example.json --out build/example --example
-```
-
-This produces three `.ipk` packages, a manifest, and `SHA256SUMS`. **Do not install the example packages.** Their Bluetooth identities are deliberate placeholders.
-
-## Step 2: Set up developer access
+## Step 1: Set up developer access
 
 LG's official [Developer Mode guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app) describes the account, TV app, and network connection requirements. Its [CLI guide](https://webostv.developer.lge.com/develop/tools/cli-dev-guide) describes the commands used below. Follow those guides for your current tools and TV.
 
@@ -205,11 +179,36 @@ Credentials stay in your local developer tooling. Do not put your LG password, S
 
 **Developer Mode access is only the first step.** It does not guarantee that an installed native app can read the remote or write the TV's input devices. The working receiver ran under ordinary application accounts, but that observation is not a promise of root-free installation on every model or firmware. This repository does not install a root exploit or modify firmware.
 
+## Step 2: Establish Bluetooth pairing
+
+**Pairing belongs here: after developer access, before building and starting the input programs. Installing the three packages does not pair the remote.** Pairing tells the remote and TV that they belong together; reconnecting to a previously paired remote is a separate operation performed by the controller.
+
+If this exact remote already has a working pairing with this exact TV, preserve it and verify the identities in Step 3. Pairing with an Apple TV or a Mac does not satisfy this requirement.
+
+For an unpaired remote, this is currently a **missing general setup procedure**, not a step that can be completed by running an included installer. The project did successfully repair a registration between the tested A1513 and G3 using the following coordinated sequence:
+
+1. Connect the diagnostic cable and verify the remote's model, firmware, Bluetooth identity, and saved peer; independently verify the TV's Bluetooth adapter and the intended remote registration.
+2. In that repair, remove only the stale registration for the intended remote on the TV. This was specific to the mismatched existing registration, not a blanket instruction to unpair working devices.
+3. Start the TV's outgoing pairing request for that remote while using the remote's diagnostic console to select the measured TV adapter as its peer.
+4. Establish the HID input connection and send the known input-start request. Pairing and a connected link alone were insufficient in the tested repair: earlier attempts lost the remote's saved peer around a minute later.
+5. Verify both sides' identities and pairing state again after more than a minute. The initialized repair retained the peer through a 70-second observation. The cable remained attached for that check; later cable-free input tests were separate.
+
+This sequence records what worked on the owner's devices. It is **not a verified fresh-pairing recipe for every LG TV**. The original scripts were tied to those devices and their existing state; they are not shipped as a general pairing tool. A new setup needs that tool adapted and validated before proceeding. Do not assume that choosing the remote in an ordinary Bluetooth menu completes all these steps.
+
+```mermaid
+flowchart LR
+    C["Computer + diagnostic cable"] --> R["Remote: select the TV peer"]
+    T["TV: pair with the intended remote"] <--> R
+    T --> H["Establish HID and initialize input"]
+    H --> V["Verify both sides after more than a minute"]
+    V --> N["Proceed to device checks and package setup"]
+```
+
 ## Step 3: Identify and check your devices
 
-**This is the first device-specific checkpoint.** If you cannot establish these facts, stop here and use the source as a reference while investigating your model.
+**Check the remaining device-specific requirements here.** If you cannot establish these facts, stop here and use the source as a reference while investigating your model.
 
-The working setup already had the remote paired with the TV. This release does not automate first-time pairing. Pairing instructions for an Apple TV do not by themselves establish that the remote is paired with an LG TV.
+Complete the pairing checkpoint in Step 2 first. Record and verify the actual device identities; a successful build cannot establish them for you.
 
 Record the following locally:
 
@@ -228,7 +227,7 @@ See [PORTING.md](docs/PORTING.md) for the precise interfaces, ownership assumpti
 
 ```mermaid
 flowchart TD
-    A["Developer access works"] --> B["Remote is paired; model and identities known"]
+    A["Step 1: developer access works"] --> B["Step 2: TV pairing verified; identities known"]
     B --> C["Native app access and input devices verified"]
     C --> D{"All target assumptions match?"}
     D -->|Yes| E["Configure and build"]
@@ -324,7 +323,7 @@ These bytes describe the tested remote's stored configuration. They are **not** 
 
 A Bluetooth Home event and the stored IR Home entry can coexist. This release does not claim hardware-level short/long-press suppression across both routes; holding the TV button may produce Home before Power. The table describes the owner-accepted behavior, not a guarantee that a long press emits only Power.
 
-If your remote already controls volume and power correctly, preserve those settings. If it does not, read [IR.md](docs/IR.md) before adapting an IR programmer. The repository includes a pure packet encoder for inspection, **not** a universal IR-writing tool:
+If your remote already controls volume and power correctly, preserve those settings. During development, the diagnostic cable was used to read and restore IR settings; later power-hold adjustments were sent over Bluetooth. This does not establish a complete cable-free setup procedure. If your remote needs programming, read [IR.md](docs/IR.md) before adapting an IR programmer. The repository includes a pure packet encoder for inspection, **not** a universal IR-writing tool:
 
 ```sh
 python3 src/ir_packets.py
@@ -451,7 +450,6 @@ For removal, first disable/cancel the exact startup Activity through its creator
 
 ```text
 src/
-  demo.py               # Synthetic buttons; no hardware access
   check.py              # Host-only test runner
   build.py              # Configured three-package builder; no TV contact
   build_support.py      # Deterministic IPK archives and tiny ARM launchers
@@ -465,6 +463,8 @@ reviews/                # Public export verification results
 tests/                 # Input, layout, and publication regression tests
   scheduler/           # Startup service tests and synthetic fixtures
 ```
+
+Developers can run the regression suite with `python3 src/check.py`. It checks input decoding, navigation, lifecycle handling, and package construction using simulated device operations. It is a development check, not an installation step or proof of hardware compatibility.
 
 Start with these files if you want to understand or adapt the behavior:
 

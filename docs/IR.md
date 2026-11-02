@@ -40,7 +40,7 @@ These formats and timings describe this A1513 firmware, not every Siri Remote. D
 
 The private development tools bound every write to the particular remote, firmware, stopped-session evidence, and previous entry. Those device-specific mutation scripts are **not** published as a universal writer; removing their bindings would not create a reliable installer.
 
-A standard USB charging cable is not a diagnostic cable. If a future port needs diagnostic serial access, document the correct hardware and electrical interface separately rather than assuming any Lightning cable will work.
+The accepted development setup used a DCSD Lightning diagnostic cable for remote-side reads, sensor-stop checks when Bluetooth was unavailable, and restoration of the known volume entries. Later power-hold adjustments were sent over Bluetooth. These are distinct access paths: the wireless report bytes above are not commands to paste into the UART console. The successful UART connection used 115200 baud, 8N1, and no flow control. A standard charging cable cannot substitute for diagnostic serial access. The public release includes neither a general UART programmer nor a validated cable-free first-time setup procedure; see [Before you begin](../README.md#before-you-begin).
 
 ## Timing and two routes for Home
 

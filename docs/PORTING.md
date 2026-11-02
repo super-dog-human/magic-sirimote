@@ -4,7 +4,6 @@ This document distinguishes the successful private installation from what a new 
 
 ## What is reproducible now
 
-- Run the actual button decoder against synthetic packets.
 - Run the input and scheduler host tests.
 - Build all three IPKs without any files from the author's computer.
 - Substitute device identities and three measured role UIDs during the build.
@@ -27,7 +26,7 @@ The public export:
 3. Replaces machine-specific build dependencies with local `build_support.py` and a single three-package builder.
 4. Regenerates controller and receiver hash pins together.
 5. Defaults Developer Mode maintenance to disabled through `expiry-policy.js`. The original scheduler's extension implementation is retained behind that explicit policy.
-6. Adds a local demo, configuration validation, packet inspection, environment metadata tool, and publication tests.
+6. Adds configuration validation, packet inspection, an environment metadata tool, and publication tests.
 7. Updates outdated docstrings and removes obsolete experiment-specific repair paths. The cleaned source builds controller/receiver **0.9.72** and scheduler **0.0.65**.
 8. Moves scheduler tests into `tests/scheduler`, removes the duplicate session-policy helper, and extracts the unchanged active HID helpers from the old standalone experiment into `hid_input.py`.
 9. Requires an explicit `runtime-files.json` inventory and checks that all runtime modules are reachable through imports from the two native entrypoints. Package pins are generated, not stored as stale source.
@@ -70,7 +69,7 @@ The public builder preserves these declared access-control groups:
 
 These declarations do not guarantee access to every internal operation on every firmware. A command that works in a developer SSH session may fail in an app, and the reverse can also happen. Validate under the actual native app identity. Do not impersonate a system service.
 
-The runtime uses the existing Bluetooth service for status, connection management, notification configuration, input activation and sensor-mode reads/writes. Pairing is a prerequisite; this export does not call a generic pairing wizard.
+The runtime uses the existing Bluetooth service for status, connection management, notification configuration, input activation and sensor-mode reads/writes. Pairing is a prerequisite; this export does not call a generic pairing wizard. See [README Step 2](../README.md#step-2-establish-bluetooth-pairing) for the observed DCSD-assisted registration repair and its limits. This work used an outgoing TV pairing request, remote-side peer selection through the diagnostic console, an HID connection, and input initialization; it was not just a Bluetooth menu selection. A fresh pairing workflow and a cable-free first-time setup remain unvalidated.
 
 ### Initial account and device inventory
 
