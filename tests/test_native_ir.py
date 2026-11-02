@@ -155,6 +155,57 @@ class InfraredTest(unittest.TestCase):
         self.assertEqual(app.code, '08')
         self.assertFalse(app.done)
 
+    def test_all_buttons_and_press_types_send_only_the_selected_entry(self):
+        expected = [('TV / Home', 1), ('Volume +', 2), ('Volume -', 4),
+                    ('Play / Pause', 8), ('Microphone', 16), ('MENU', 32),
+                    ('Surface click', 128)]
+        self.assertEqual(list(ir.BUTTONS), expected)
+        for index, (name, mask) in enumerate(expected):
+            for press, delay in ((0, 0), (1, 2)):
+                for action, control in (('set', 3), ('delete', 4)):
+                    with self.subTest(button=name, delay=delay, action=action):
+                        tv = TV()
+                        def submit(state, action, button, delay, code):
+                            return ir.program(VALUES, action, button, delay, code,
+                                              tv, lambda record: None, idle=lambda: None)
+                        app = InfraredScreen(Path('/unused'), submit=submit)
+                        app.choose(0); app.choose(index)
+                        app.choose(1); app.choose(press)
+                        app.choose(2); app.choose(0)  # Power on/off, 08.
+                        self.assertEqual(tv.calls, [])
+                        app.choose(control)
+                        self.assertEqual(tv.calls, [])
+                        app.choose(1)
+                        result = app.results.get(timeout=2)
+                        self.assertEqual(result['status'], 'submitted')
+                        wire = ([240, 1, mask, delay, 1, 0, 0, 0, 0, 0, 32, 223, 16, 239]
+                                if action == 'set' else [240, 2, mask, delay])
+                        self.assertEqual(tv.writes(), [wire])
+
+    def test_button_and_press_picker_navigation_and_cancel(self):
+        app = InfraredScreen(Path('/unused'))
+        app.choose(0)
+        app.handle(('key', 1073741905))  # Down one row in a two-column list.
+        self.assertEqual(app.focus, 2)
+        app.handle(('key', 13))
+        self.assertEqual(app.button, 2)
+        app.choose(0)
+        self.assertEqual(app.focus, 2)
+        app.handle(('key', 27))
+        self.assertEqual(app.button, 2)
+        self.assertIsNone(app.selecting)
+        self.assertFalse(app.done)
+        app.choose(1)
+        app.handle(('key', 1073741905))
+        app.handle(('key', 13))
+        self.assertEqual(app.delay, 2)
+        app.choose(1)
+        self.assertEqual(app.focus, 1)
+        app.choose(2)  # Explicit Cancel.
+        self.assertEqual(app.delay, 2)
+        self.assertEqual(app.focus, 1)
+        self.assertIsNone(app.selecting)
+
     def test_confirm_runs_once_and_busy_ignores_repeated_input(self):
         import threading
         entered = threading.Event(); release = threading.Event(); calls = []

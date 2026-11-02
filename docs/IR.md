@@ -3,7 +3,7 @@
 The A1513 can store IR commands and transmit them without the TV's Bluetooth input program. This is how the tested setup handles volume and power, including powering the TV on while the receiver program is not processing input.
 
 The [native setup app](NATIVE_APP.md) includes an **Infrared** screen with explicit
-**Set (IR)** and **Delete (IR)** actions. Version 0.2.1 has passed offline transaction and UI
+**Set (IR)** and **Delete (IR)** actions. Version 0.2.2 has passed offline transaction and UI
 tests; the new screen and its native Bluetooth transport still need hardware
 validation. Installing or opening the app never programs the remote.
 
@@ -15,8 +15,12 @@ validation. Installing or opening the app never programs the remote.
    deployment procedure. The screen refuses to operate while another project
    app is running or the remote's motion sensors are active. It does not stop
    an existing installation for you. Use the original LG remote for setup.
-3. Open **Infrared**. Select the physical button and **Immediate (00)** or
-   **Hold about 0.7 seconds (02)**. These are separate stored entries.
+3. Open **Infrared**, select **Button (IR)** and choose a physical button
+   from the list: TV / Home, Volume +, Volume −, Play / Pause, Microphone,
+   MENU, or Surface click. All seven buttons have the same Set/Delete options.
+   Select **Press** and choose **Normal press (immediate)** or
+   **Long press (about 0.7 seconds)**. These are separate stored entries;
+   selecting or cancelling either list does not send a request.
 4. Select **Action** and choose a named action such as **Power on/off (IR)**
    or **Back (IR)**. Alternatively, choose **Enter code directly (IR)** and
    enter exactly two hexadecimal digits (`00`–`FF`) using the on-screen keys,
@@ -27,6 +31,18 @@ validation. Installing or opening the app never programs the remote.
 6. Test the button physically. A TV service acknowledgement is shown as
    **Request sent**, not proof that the remote saved the entry. An interrupted
    or missing acknowledgement is shown as unknown and never retried automatically.
+
+**Normal press is immediate, not “short press only.”** If both normal and
+long-press entries are set, holding a button can send the normal command first
+and the long-press command later. To make a button send only a long-press IR
+command, delete its normal-press IR entry separately. This does not remove any
+Bluetooth action. The two choices use firmware selectors `00` and `02`;
+the app does not offer arbitrary hold times.
+
+The editor supports all seven button selectors and both press types; this does
+not mean every combination has been tested on hardware. Surface click means
+physically pressing the touch surface. Touching or swiping is not an IR button
+entry, and this screen does not remap those gestures.
 
 The named choices are Power on/off (`08`), Back (`28`), Home (`7C`),
 Settings (`43`), Volume + (`02`), Volume − (`03`), Mute (`09`), Play (`B0`)

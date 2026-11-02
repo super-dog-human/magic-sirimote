@@ -5,6 +5,7 @@ from ir_programmer import BUTTONS, execute, packet
 
 ARROWS = {1073741906: -1, 1073741905: 1, 1073741904: -1, 1073741903: 1}
 BACK = (27, 461, 1073742094)
+PRESS_TYPES = (('Normal press (immediate)', 0), ('Long press (about 0.7 seconds)', 2))
 # LG command bytes, not factory defaults or a readback from the remote.
 PRESETS = (('Power on/off', '08'), ('Back', '28'), ('Home', '7C'),
            ('Settings', '43'), ('Volume +', '02'), ('Volume -', '03'),
@@ -23,6 +24,7 @@ class InfraredScreen:
         self.code = ''
         self.editing = False
         self.picking = False
+        self.selecting = None
         self.draft = ''
         self.review = None
         self.busy = self.done = False
@@ -73,6 +75,16 @@ class InfraredScreen:
                 self.results.put(value)
             threading.Thread(target=work, name='infrared-configuration', daemon=False).start()
             return
+        if self.selecting:
+            options = BUTTONS if self.selecting == 'button' else PRESS_TYPES
+            target = 0 if self.selecting == 'button' else 1
+            if 0 <= index < len(options):
+                if self.selecting == 'button':
+                    self.button = index
+                else:
+                    self.delay = options[index][1]
+            self.selecting = None; self.focus = target
+            return
         if self.picking:
             if index < len(PRESETS):
                 self.code = PRESETS[index][1]
@@ -97,9 +109,10 @@ class InfraredScreen:
                 self.draft += key[index]
             return
         if index == 0:
-            self.button = (self.button + 1) % len(BUTTONS)
+            self.selecting = 'button'; self.focus = self.button
         elif index == 1:
-            self.delay = 2 if self.delay == 0 else 0
+            self.selecting = 'press'
+            self.focus = next(i for i, (_, value) in enumerate(PRESS_TYPES) if value == self.delay)
         elif index == 2:
             self.picking = True; self.focus = 0
         elif index in (3, 4):
@@ -120,6 +133,9 @@ class InfraredScreen:
         if kind == 'close' or kind == 'key' and value in BACK:
             if self.review is not None:
                 self.review = None; self.focus = 5
+            elif self.selecting:
+                self.focus = 0 if self.selecting == 'button' else 1
+                self.selecting = None
             elif self.editing:
                 self.editing = False; self.picking = True; self.focus = len(PRESETS)
             elif self.picking:
@@ -127,9 +143,12 @@ class InfraredScreen:
             else:
                 self.done = True
         elif kind == 'key' and value in ARROWS:
-            count = 2 if self.review else len(PRESETS)+2 if self.picking else 18 if self.editing else 6
+            if self.selecting:
+                count = len(BUTTONS if self.selecting == 'button' else PRESS_TYPES) + 1
+            else:
+                count = 2 if self.review else len(PRESETS)+2 if self.picking else 18 if self.editing else 6
             step = ARROWS[value]
-            if self.picking and value in (1073741906, 1073741905):
+            if (self.picking or self.selecting == 'button') and value in (1073741906, 1073741905):
                 step *= 2
             self.focus = (self.focus + step) % count
         elif kind == 'key' and value in (13, 1073741912):
@@ -152,7 +171,7 @@ class InfraredScreen:
             canvas.rectangle(bounds, (30, 113, 156) if self.focus == index else (36, 48, 65))
             canvas.text(title, bounds[0]+18, bounds[1]+14, 25, max_width=bounds[2]-36)
             self.boxes.append((index, bounds))
-        press = 'Immediate (00)' if self.delay == 0 else 'Hold about 0.7 seconds (02)'
+        press = next(label for label, value in PRESS_TYPES if value == self.delay)
         if self.busy:
             canvas.text('Working...', 66, 240, 32)
         elif self.review:
@@ -162,6 +181,18 @@ class InfraredScreen:
             canvas.text('Deleting does not restore an earlier assignment. Bluetooth mapping is unchanged.', 66, 347, 22)
             button(0, 'Cancel', (64, 420, 552, 64))
             button(1, 'Set (IR)' if self.review == 'set' else 'Delete (IR)', (640, 420, 552, 64))
+        elif self.selecting == 'button':
+            canvas.text('Choose a physical button (IR)', 66, 146, 27)
+            for i, title in enumerate([name + ' (IR)' for name, _ in BUTTONS] + ['Cancel']):
+                row, column = divmod(i, 2)
+                button(i, title, (64+column*580, 200+row*77, 564, 64))
+            canvas.text('All seven physical buttons, including the surface click. Swipes are gestures.', 66, 530, 21)
+        elif self.selecting == 'press':
+            canvas.text('Choose a press type (IR)', 66, 146, 27)
+            for i, title in enumerate([label for label, _ in PRESS_TYPES] + ['Cancel']):
+                button(i, title, (64, 200+i*77, 1152, 64))
+            canvas.text('Normal press sends immediately, even when you keep holding the button.', 66, 468, 22)
+            canvas.text('If both entries are set, a long press can send both commands.', 66, 510, 22)
         elif self.picking:
             canvas.text('Choose an action (IR)', 66, 146, 27)
             options = [name + ' (IR) - ' + code for name, code in PRESETS] + ['Enter code directly (IR)', 'Cancel']

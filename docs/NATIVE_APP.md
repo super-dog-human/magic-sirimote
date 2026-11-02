@@ -4,9 +4,9 @@ The single-app version is being developed as a **native webOS application**, wit
 
 ## Try the setup preview
 
-[Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.2.1_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
+[Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.2.2_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
 
-This package contains a native settings screen, a remote-friendly character picker, settings validation and a non-mutating input-access check. It contains **no device addresses or serial numbers**. Saving settings changes only this app's saved configuration. It does not pair a remote, start remote control or register automatic startup. The **Infrared** screen offers named LG actions and direct two-digit code entry, and can explicitly set or delete one stored assignment; it never writes automatically. The new IR integration is not yet hardware-validated.
+This package contains a native settings screen, a remote-friendly character picker, settings validation and a non-mutating input-access check. It contains **no device addresses or serial numbers**. Saving settings changes only this app's saved configuration. It does not pair a remote, start remote control or register automatic startup. The **Infrared** screen provides a list of all seven physical buttons and separate normal/long-press selectors. It offers named LG actions and direct two-digit code entry, and can explicitly set or delete one stored assignment; it never writes automatically. The new IR integration is not yet hardware-validated.
 
 The preview requires the same tested G3 environment, including the TV's 32-bit Python 3.10+ interpreter, SDL2 and SDL_ttf. It uses a font already installed on the TV. These dependencies are not bundled. Other TV models remain unverified.
 
@@ -14,7 +14,7 @@ The preview requires the same tested G3 environment, including the TV's 32-bit P
 2. Install the IPK, replacing `my-tv` with the device name registered in your LG CLI:
 
    ```sh
-   ares-install -d my-tv releases/native-preview/org.magicsirimote.app_0.2.1_arm.ipk
+   ares-install -d my-tv releases/native-preview/org.magicsirimote.app_0.2.2_arm.ipk
    ares-launch -d my-tv org.magicsirimote.app
    ```
 
