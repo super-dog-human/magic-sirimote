@@ -4,7 +4,7 @@
   "schedulerPythonTests": 10,
   "schedulerJavascriptTestFiles": 22,
   "mermaidDiagramsSyntaxValidated": 9,
-  "localMarkdownLinksAndAnchorsValidated": 55,
+  "localMarkdownLinksAndAnchorsValidated": 56,
   "reproduciblePackageBuild": true,
   "packageHashesAndPinsChecked": true,
   "publicPackagesInstalledOnTV": false,

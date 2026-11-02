@@ -8,7 +8,7 @@ Host checks were run on macOS. Hardware validation of the public package version
 - Two independent builds produced identical bytes for all three IPKs. Archive paths, file hashes, cross-package pins, ARM ELF headers, compiled Python payloads, and the disabled maintenance policy were checked.
 - The pure IR packet encoder ran locally without device access.
 - All nine README Mermaid diagrams passed the Mermaid 11 parser. This was a syntax check, not a GitHub screenshot/render comparison.
-- 55 local Markdown links/anchors were checked, including the pre-existing root LICENSE at the destination repository.
+- 56 local Markdown links/anchors were checked, including the pre-existing root LICENSE at the destination repository.
 - Python source compiled; an export scan found no original device addresses/serial, local home-directory paths, or private-key markers. No live runtime state, authentication receipts, recordings, keys, or firmware was included.
 
 ## Runtime checks

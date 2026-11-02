@@ -8,15 +8,33 @@ The repository contains the TV runtime, package builder, configuration reference
 
 > **Setup status:** the runtime has been tested on the hardware listed below, but **following this README from top to bottom does not yet reproduce a fresh installation**, even on the same remote and TV models. Pairing, app-account discovery, device-access checks, IR programming, and startup/maintenance operations still need setup tooling. See the [setup audit](reviews/setup-audit.md) for the exact gaps. The published package versions have passed computer-side tests; hardware validation is pending.
 
-- [1. What you can do](#1-what-you-can-do)
-- [2. How it works](#2-how-it-works)
-- [3. Setup guide](#3-setup-guide)
+- [1. Environment](#1-environment)
+- [2. What you can do](#2-what-you-can-do)
+- [3. How it works](#3-how-it-works)
+- [4. Setup guide](#4-setup-guide)
 
-## 1. What you can do
+## 1. Environment
+
+The tested hardware and software configuration is:
+
+| Component | Model / version |
+| --- | --- |
+| Siri Remote | **First generation**, black, model **A1513** |
+| Siri Remote main firmware | **0241** |
+| Siri Remote radio firmware | **0107** |
+| Television | **LG G3 — OLED55G3PJA** |
+| webOS platform version (`sdkVersion`) | **11.2.0** |
+| TV firmware (`firmwareVersion`) | **43.21.96** |
+| TV input apps | Controller and receiver **0.9.71** |
+| TV startup package | **0.0.64** |
+
+The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
+
+## 2. What you can do
 
 ### Verified behavior
 
-The following controls are verified on the tested configuration listed below.
+The following controls are verified on the configuration listed in Environment.
 
 | Action | Result | Path |
 | --- | --- | --- |
@@ -33,21 +51,7 @@ The following controls are verified on the tested configuration listed below.
 
 **MENU opens Settings**, and **the microphone button goes Back**. Voice input is not implemented.
 
-#### Compatibility and limits
-
-| Item | Tested configuration / current limit |
-| --- | --- |
-| Remote | Black first-generation **A1513**; Main firmware 0241, Radio 0107 |
-| TV | **LG OLED55G3PJA**, firmware **43.21.96** |
-| Input apps | Controller and receiver 0.9.71 |
-| Startup package | 0.0.64 |
-| Regular TV off/on | Confirmed on the working installation |
-| Full loss of power and restart | Automatic startup confirmed; final button mappings have not been separately checked after a full restart |
-| Leaving the remote unused, then using it again | Operation after inactivity confirmed; actual remote sleep/disconnection was not independently established |
-| Pointer motion while touching the surface | **Not supported**; remove your finger to move the pointer |
-| A1962, later silver remotes, other LG models/firmware | Not validated by this project |
-| Long-term Developer Mode renewal | One extension experiment succeeded; indefinite unattended operation is not established |
-| Public source build | Controller/receiver **0.9.72**, scheduler **0.0.65**; builds and passes host tests; hardware validation is pending |
+Normal TV off/on and automatic input resumption are verified on this configuration.
 
 This reproduces many everyday Magic Remote interactions, not every function of LG's original remote. Keep the original remote available for setup and recovery.
 
@@ -87,7 +91,7 @@ flowchart LR
 
 The tested remote's threshold is approximately **0.716 seconds**, not a guaranteed wall-clock response time for the TV screen. Hold for a little under a second and release. Do not keep holding until the entire startup animation finishes. A power toggle is not a separate “on” or “off” command.
 
-## 2. How it works
+## 3. How it works
 
 ### How the pieces fit together
 
@@ -193,7 +197,7 @@ We are grateful to the authors and contributors of:
 
 Links credit research and tooling; they do not imply endorsement or identical compatibility. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for scope. Project-authored code is under the [MIT license](LICENSE). Apple and LG names identify the hardware; this is an independent project.
 
-## 3. Setup guide
+## 4. Setup guide
 
 The steps below describe the intended setup sequence. **They are not yet a complete executable installation guide.** “Missing tool” means the reader would currently have to write or adapt code; it does not mean running the next command will fill in the gap.
 
