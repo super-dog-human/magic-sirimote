@@ -1,6 +1,6 @@
 {
   "baseline": "controller/receiver 0.9.71; scheduler 0.0.64",
-  "inputAndPublicationPythonTests": 100,
+  "inputAndPublicationPythonTests": 109,
   "schedulerPythonTests": 10,
   "schedulerJavascriptTestFiles": 22,
   "mermaidDiagramsSyntaxValidated": 8,
@@ -9,12 +9,17 @@
   "packageHashesAndPinsChecked": true,
   "publicPackagesInstalledOnTV": false,
   "privateDataScan": "No original device address/serial, local home path or private-key marker found in exported text. Live state, keys, logs and binaries not exported.",
-  "publicBuild": "controller/receiver 0.9.74; scheduler 0.0.67",
+  "publicBuild": "controller/receiver 0.9.78; scheduler 0.0.71",
   "retiredRequestGuardsTested": true,
   "dependencyInventoryVerified": true,
   "freshInstallWorkflowComplete": false,
   "cleanGitExportHostChecksPassed": true,
   "interruptedLaunchRecoveryTests": 13,
   "hardwareRecoveryBuild": "controller/receiver 0.9.73; scheduler 0.0.66",
-  "longPowerOffRetestPending": true
+  "longPowerOffRetestPending": true,
+  "outputStartupTests": 9,
+  "hardwareOutputStartupBuild": "controller/receiver 0.9.77; scheduler 0.0.70",
+  "outputStartupColdBootRetestPending": true,
+  "outputStartupNormalControlsVerified": true,
+  "initialPointerCalibrationDelayRemains": true
 }

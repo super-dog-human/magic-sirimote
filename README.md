@@ -354,9 +354,9 @@ The output contains:
 
 | Package | Role |
 | --- | --- |
-| `org.codex.siriremote.autocoord20261029v_0.9.74_arm.ipk` | Connection controller |
-| `org.codex.siriremote.hidgattrouterb20261029u_0.9.74_arm.ipk` | Input receiver |
-| `org.codex.siriremote.v20scheduler20261031a_0.0.67_arm.ipk` | Startup app and service |
+| `org.codex.siriremote.autocoord20261029v_0.9.78_arm.ipk` | Connection controller |
+| `org.codex.siriremote.hidgattrouterb20261029u_0.9.78_arm.ipk` | Input receiver |
+| `org.codex.siriremote.v20scheduler20261031a_0.0.71_arm.ipk` | Startup app and service |
 
 The long internal package names are retained for compatibility with the tested implementation. Do not rename just one package: the components verify one another's identities and file hashes.
 
@@ -371,9 +371,9 @@ Before updating an existing installation, stop its input session cooperatively a
 On a prepared, verified TV, the package installation commands are:
 
 ```sh
-ares-install --device my-tv build/my-tv/org.codex.siriremote.autocoord20261029v_0.9.74_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.hidgattrouterb20261029u_0.9.74_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.v20scheduler20261031a_0.0.67_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.autocoord20261029v_0.9.78_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.hidgattrouterb20261029u_0.9.78_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.v20scheduler20261031a_0.0.71_arm.ipk
 ```
 
 Then:

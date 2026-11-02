@@ -82,8 +82,11 @@ def run_connected_once(*,watch,lease,paired_check,external_feature_guard,record,
    out={**out,'outputCounts':{k:summary[k] for k in ('keyFrameWrites','clickFrameWrites','motionFrameWrites')},'readStats':receive_stats}
  except Exception as exc:
   code=diagnostic_code(exc)
-  if code.startswith('other-'):code='setup-'+stage
-  out={'status':'attention','reason':'setup-'+type(exc).__name__,'diagnostic':code}
+  if stage=='open-outputs':
+   from output_devices import failure_code
+   code=failure_code(exc)
+  elif code.startswith('other-'):code='setup-'+stage
+  out={'status':'attention','reason':'setup-'+type(exc).__name__,'diagnostic':code,'errorType':type(exc).__name__}
  finally:
   if system_fd is not None:
    try:

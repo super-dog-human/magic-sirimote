@@ -8,6 +8,8 @@ KEY_NAME='LGE RCU'
 MOUSE_NAME='ClickableMouse'
 MAX_EVENT_NODES=128
 KEY_BYTES=96
+class OutputCloseError(RuntimeError):
+ pass
 def _ioc(d,t,n,s):return (d<<30)|(s<<16)|(ord(t)<<8)|n
 def _ior(n,s):return _ioc(2,'E',n,s)
 EV_NAME=lambda size:_ior(0x06,size)
@@ -32,7 +34,7 @@ def _matches(c):
           all(has_capability(c['relative'],n) for n in (0,1)) and
           has_capability(c['keys'],BTN_LEFT))
  return False
-def open_verified_outputs(root='/dev/input',*,lstat_fn=os.lstat,open_fn=os.open,fstat_fn=os.fstat,ioctl_fn=fcntl.ioctl,close_fn=os.close,clock=time.monotonic,timeout=20):
+def _open_verified_outputs_once(root='/dev/input',*,lstat_fn=os.lstat,open_fn=os.open,fstat_fn=os.fstat,ioctl_fn=fcntl.ioctl,close_fn=os.close,clock=time.monotonic,timeout=20):
  deadline=clock()+timeout
  candidates={KEY_NAME:[],MOUSE_NAME:[]};errors={};complete=True;unavailable_event_slots=0
  for i in range(MAX_EVENT_NODES):
@@ -71,7 +73,7 @@ def open_verified_outputs(root='/dev/input',*,lstat_fn=os.lstat,open_fn=os.open,
   finally:
    if fd is not None:
     try:close_fn(fd)
-    except BaseException:complete=False
+    except BaseException:raise OutputCloseError('output-descriptor-close-unconfirmed')
  if not complete or len(candidates[KEY_NAME])!=1 or len(candidates[MOUSE_NAME])!=1:
   raise RuntimeError('output-node-inventory-incomplete-or-nonunique:'+str({'complete':complete,'counts':{k:len(v) for k,v in candidates.items()},'errors':errors,'unavailableEventSlots':unavailable_event_slots}))
  opened=[]
@@ -93,7 +95,53 @@ def open_verified_outputs(root='/dev/input',*,lstat_fn=os.lstat,open_fn=os.open,
   outputs=VerifiedOutputs(opened[0],opened[1],ioctl_fn=ioctl_fn)
   return outputs,records,{'candidateCounts':{k:len(v) for k,v in candidates.items()},'inventoryComplete':True,'errors':errors,'unavailableEventSlots':unavailable_event_slots}
  except BaseException:
+  close_failed=False
   for fd in reversed(opened):
    try:close_fn(fd)
-   except BaseException:pass
+   except BaseException:close_failed=True
+  if close_failed:raise OutputCloseError('output-descriptor-close-unconfirmed')
   raise
+
+
+def open_verified_outputs(root='/dev/input',*,allow_retry=None,wait=time.sleep,
+                          clock=time.monotonic,timeout=20,retry_window=12,
+                          attempt_fn=None,**kwargs):
+ """Re-check startup readiness without sending any input events.
+
+ Every attempt performs the complete inventory and identity validation again.
+ Retry only with a live connection/lease guard and confirmed descriptor cleanup.
+ Both the attempt count and elapsed window are bounded; stop interrupts waiting.
+ """
+ if allow_retry is not None and not callable(allow_retry):raise ValueError('invalid output retry guard')
+ if not 0<retry_window<=20:raise ValueError('invalid output retry window')
+ attempt=attempt_fn or _open_verified_outputs_once
+ started=clock();deadline=started+retry_window;previous=started
+ for index in range(13):
+  if allow_retry is not None and allow_retry() is not True:raise RuntimeError('output-startup-guard-lost')
+  try:return attempt(root,clock=clock,timeout=min(timeout,max(.01,deadline-clock())) if allow_retry is not None else timeout,**kwargs)
+  except OutputCloseError:raise
+  except (OSError,RuntimeError) as exc:
+   now=clock()
+   if allow_retry is None or index==12 or now<previous or now>=deadline or allow_retry() is not True:raise
+   previous=now
+   wait(min(1.,deadline-now))
+   now=clock()
+   if now<previous or now>=deadline or allow_retry() is not True:raise exc
+   previous=now
+
+
+def failure_code(exc):
+ """Fixed metadata only; no raw exception text is persisted."""
+ if isinstance(exc,OutputCloseError):return 'output-open-close'
+ if isinstance(exc,TimeoutError):return 'output-open-timeout'
+ if isinstance(exc,OSError):
+  if exc.errno in (errno.EACCES,errno.EPERM):return 'output-open-permission'
+  if exc.errno in (errno.ENOENT,errno.ENODEV,errno.ENXIO):return 'output-open-unavailable'
+  return 'output-open-io'
+ text=str(exc)
+ if text.startswith('output-node-inventory-incomplete-or-nonunique:'):return 'output-open-inventory'
+ if text.startswith('output-node-changed-on-rw-reopen:'):return 'output-open-changed'
+ if text=='Builtin-key-already-held':return 'output-open-key-held'
+ if text=='ClickableMouse-BTN_LEFT-already-held':return 'output-open-mouse-held'
+ if text=='output-startup-guard-lost':return 'output-open-guard'
+ return 'output-open-other'
