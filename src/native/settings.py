@@ -1,4 +1,4 @@
-"""Editable device identities for the native setup application.
+"""Editable device identities and cursor preference for the native setup application.
 
 This stores application settings only. It never pairs devices, changes the
 remote's memory, or enables the input runtime.
@@ -18,9 +18,12 @@ NAME = re.compile(r'[A-Za-z0-9_-]{1,64}\Z')
 
 
 def validate(values):
-    if type(values) is not dict or set(values) != {'schema', *FIELDS} or type(values['schema']) is not int or values['schema'] != 1:
+    if type(values) is not dict or set(values) not in ({'schema', *FIELDS}, {'schema', *FIELDS, 'gyroEnabled'}) or type(values['schema']) is not int or values['schema'] != 1:
         raise ValueError('Unsupported settings format.')
     result = dict(values)
+    result.setdefault('gyroEnabled', True)
+    if type(result['gyroEnabled']) is not bool:
+        raise ValueError('Gyro cursor must be On or Off.')
     for key in ('remoteAddress', 'adapterAddress'):
         raw = values[key]
         if type(raw) is not str:

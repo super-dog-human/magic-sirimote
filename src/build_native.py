@@ -8,7 +8,7 @@ import build_support
 
 ROOT = Path(__file__).resolve().parent
 APP = 'org.magicsirimote.app'
-VERSION = '0.2.3'
+VERSION = '0.2.4'
 SOURCES = ('entry.py', 'settings.py', 'graphics.py', 'device_check.py',
            'ir_screen.py', 'ir_programmer.py', 'native_luna.py', 'tv_assignments.py')
 
@@ -45,6 +45,7 @@ def build(output):
     manifest = {'schema': 1, 'purpose': 'native-setup-infrared',
                 'controlsRemote': False, 'pairsRemote': False, 'programsInfrared': True,
                 'savesTVAssignments': True, 'activatesTVAssignments': False,
+                'savesGyroPreference': True, 'appliesGyroPreference': False,
                 'automaticInfraredWrites': False, 'hardwareValidated': False,
                 'registersAutomaticStartup': False, 'deviceIdentitiesEmbedded': False,
                 'package': record}

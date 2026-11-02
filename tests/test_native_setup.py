@@ -64,6 +64,37 @@ class NativeSettingsTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 settings.load(path)
 
+    def test_gyro_defaults_on_for_new_and_legacy_settings(self):
+        with tempfile.TemporaryDirectory() as path:
+            self.assertIs(Setup(Path(path)).values['gyroEnabled'], True)
+            (Path(path) / 'settings.json').write_text(json.dumps(self.good()))
+            self.assertIs(settings.load(path)['gyroEnabled'], True)
+            self.assertIs(Setup(Path(path)).values['gyroEnabled'], True)
+
+    def test_gyro_toggle_requires_save_and_survives_reopen(self):
+        with tempfile.TemporaryDirectory() as path:
+            settings.save(path, self.good())
+            app = Setup(Path(path)); canvas = CanvasStub()
+            app.focus = 3; app.handle(('key', 13), canvas)
+            self.assertIs(app.values['gyroEnabled'], False)
+            self.assertIs(settings.load(path)['gyroEnabled'], True)
+            app.choose(5, canvas)
+            self.assertIn('not active', app.message)
+            reopened = Setup(Path(path))
+            self.assertIs(reopened.values['gyroEnabled'], False)
+            self.assertEqual(reopened.values['remoteName'], self.good()['remoteName'])
+            reopened.choose(3, canvas); reopened.choose(5, canvas)
+            self.assertIs(settings.load(path)['gyroEnabled'], True)
+
+    def test_invalid_gyro_values_do_not_overwrite_saved_settings(self):
+        with tempfile.TemporaryDirectory() as path:
+            settings.save(path, {**self.good(), 'gyroEnabled': False})
+            before = (Path(path) / 'settings.json').read_bytes()
+            for value in (0, 1, 'false', 'true', None, [], {}):
+                with self.subTest(value=value), self.assertRaises(ValueError):
+                    settings.save(path, {**self.good(), 'gyroEnabled': value})
+                self.assertEqual((Path(path) / 'settings.json').read_bytes(), before)
+
     def test_remote_keyboard_edit_and_back_do_not_save_implicitly(self):
         with tempfile.TemporaryDirectory() as path:
             app = Setup(Path(path));canvas = CanvasStub()

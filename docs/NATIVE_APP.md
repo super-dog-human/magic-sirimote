@@ -4,7 +4,7 @@ The single-app version is being developed as a **native webOS application**, wit
 
 ## Try the setup preview
 
-[Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.2.3_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
+[Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.2.4_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
 
 This package contains a native settings screen, a remote-friendly character picker, settings validation and a non-mutating input-access check. It contains **no device addresses or serial numbers**. Saving settings changes only this app's saved configuration. It does not pair a remote, start remote control or register automatic startup. The **Buttons** screen provides a list of all seven physical buttons and separate normal/long-press selectors. It offers named LG actions and direct two-digit code entry, and can explicitly set or delete one stored assignment; it never writes automatically. The new IR integration is not yet hardware-validated.
 
@@ -14,7 +14,7 @@ The preview requires the same tested G3 environment, including the TV's 32-bit P
 2. Install the IPK, replacing `my-tv` with the device name registered in your LG CLI:
 
    ```sh
-   ares-install -d my-tv releases/native-preview/org.magicsirimote.app_0.2.3_arm.ipk
+   ares-install -d my-tv releases/native-preview/org.magicsirimote.app_0.2.4_arm.ipk
    ares-launch -d my-tv org.magicsirimote.app
    ```
 
@@ -40,6 +40,17 @@ Only these device identities are entered manually in the preview:
 | Remote Bluetooth address | The Siri Remote's Bluetooth address, such as `AA:BB:CC:DD:EE:FF`; not the TV's Wi-Fi or Ethernet address |
 | Remote device name / serial | The exact name reported for the remote's HID identity; preserve upper/lower case |
 | TV Bluetooth address | The TV's Bluetooth adapter address |
+
+**Gyro cursor** is a simple **On / Off** setting, with **On** as the default.
+Select the row and press OK to toggle it, then choose **Save settings**.
+The preference is retained when the app is reopened. Older settings files
+without this field are treated as On. The intended Off behavior disables only
+motion-driven cursor movement; swipe navigation and button actions remain.
+
+In this native preview, the preference is saved but **not applied to the input
+runtime yet**. The existing three-package runtime is also unchanged. The UI
+reports this after saving. The value is stored as the boolean `gyroEnabled` in
+`state/settings.json`; invalid non-boolean values are rejected.
 
 Entering these values **does not create a pairing**. A pairing/setup workflow still has to be integrated. The app's account identifiers and input-device paths are implementation details to discover on the TV, not information users should have to guess. The setup preview does not accept LG account credentials or Developer Mode tokens.
 

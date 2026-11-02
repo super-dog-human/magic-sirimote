@@ -17,7 +17,7 @@ BACK = (27, 461, 1073742094)
 class Setup:
     def __init__(self, state):
         self.state = state
-        self.values = dict.fromkeys(settings.FIELDS, '')
+        self.values = {**dict.fromkeys(settings.FIELDS, ''), 'gyroEnabled': True}
         self.focus = 0
         self.editing = None
         self.key_focus = 0
@@ -27,7 +27,7 @@ class Setup:
         self.boxes = []
         self.infrared = None
         try:
-            self.values.update({key: value for key, value in settings.load(state).items() if key in settings.FIELDS})
+            self.values.update({key: value for key, value in settings.load(state).items() if key in (*settings.FIELDS, 'gyroEnabled')})
             self.message = 'Saved identities loaded. This preview does not start remote control.'
         except FileNotFoundError:
             pass
@@ -57,6 +57,9 @@ class Setup:
             self.key_focus = 0
             canvas.start_text()
         elif index == 3:
+            self.values['gyroEnabled'] = not self.values['gyroEnabled']
+            self.message = 'Gyro preference changed. Choose Save settings; runtime integration is pending.'
+        elif index == 4:
             from device_check import inspect
             try:
                 result = inspect()
@@ -66,13 +69,13 @@ class Setup:
                 (self.state / 'capabilities.json').write_text(json.dumps(result) + '\n')
             except (OSError, ValueError):
                 self.message = 'The compatibility check could not finish.'
-        elif index == 4:
+        elif index == 5:
             try:
                 settings.save(self.state, {'schema': 1, **self.values})
-                self.message = 'Settings saved. Pairing, infrared and remote control have not been changed.'
+                self.message = 'Settings saved. Gyro preference is not active until runtime integration is complete.'
             except (OSError, ValueError) as error:
                 self.message = str(error) if isinstance(error, ValueError) else 'Could not save settings.'
-        elif index == 5:
+        elif index == 6:
             from ir_screen import InfraredScreen
             self.infrared = InfraredScreen(self.state)
         else:
@@ -106,7 +109,7 @@ class Setup:
                     canvas.stop_text()
             elif value in ARROWS:
                 if self.editing is None:
-                    self.focus = (self.focus + ARROWS[value]) % 7
+                    self.focus = (self.focus + ARROWS[value]) % 8
                 else:
                     step = ARROWS[value] * (10 if value in (1073741906, 1073741905) else 1)
                     self.key_focus = (self.key_focus + step) % len(self.keys)
@@ -138,14 +141,18 @@ class Setup:
             canvas.text('Back closes the keyboard. Choose Save settings on the previous screen.', 66, 665, 20, (155, 170, 190))
         else:
             for index, field in enumerate(settings.FIELDS):
-                y = 157 + index * 101
+                y = 140 + index * 91
                 canvas.text(settings.LABELS[index], 66, y, 21, (155, 170, 190))
                 box = (64, y + 31, 1152, 57)
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
                 canvas.text(self.values[field] or 'Select to enter', 82, y + 44, 25, max_width=1110)
                 self.boxes.append((index, box))
-            for index, title in enumerate(('Check this TV', 'Save settings', 'Buttons', 'Close'), 3):
-                box = (64 + (index - 3) * 292, 480, 274, 61)
+            box = (64, 416, 1152, 54)
+            canvas.rectangle(box, (30, 113, 156) if self.focus == 3 else (36, 48, 65))
+            canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 430, 25)
+            self.boxes.append((3, box))
+            for index, title in enumerate(('Check this TV', 'Save settings', 'Buttons', 'Close'), 4):
+                box = (64 + (index - 4) * 292, 492, 274, 61)
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
                 canvas.text(title, box[0] + 25, box[1] + 17, 25)
                 self.boxes.append((index, box))
