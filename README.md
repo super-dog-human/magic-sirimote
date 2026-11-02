@@ -271,10 +271,10 @@ If this exact remote already has a working pairing with this exact TV, preserve 
 For an unpaired remote, this is currently a **missing general setup procedure**, not a step that can be completed by running an included installer. The verified registration-repair sequence for the tested A1513 and G3 is:
 
 1. Collect the model, firmware, remote address/name and TV adapter address listed in Step 3 **before changing pairing**. Connect the diagnostic cable and verify the remote's model, firmware, Bluetooth identity, and saved peer; independently verify the TV's Bluetooth adapter and the intended remote registration.
-2. In that repair, remove only the stale registration for the intended remote on the TV. This was specific to the mismatched existing registration, not a blanket instruction to unpair working devices.
+2. If the TV has a stale or mismatched registration for this remote, remove that registration. Leave working pairings intact.
 3. Start the TV's outgoing pairing request for that remote while using the remote's diagnostic console to select the measured TV adapter as its peer.
-4. Establish the HID input connection and send the known input-start request. Pairing and a connected link alone were insufficient in the tested repair: earlier attempts lost the remote's saved peer around a minute later.
-5. Verify both sides' identities and pairing state again after more than a minute. The initialized repair retained the peer through a 70-second observation. The cable remained attached for that check; later cable-free input tests were separate.
+4. Establish the HID connection and initialize input.
+5. Wait at least one minute, then confirm that the TV still lists the remote as paired and the remote still stores the correct TV adapter as its peer.
 
 This repair sequence is verified for the tested A1513/G3 configuration. **First-time pairing on an unprepared remote and TV is not yet validated.** A general pairing tool is not included. A new setup needs that tool adapted and validated before proceeding. Do not assume that choosing the remote in an ordinary Bluetooth menu completes all these steps.
 
