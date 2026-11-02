@@ -12,3 +12,6 @@ node_modules/
 *.key
 *.pcap
 *.pcapng
+
+# Generic, explicitly labelled native setup preview (no device configuration).
+!/releases/native-preview/*.ipk

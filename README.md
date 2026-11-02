@@ -60,6 +60,20 @@ flowchart LR
 
 The computer is a setup tool. It is not a relay for normal button presses. Infrared also works independently of the TV input program once the remote has the correct IR configuration.
 
+### How it controls other apps
+
+Magic Sirimote translates the remote's Bluetooth reports into the TV's existing keyboard and mouse input events. It uses the `LGE RCU` input device for directions, selection and system buttons, and `ClickableMouse` for pointer movement and clicks. webOS routes those events to the current screen, including Home and other apps. Those apps do not need to be modified.
+
+```mermaid
+flowchart TD
+    R["Siri Remote: buttons, swipes, motion"] -->|"Bluetooth reports"| T["TV-local program: decode and translate"]
+    T --> I["Shared TV input path: keys, pointer, clicks"]
+    I --> U["Home or the app currently in use"]
+    R -->|"Infrared"| P["TV power and volume"]
+```
+
+The two low-level mechanisms are different: Bluetooth setup uses internal webOS service methods; sending keys and pointer movement uses direct Linux input-device access (`/dev/input/...`). The running input programs use non-root app accounts with no effective Linux capabilities. The tested native-app environment provides the necessary device access. This is not a guarantee that an ordinary web-app service, another TV, or a future firmware grants the same access.
+
 Inside the TV, three packages divide the work:
 
 ```mermaid
@@ -67,7 +81,7 @@ flowchart TD
     OS["webOS Activity Manager"] -->|"Scheduled callback, approximately every minute"| S["Startup service"]
     S -->|"Check package identity and startup state"| C["Controller: manage the remote connection"]
     C --> R["Receiver: decode input"]
-    R --> D["Directional keys / Settings / Back / Home"]
+    R --> D["Directional keys / Back / Home"]
     R --> P["Pointer movement and click"]
     D --> TV["LG user interface"]
     P --> TV
@@ -187,6 +201,8 @@ We are grateful to the authors and contributors of:
 Links credit research and tooling; they do not imply endorsement or identical compatibility. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for scope. Project-authored code is under the [MIT license](LICENSE). Apple and LG names identify the hardware; this is an independent project.
 
 ## 4. Setup guide
+
+A [native setup preview](docs/NATIVE_APP.md) is available as one generic IPK, with an editable TV-side settings screen and input-access check. It does not yet replace the three-package input runtime described below. The complete single-app version is under development.
 
 The steps below describe the intended setup sequence. **They are not yet a complete executable installation guide.** “Missing tool” means the reader would currently have to write or adapt code; it does not mean running the next command will fill in the gap.
 
