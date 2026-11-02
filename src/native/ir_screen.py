@@ -98,7 +98,7 @@ class InfraredScreen:
         if self.picking:
             if index < len(PRESETS):
                 self.route = 'ir'
-                self.message = 'Choose Set (IR) to review this infrared assignment.'
+                self.message = 'Choose Set to review this infrared assignment.'
                 self.detail = 'Current remote settings cannot be read; this is your selected command.'
                 self.code = PRESETS[index][1]
                 self.picking = False; self.focus = 2
@@ -123,7 +123,7 @@ class InfraredScreen:
                     return
                 self.code = self.draft
                 self.route = 'ir'
-                self.message = 'Choose Set (IR) to review this infrared assignment.'
+                self.message = 'Choose Set to review this infrared assignment.'
                 self.detail = 'Current remote settings cannot be read; this is your selected command.'
                 self.editing = False; self.focus = 2
             elif len(self.draft) < 2:
@@ -197,7 +197,7 @@ class InfraredScreen:
             self.boxes.append((index, bounds))
         tv = self.route == 'tv'
         action = 'Screen off / restore (TV)' if tv else action_label(self.code)
-        set_label, delete_label = ('Save (TV)', 'Delete (TV)') if tv else ('Set (IR)', 'Delete (IR)')
+        set_label, delete_label = ('Save', 'Delete') if tv else ('Set', 'Delete')
         press = 'Normal press (release)' if tv and self.delay == 0 else next(label for label, value in PRESS_TYPES if value == self.delay)
         if self.busy:
             canvas.text('Working...', 66, 240, 32)

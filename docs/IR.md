@@ -3,7 +3,7 @@
 The A1513 can store IR commands and transmit them without the TV's Bluetooth input program. This is how the tested setup handles volume and power, including powering the TV on while the receiver program is not processing input.
 
 The [native setup app](NATIVE_APP.md) includes a **Buttons** screen with explicit
-**Set (IR)** and **Delete (IR)** actions. Version 0.2.3 has passed offline transaction and UI
+**Set** and **Delete** actions. Version 0.2.5 has passed offline transaction and UI
 tests; the new screen and its native Bluetooth transport still need hardware
 validation. Installing or opening the app never programs the remote.
 
@@ -24,9 +24,9 @@ validation. Installing or opening the app never programs the remote.
 4. Select **Action** and choose a named action such as **Power on/off (IR)**
    or **Back (IR)**. Alternatively, choose **Enter code directly (IR)** and
    enter exactly two hexadecimal digits (`00`–`FF`) using the on-screen keys,
-   then select **Done**. Select **Set (IR)**, review the button, press type and
-   action, then confirm with **Set (IR)**. Choosing an action alone sends nothing.
-5. To remove that entry, select **Delete (IR)** and confirm with **Delete (IR)**.
+   then select **Done**. Select **Set**, review the button, press type and
+   action, then confirm with **Set**. Choosing an action alone sends nothing.
+5. To remove that entry, select **Delete** and confirm with **Delete**.
    No action code is needed. Other buttons and delay selectors are untouched.
 6. Test the button physically. A TV service acknowledgement is shown as
    **Request sent**, not proof that the remote saved the entry. An interrupted
@@ -43,6 +43,10 @@ The editor supports all seven button selectors and both press types; this does
 not mean every combination has been tested on hardware. Surface click means
 physically pressing the touch surface. Touching or swiping is not an IR button
 entry, and this screen does not remap those gestures.
+
+Physical button names and Save/Set/Delete controls use plain labels. The action
+choices identify their route: **(IR)** for infrared and **(TV)** for TV-side
+processing.
 
 The named choices are Power on/off (`08`), Back (`28`), Home (`7C`),
 Settings (`43`), Volume + (`02`), Volume − (`03`), Mute (`09`), Play (`B0`)
@@ -72,7 +76,7 @@ previous assignment cannot be reconstructed from a receipt.
 **Buttons → Action → Screen off / restore (TV)** is a TV-side choice, not an
 infrared command or a two-digit code. Its intended behavior is to keep audio
 playing while the picture is off, then restore the picture on the next press.
-Choose a button and normal/long press, then confirm **Save (TV)**. **Delete (TV)**
+Choose a button and normal/long press, then confirm **Save**. **Delete**
 removes only that locally saved TV assignment. Neither operation changes the
 remote's infrared entries or sends a power command.
 
