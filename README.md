@@ -44,42 +44,6 @@ Normal TV off/on and automatic input resumption are verified on this configurati
 
 This reproduces many everyday Magic Remote interactions, not every function of LG's original remote. Keep the original remote available for setup and recovery.
 
-### Using the remote
-
-#### Two ways to select things
-
-Think of the touch surface as a small directional pad, and the whole remote as an air pointer.
-
-```mermaid
-stateDiagram-v2
-    [*] --> Pointer
-    Pointer: Pointer mode
-    Navigation: Directional selection mode
-    Pointer --> Navigation: Swipe the surface
-    Navigation --> Navigation: More swipes or small hand movements
-    Navigation --> Pointer: Finger off, then deliberate larger movement
-    Pointer --> Pointer: Press surface to click pointer position
-    Navigation --> Navigation: Press surface to select highlighted item
-```
-
-1. **To navigate by selection:** swipe. The pointer disappears. Swipe again to move the highlight, then press the surface to open the selected item.
-2. **To use the pointer:** lift your finger off the surface and make a deliberate movement with the remote. Once the pointer appears, smaller movements move it. Press the surface to click.
-3. **After a fresh connection:** place the remote on a flat surface, with nothing touching the touch area, for about five seconds. This gives the orientation calibration time to settle.
-
-Small hand movements after a swipe should not immediately bring the pointer back.
-
-#### Power is a short hold, not a three-second wait
-
-```mermaid
-flowchart LR
-    A["Press TV-picture button"] --> B{"Release before hold threshold?"}
-    B -->|Yes| C["Home action"]
-    B -->|"Hold about 0.7 s"| D["IR power command"]
-    D --> E["Release; let the TV finish turning on/off"]
-```
-
-The tested remote's threshold is approximately **0.716 seconds**, not a guaranteed wall-clock response time for the TV screen. Hold for a little under a second and release. Do not keep holding until the entire startup animation finishes. A power toggle is not a separate “on” or “off” command.
-
 ## 3. How it works
 
 ### How the pieces fit together
@@ -110,6 +74,40 @@ flowchart TD
 ```
 
 The minute-based callback is for startup and recovery decisions. It does **not** mean the remote's input is processed once a minute. The receiver handles input continuously while running.
+
+### Pointer and selection modes
+
+Think of the touch surface as a small directional pad, and the whole remote as an air pointer.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pointer
+    Pointer: Pointer mode
+    Navigation: Directional selection mode
+    Pointer --> Navigation: Swipe the surface
+    Navigation --> Navigation: More swipes or small hand movements
+    Navigation --> Pointer: Finger off, then deliberate larger movement
+    Pointer --> Pointer: Press surface to click pointer position
+    Navigation --> Navigation: Press surface to select highlighted item
+```
+
+1. **To navigate by selection:** swipe. The pointer disappears. Swipe again to move the highlight, then press the surface to open the selected item.
+2. **To use the pointer:** lift your finger off the surface and make a deliberate movement with the remote. Once the pointer appears, smaller movements move it. Press the surface to click.
+3. **After a fresh connection:** place the remote on a flat surface, with nothing touching the touch area, for about five seconds. This gives the orientation calibration time to settle.
+
+Small hand movements after a swipe should not immediately bring the pointer back.
+
+### Power button timing
+
+```mermaid
+flowchart LR
+    A["Press TV-picture button"] --> B{"Release before hold threshold?"}
+    B -->|Yes| C["Home action"]
+    B -->|"Hold about 0.7 s"| D["IR power command"]
+    D --> E["Release; let the TV finish turning on/off"]
+```
+
+The tested remote's threshold is approximately **0.716 seconds**, not a guaranteed wall-clock response time for the TV screen. Hold for a little under a second and release. Do not keep holding until the entire startup animation finishes. A power toggle is not a separate “on” or “off” command.
 
 ### Automatic startup and standby
 
