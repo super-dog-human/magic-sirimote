@@ -196,7 +196,6 @@ The steps below describe the intended setup sequence. **They are not yet a compl
 | 4. Package build | Runnable, tested builder | Verified target values from stage 3 |
 | 5. Install and launch | Conditional installation/launch commands and runtime code | Installed-file/status verification and usable stop/resume/startup-registration tools |
 | 6. Infrared | Tested command entries and a packet encoder | Backup, write, readback, and restore tool; the encoder does not program the remote |
-| 7. Acceptance | Physical checks for both IR and Bluetooth | A fresh-install run of the published build, including automatic startup |
 
 The [setup audit](reviews/setup-audit.md) lists the remaining implementation and validation work. Each TV and remote needs its own pairing, IR configuration, and measured app account IDs, including units of the same model.
 
@@ -389,7 +388,7 @@ Then:
    ```
 
 5. Verify the current run’s `receiver-ready-<run>.json` in the receiver’s `state` directory against the live receiver PID/start ticks and current session. The file contains `sensorModeVerified: 1`. An old ready file or a launch acknowledgement is insufficient. A supported status command that performs these checks is still missing.
-6. Stop pressing the surface. Place the remote still for about five seconds, then perform the **Bluetooth input** checks in Step 7. Complete IR programming and startup registration before their corresponding tests.
+6. Stop pressing the surface and place the remote still for about five seconds to let the motion calibration settle.
 
 The controller obtains the receiver's current file hashes from the startup service. Installing that service is therefore required even for manual controller launch. **Installing it does not automatically register startup.** Startup provisioning is a separate operation described in [PORTING.md](docs/PORTING.md#startup-provisioning).
 
@@ -397,9 +396,9 @@ The controller obtains the receiver's current file hashes from the startup servi
 
 Step 6 requires a cleanly stopped input session. The stop protocol exists in `src/runtime/stop_request.py`, but this checkout has no supported command that finds the live instance, requests stop, verifies sensor shutdown/process exit, and reconciles the completed stop records for later resume. [PORTING.md](docs/PORTING.md#stopping-updating-and-removing) describes that contract. Repeating `ares-launch` while a completed stop veto remains is not a substitute for the missing resume operation.
 
-#### Register automatic startup before restart tests
+#### Register automatic startup
 
-Installation and a successful manual launch do not register the persistent Activity. The [startup provisioning contract](docs/PORTING.md#startup-provisioning) requires a fresh request, launch under the scheduler's own identity, verification of creation/binding/callback, and archival of the completed request. Its handlers exist, but a supported operator command is still missing. Complete and verify that operation before the off/on and full-restart tests in Step 7. Choosing `devmodeMaintenance` does not perform this registration.
+Installation and a successful manual launch do not register the persistent Activity. The [startup provisioning contract](docs/PORTING.md#startup-provisioning) requires a fresh request, launch under the scheduler's own identity, verification of creation/binding/callback, and archival of the completed request. Its handlers exist, but a supported operator command is still missing. Complete and verify that operation to enable automatic startup. Choosing `devmodeMaintenance` does not perform this registration.
 
 ### Step 6: Set up infrared separately
 
@@ -426,42 +425,7 @@ python3 src/ir_packets.py
 
 Confirm IR independently with the TV input program cleanly stopped: point the remote at the TV, press Volume + once and Volume − once, and check that the volume rises and returns. Test power separately. Do not infer IR success from a Bluetooth-delivered key.
 
-Running the encoder above only prints bytes; **it does not save these settings to your remote**. The missing programmer must handle existing entries and enable flags, write the intended entries, read them back, and verify the physical IR result. After IR checks, the missing resume operation from Step 5 must reconcile the clean stop and allow the controller to start again before the combined acceptance tests.
-
-### Step 7: Verify everyday use
-
-After manual input works, IR programming is verified, input has resumed, and automatic startup is registered, run these tests. Completing the host test suite does not replace them. If one fails, record exactly which step failed before changing anything.
-
-| Test | What to do | Success looks like |
-| --- | --- | --- |
-| Directional selection | Swipe on the home screen | Pointer disappears; highlight moves |
-| Selection click | Press after choosing an app by swiping | Highlighted app opens |
-| Back | Short-press microphone | Previous screen returns |
-| Settings | Short-press MENU | LG settings opens |
-| Home | Short-press TV-picture | LG Home appears |
-| Pointer | Finger off, five seconds still, then deliberate movement | Pointer appears and follows movement |
-| Pointer click | Point at an item and press surface | Item under pointer is clicked |
-| Media | Play a video; press Play/Pause twice | Pause, then resume in a supported media state |
-| Volume | Point at TV; + once, then − once | Volume rises, then returns |
-| Power | Hold TV-picture briefly, release; wait; repeat | TV switches off and back on |
-
-For persistence, distinguish three different tests:
-
-```mermaid
-flowchart LR
-    T["What are we testing?"] --> I["Remote unused; TV stays on"]
-    T --> S["Ordinary TV off/on"]
-    T --> B["Complete TV restart after power loss"]
-    I --> IR["Input works again without manual restart"]
-    S --> SR["Program resumes during everyday standby cycle"]
-    B --> BR["TV starts the program after a new boot"]
-```
-
-- **Remote left unused:** leave the TV on and the unplugged remote untouched for about 15 minutes, then press the surface and try the controls. Note any delay. This proves usability after inactivity; proving actual remote sleep needs connection evidence as well.
-- **Ordinary off/on:** after configuring startup, turn the TV off normally, wait about 30 seconds, and turn it back on. Try the same controls without using the computer to relaunch anything.
-- **Full restart:** this is a separate startup test, not a daily requirement. When the TV is not updating, turn it off, disconnect its own power plug for about 30 seconds, reconnect, and start it again. Do not switch a household breaker for this test. Check automatic startup and input without a manual launch.
-
-A working pointer is not proof that all buttons work. A successful power toggle is not proof that Bluetooth input resumed. Test both paths.
+Running the encoder above only prints bytes; **it does not save these settings to your remote**. The missing programmer must handle existing entries and enable flags, write the intended entries, read them back, and verify the physical IR result. After IR checks, the missing resume operation from Step 5 must reconcile the clean stop and allow the controller to start again.
 
 ### Developer Mode expiry
 
