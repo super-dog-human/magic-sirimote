@@ -26,7 +26,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(build.configured('5415 6959 5636 a5415 54150',q),b'6001 6002 6003 a5415 54150')
     def test_buttons_hold_and_chord_do_not_duplicate(self):
         actions=[];d=SystemButtons(actions.append);d.bind(1)
-        for mask in [0,32,32,0,16,16,0,48,32,0,1,0,8]:d.feed(1,bytes([0xfc,0,mask]))
+        for mask in [0,32,32,0,16,16,0,48,32,0,1,0,8,0]:d.feed(1,bytes([0xfc,0,mask]))
         self.assertEqual(actions,['settings','back','home','playpause'])
     def test_ir_encoder_matches_observed_power_packet(self):
         self.assertEqual(ir_packets.encode_entry(1,2,bytes.fromhex('20df10ef')),bytes.fromhex('f001010201000000000020df10ef'))

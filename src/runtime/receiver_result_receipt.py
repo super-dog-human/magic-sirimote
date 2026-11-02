@@ -5,7 +5,7 @@ process identity, process exit, storage persistence, or sensor state today.
 """
 import json,os,re,stat
 from pathlib import Path
-from receive_diagnostics import valid as valid_receive_diagnostics
+from receive_diagnostics import valid as valid_receive_diagnostics, diagnostic_result
 APP='org.codex.siriremote.hidgattrouterb20261029u'
 
 def _process_identity():
@@ -32,23 +32,25 @@ def write_receipt(directory,run,result,*,state_uid=5999,group=5000,process_info=
    reads=result.get('readStats')
    if r.get('endReason')!='stop-requested' or type(reads) is not dict or reads.get('aborted') is not True or reads.get('bytesReceived')!=0 or reads.get('nonemptyReads')!=0 or any(o[k]!=0 for k in ('keyFrameWrites','clickFrameWrites','motionFrameWrites')):raise ValueError('empty result lacks clean stop')
   counts={'bytesReceived':r['bytesReceived'],**{k:o[k] for k in ('keyFrameWrites','clickFrameWrites','motionFrameWrites')}}
+ source,cleanup=diagnostic_result(result)
  allowed={'guard-rejected','native-identity-rejected','luna-timeout','luna-nonzero','luna-invalid-json','borrowed-view-invalid','control-changed','receive-unconfirmed','output-release-unverified','receive-control-not-ready','other-ValueError','other-RuntimeError','other-LunaCallError','other-TimeoutError','other-OSError','other-error'}
- diagnostic=result.get('diagnostic')
+ diagnostic=source.get('diagnostic')
  if diagnostic not in allowed and not (type(diagnostic) is str and re.fullmatch(r'(?:output-open-(?:close|timeout|permission|unavailable|io|inventory|changed|key-held|mouse-held|guard|other)|target-(?:inventory-incomplete|inventory-invalid|not-unique|not-present|ambiguous|node-invalid|node-changed|identity-mismatch)|setup-(?:input-start|after-input-start|open-target|open-outputs|open-system-keys|connection-recheck|receiver-setup|session)|gatt-rejected-(?:[0-9]{1,4}|unknown)|notification-(?:control-unavailable|intent-unrecorded|enable-unconfirmed|setting-unsupported|proof-unrecorded)|preborrow-(?:lease|feature|snapshot|age|hid|gatt|exception))',diagnostic)):diagnostic=None
- frames=result.get('outputCounts')
+ frames=source.get('outputCounts')
  frame_keys=('keyFrameWrites','clickFrameWrites','motionFrameWrites')
  if type(frames) is dict and all(type(frames.get(k)) is int and 0<=frames[k]<=100000 for k in frame_keys):frames={k:frames[k] for k in frame_keys}
  else:frames=None
- read=result.get('readStats');readkeys=('readCalls','bytesReceived','nonemptyReads','emptyReads','wouldBlockReads','interruptedReads','elapsedMs')
+ read=source.get('readStats');readkeys=('readCalls','bytesReceived','nonemptyReads','emptyReads','wouldBlockReads','interruptedReads','elapsedMs')
  if type(read) is dict and all(type(read.get(k)) is int and 0<=read[k]<=100000000 for k in readkeys) and type(read.get('aborted')) is bool:read={**{k:read[k] for k in readkeys},'aborted':read['aborted']}
  else:read=None
  if counts is not None and counts['bytesReceived']==0 and read is None:raise ValueError('empty result lacks read counters')
- phase=result.get('phase') if result.get('phase') in ('prepare','start','receive','stop') else None
- previous=result.get('previousPhase') if result.get('previousPhase') in ('start','receive') else None
- failure=result.get('errorType') if result.get('errorType') in ('RuntimeError','ValueError','TimeoutError','OSError','LunaCallError') else None
+ phase=source.get('phase') if source.get('phase') in ('prepare','start','receive','stop') else None
+ previous=source.get('previousPhase') if source.get('previousPhase') in ('start','receive') else None
+ failure=source.get('errorType') if source.get('errorType') in ('RuntimeError','ValueError','TimeoutError','OSError','LunaCallError') else None
  data={'schema':1,'appId':APP,'run':run,'status':status,'diagnostic':diagnostic,'frameCounts':frames,'readStats':read,'phase':phase,'previousPhase':previous,'failureType':failure,'sensorStopVerified':sensor,'journalArchived':archived,'featureExclusivity':feature,'counts':counts,'process':process,'rawReportsPersisted':False}
- details=(result.get('readStats') or {}).get('receiveDiagnostics')
+ details=(source.get('readStats') or {}).get('receiveDiagnostics')
  if valid_receive_diagnostics(details):data['receiveDiagnostics']=details
+ if cleanup:data['cleanupDiagnostics']=cleanup
  fd=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   d=os.fstat(fd)

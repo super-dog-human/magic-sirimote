@@ -13,7 +13,7 @@ Host checks were run on macOS. Hardware validation of the public package version
 
 ## Runtime checks
 
-The checked public builds are controller/receiver 0.9.94 and scheduler 0.0.87.
+The checked public builds are controller/receiver 0.9.102 and scheduler 0.0.95.
 
 - Every packaged runtime module is reachable through static imports from the controller/receiver entrypoints; a clean host process can import all modules without device operations.
 - A retired request blocks the controller/receiver before native checks, signal setup, or connection work. Ordinary stop/recovery records remain eligible for their existing handlers.
@@ -50,3 +50,17 @@ Resting-pose suppression uses a 0.20-second quiet window within 0.0012 radians a
 Horizontal and vertical conversion gains are multiplied by 0.45, from 3230 / 4845 to 1453.5 / 2180.25. Initialization, rest detection, filter parameters, and the 20 ms render period are unchanged. Comparing identical synthetic movements on each axis produced output ratios of approximately 0.45 and the same first-output time, with identical filter and rest-state decisions. Integer output rounding and TV acceleration mean this does not promise an exact 55% reduction in displayed pixels for every movement.
 
 The user accepted this travel setting on the TV with controller/receiver 0.9.93 and scheduler 0.0.86. All 410 installed files matched the build hashes. The public packages remain a separate export; all 124 input and publication tests passed.
+
+## System button release timing and shared IR input
+
+MENU, microphone, Home, and Play/Pause dispatch their Bluetooth action on the first neutral button report after an uninterrupted single-button press. Held reports do not repeat; chords, a different button, and reconnects cancel pending actions. Surface clicks and stored IR commands are unchanged. Button-budget rotation consumes the same neutral report to rearm without dropping the next press. Nine tests cover release timing and lifecycle boundaries.
+
+An uncovered Home press reproduced a receiver stop, while a covered IR emitter allowed the same Bluetooth operation to continue. Read-only observation saw the native Home key held for approximately 165 ms. The receiver's original error was `system-key-held`; cleanup also reported `system-key-release-unverified`. IR and Bluetooth were attempting the same shared input concurrently.
+
+The system-key sink now skips a dispatch when a managed native key is already held, without writing, releasing the other source's key, waiting, retrying, or disabling the sink. The next press remains eligible after the external key is released. Uncertain writes and identity failures remain terminal. A skipped media toggle clears its pending expectation and requires a fresh playback sample, preventing it from waiting for a playback change that was never requested. Five added checks cover duplicated IR Home, continued operation, uncertain writes, media-state refresh, and stale media replies; an existing shared-key test was updated to check nonfatal refusal.
+
+Bounded diagnostics retain the original session failure when resource or application cleanup wraps it. Only allowlisted reason codes and cleanup categories are added; nested success and sensor-stop proof never replace the outer lifecycle result. Four checks cover nested diagnostics, legacy records, privacy, and schema bounds.
+
+All 142 input and publication tests passed. Private hardware packages are controller/receiver 0.9.101 and scheduler 0.0.94, with all 410 installed files verified. The user confirmed that an uncovered Home press returns to Home and subsequent navigation and MENU still work. Repeated Home operations and MENU/microphone release timing were also physically confirmed without another stop. The public build remains a separate export.
+
+A subsequent approximately 0.7-second IR power-off/on test launched a new receiver automatically. Controls were initially reported unavailable, then worked without a manual restart. Immediate readiness after power-on is not verified; the startup delay was not measured in this trial. IR configuration was not changed.

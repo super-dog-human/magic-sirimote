@@ -29,8 +29,10 @@ class CombinedControls:
    self._sync()
    # Only a verified all-buttons-released report permits a fresh budget.
    # This avoids terminating daily operation after a finite number of keys.
-   if self.buttons.actions>=self.max_system_actions and observed_mask(report)==0:self._sync(force=True)
    self.buttons.feed(self.button_generation,report)
+   if self.buttons.actions>=self.max_system_actions and observed_mask(report)==0:
+    self._sync(force=True)
+    self.buttons.feed(self.button_generation,report)
    return result
   except BaseException:
    self.stop('combined-output-error');raise

@@ -51,13 +51,26 @@ class PlaybackSnapshot:
     self._state=None;self._time=None;self._version+=1
    return result
 
+ def cancel_consumed(self,ticket):
+  # A skipped native dispatch must not wait forever for a playback change
+  # that we never requested. Require a fresh status sample; never replay it.
+  with self._lock:
+   if ticket!=self._version:return False
+   self._expected=None;self._state=None;self._time=None;self._version+=1
+   return True
+
 
 class MediaAwareSink:
  def __init__(self,sink,snapshot):
-  if not callable(getattr(sink,'pulse',None)) or not callable(getattr(snapshot,'consume',None)):raise ValueError('invalid sink')
+  if not callable(getattr(sink,'pulse',None)) or not all(callable(getattr(snapshot,n,None)) for n in ('consume','ticket','cancel_consumed')):raise ValueError('invalid sink')
   self.sink=sink;self.snapshot=snapshot;self.skipped=0
  def pulse(self,action):
-  if action=='playpause':
+  toggle=action=='playpause';ticket=None
+  if toggle:
    action=self.snapshot.consume()
    if action is None:self.skipped+=1;return False
-  self.sink.pulse(action);return True
+   ticket=self.snapshot.ticket()
+  if self.sink.pulse(action) is False:
+   if toggle:self.snapshot.cancel_consumed(ticket)
+   self.skipped+=1;return False
+  return True

@@ -1,6 +1,6 @@
 {
   "baseline": "controller/receiver 0.9.71; scheduler 0.0.64",
-  "inputAndPublicationPythonTests": 124,
+  "inputAndPublicationPythonTests": 142,
   "schedulerPythonTests": 10,
   "schedulerJavascriptTestFiles": 22,
   "mermaidDiagramsSyntaxValidated": 8,
@@ -9,7 +9,7 @@
   "packageHashesAndPinsChecked": true,
   "publicPackagesInstalledOnTV": false,
   "privateDataScan": "No original device address/serial, local home path or private-key marker found in exported text. Live state, keys, logs and binaries not exported.",
-  "publicBuild": "controller/receiver 0.9.94; scheduler 0.0.87",
+  "publicBuild": "controller/receiver 0.9.102; scheduler 0.0.95",
   "retiredRequestGuardsTested": true,
   "dependencyInventoryVerified": true,
   "freshInstallWorkflowComplete": false,
@@ -35,5 +35,17 @@
   "pointerGainRatio": 0.45,
   "pointerGainOnsetComparisonPassed": true,
   "hardwarePointerGainBuild": "controller/receiver 0.9.93; scheduler 0.0.86",
-  "pointerGainPhysicalAcceptanceVerified": true
+  "pointerGainPhysicalAcceptanceVerified": true,
+  "buttonReleaseTests": 9,
+  "hardwareButtonReleaseBuild": "controller/receiver 0.9.101; scheduler 0.0.94",
+  "buttonReleasePhysicalAcceptanceVerified": true,
+  "nestedFailureDiagnosticTests": 4,
+  "irHomeCollisionReproduced": true,
+  "observedIrHomeHeldMs": 165,
+  "sharedIrCollisionChecksAdded": 5,
+  "uncoveredHomeContinuedInputVerified": true,
+  "repeatedHomeWithoutStopVerified": true,
+  "buttonReleasePowerCycleAutomaticResumeVerified": true,
+  "immediatePowerOnInputReadyVerified": false,
+  "irConfigurationChanged": false
 }

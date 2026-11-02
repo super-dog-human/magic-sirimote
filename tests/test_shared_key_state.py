@@ -38,9 +38,61 @@ class Tests(unittest.TestCase):
   sink=self.system()
   for action in KEYS:sink.pulse(action)
   self.assertEqual(self.held,{116});self.assertTrue(sink.verify_released());self.assertFalse(any(c==116 for c,v in self.writes))
- def test_system_owned_key_conflict_still_blocks(self):
+ def test_external_system_key_skips_without_poisoning_sink(self):
   sink=self.system();self.held.add(KEYS['home'])
-  with self.assertRaises(RuntimeError):sink.pulse('back')
+  self.assertIs(sink.pulse('back'),False);self.assertFalse(sink.failed)
   self.assertEqual(self.writes,[]);self.assertEqual(self.held,{116,KEYS['home']})
+  self.held.remove(KEYS['home']);sink.pulse('back')
+  self.assertEqual(self.writes,[(KEYS['back'],1),(KEYS['back'],0)])
+  self.assertEqual(self.held,{116})
+
+ def test_duplicate_ir_home_does_not_write_or_release_ir_key(self):
+  sink=self.system();self.held.add(KEYS['home'])
+  self.assertIs(sink.pulse('home'),False);self.assertFalse(sink.failed)
+  self.assertEqual(self.writes,[]);self.assertIn(KEYS['home'],self.held)
+  self.held.remove(KEYS['home']);sink.pulse('settings');self.assertTrue(sink.verify_released())
+ def test_uncertain_press_remains_terminal_and_attempts_one_release(self):
+  sink=self.system();writes=[]
+  def short(fd,packet):writes.append(packet);return len(packet)-1 if len(writes)==1 else len(packet)
+  sink.write=short
+  with self.assertRaises(OSError):sink.pulse('home')
+  self.assertTrue(sink.failed);self.assertEqual(len(writes),2)
+  with self.assertRaises(RuntimeError):sink.pulse('home')
+  self.assertEqual(len(writes),2)
+ def test_skipped_media_toggle_accepts_fresh_unchanged_play_state(self):
+  from media_toggle import PlaybackSnapshot,MediaAwareSink
+  snapshot=PlaybackSnapshot(clock=lambda:1.)
+  playing={'returnValue':True,'foregroundAppInfo':[{'playState':'playing'}]}
+  snapshot.update(playing);sink=self.system();media=MediaAwareSink(sink,snapshot)
+  self.held.add(KEYS['home']);self.assertIs(media.pulse('playpause'),False)
+  self.assertEqual(self.writes,[]);self.assertIsNone(snapshot.choose())
+  self.held.remove(KEYS['home']);snapshot.update(playing)
+  self.assertIs(media.pulse('playpause'),True);self.assertEqual(self.writes,[(KEYS['pause'],1),(KEYS['pause'],0)])
+ def test_cancelled_media_does_not_accept_stale_inflight_poll(self):
+  from media_toggle import PlaybackSnapshot
+  snapshot=PlaybackSnapshot(clock=lambda:1.)
+  playing={'returnValue':True,'foregroundAppInfo':[{'playState':'playing'}]}
+  snapshot.update(playing);self.assertEqual(snapshot.consume(),'pause');ticket=snapshot.ticket()
+  self.assertTrue(snapshot.cancel_consumed(ticket));self.assertFalse(snapshot.update(playing,ticket=ticket))
+  snapshot.update(playing);self.assertEqual(snapshot.choose(),'pause')
+
+ def test_ir_collision_does_not_stop_combined_receiver(self):
+  from combined_controls import CombinedControls
+  from media_toggle import PlaybackSnapshot,MediaAwareSink
+  class Rolling:
+   generation=1
+   closed=False
+   def start(self):pass
+   def feed_raw(self,*args):return True
+   def tick(self):return True
+   def stop(self,reason):self.closed=True
+   def _live(self):return True
+  sink=self.system();rolling=Rolling();controls=CombinedControls(rolling,MediaAwareSink(sink,PlaybackSnapshot()).pulse)
+  controls.start()
+  def feed(mask):controls.feed_raw(1,bytes((0xfc,0,mask)))
+  feed(0);feed(1);self.held.add(KEYS['home']);feed(0)
+  self.assertFalse(controls.closed);self.assertFalse(sink.failed);self.assertEqual(self.writes,[])
+  self.held.remove(KEYS['home']);feed(32);feed(0)
+  self.assertEqual(self.writes,[(KEYS['settings'],1),(KEYS['settings'],0)]);self.assertFalse(controls.closed)
 
 if __name__=='__main__':unittest.main()

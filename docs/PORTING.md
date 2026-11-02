@@ -21,7 +21,7 @@ After a full TV restart, the controller can archive an expired request from befo
 
 ## Build configuration and validation
 
-The source builds controller/receiver **0.9.94** and scheduler **0.0.87**. Hardware testing covers controller/receiver 0.9.73 and scheduler 0.0.66. Hardware validation of the public package versions is pending; see `reviews/verification.md` for computer-side checks.
+The source builds controller/receiver **0.9.102** and scheduler **0.0.95**. Hardware testing covers controller/receiver 0.9.73 and scheduler 0.0.66. Hardware validation of the public package versions is pending; see `reviews/verification.md` for computer-side checks.
 
 - `src/build.py` uses your local configuration for device identities and measured developer/controller/receiver UIDs. Source defaults and test fixtures are not target measurements.
 - `src/build_support.py` provides archive construction and native launchers. The builder generates matching package hashes and an explicit runtime source inventory defines the included modules.

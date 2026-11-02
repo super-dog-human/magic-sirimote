@@ -41,7 +41,9 @@ class SystemKeySink:
    self._identity()
    state=_bitmap(self.fd,EVIOCGKEY,self.ioctl)
    # Shared RCU state includes the TV's power latch. Do not alter it.
-   if any(state[c//8]&(1<<(c%8)) for c in KEYS.values()):raise RuntimeError('managed system key already held')
+   # An IR or physical RCU press is external ownership, not our output failure.
+   # Skip this dispatch without writing or releasing another source's key.
+   if any(state[c//8]&(1<<(c%8)) for c in KEYS.values()):return False
    down=_frame(code,1);up=_frame(code,0)
    down_attempted=True
    if self.write(self.fd,down)!=len(down):raise OSError('short key press')

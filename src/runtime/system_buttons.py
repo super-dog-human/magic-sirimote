@@ -19,19 +19,25 @@ def observed_mask(report):
 class SystemButtons:
  def __init__(self,emit,*,max_actions=128):
   if not callable(emit) or type(max_actions) is not int or not 1<=max_actions<=1024:raise ValueError('invalid output')
-  self.emit=emit;self.max_actions=max_actions;self.generation=None;self.armed=False;self.actions=0;self.failed=False
+  self.emit=emit;self.max_actions=max_actions;self.generation=None;self.armed=False;self.pending=None;self.actions=0;self.failed=False
  def bind(self,generation):
   if type(generation) is not int or generation<=0 or self.generation is not None or self.failed:raise ValueError('invalid generation')
-  self.generation=generation;self.armed=False
+  self.generation=generation;self.armed=False;self.pending=None
  def feed(self,generation,report):
   if self.failed or generation!=self.generation or self.generation is None:return False
   mask=observed_mask(report)
   if mask is None:return False
-  if mask==0:self.armed=True;return False
-  action=MASK_TO_ACTION.get(mask)
-  if not self.armed or action is None:
-   self.armed=False;return False
-  self.armed=False
+  if mask!=0:
+   # Only a single uninterrupted press after a neutral report is eligible.
+   if self.armed and mask in MASK_TO_ACTION:
+    self.pending=mask;self.armed=False
+   elif mask!=self.pending:
+    self.pending=None;self.armed=False
+   return False
+  pending=self.pending
+  self.pending=None;self.armed=True
+  if pending is None:return False
+  action=MASK_TO_ACTION[pending]
   if self.actions>=self.max_actions:self.failed=True;raise RuntimeError('action budget exhausted')
   try:sent=self.emit(action)
   except BaseException:self.failed=True;raise
@@ -39,4 +45,4 @@ class SystemButtons:
   self.actions+=1;return True
  def unbind(self,generation):
   if generation!=self.generation or self.generation is None:return False
-  self.generation=None;self.armed=False;return True
+  self.generation=None;self.armed=False;self.pending=None;return True

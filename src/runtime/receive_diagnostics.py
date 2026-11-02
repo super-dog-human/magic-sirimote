@@ -10,6 +10,45 @@ WATCH=(None,'closed','missing','stale','clock-invalid','generation-changed','cur
 STAGES=('tick','abort','read','feed','wait','clock')
 ERRORS=('OSError','RuntimeError','ValueError','TypeError','TimeoutError','KeyboardInterrupt','SystemExit','other')
 
+FAILURE_CODES={
+ 'managed system key already held':'system-key-held',
+ 'key release unconfirmed':'system-key-release-unconfirmed',
+ 'short key press':'system-key-short-press',
+ 'short key release':'system-key-short-release',
+ 'device identity unverified':'system-key-identity-unverified',
+ 'output disabled':'system-key-disabled',
+ 'receiver continuity lost':'receiver-continuity-lost',
+ 'screen-worker-stop-unconfirmed':'screen-worker-stop-unconfirmed',
+ 'media-worker-stop-unconfirmed':'media-worker-stop-unconfirmed',
+ 'invalid receive diagnostics':'receive-diagnostics-invalid',
+}
+CLEANUP_ERRORS={
+ 'resource-close-unverified':('system-key-release-unverified','system-key-release-error','system-key-close-error','output-release-unverified','output-release-error','output-close-error','target-close-error'),
+ 'app-cleanup-unverified':('status-pump-stop-unverified','status-pump-stop-error','session-archive-unverified','session-archive-error','empty-session-discard-unverified','empty-session-discard-error','journal-close-error','lease-close-error'),
+}
+
+def diagnostic_result(result):
+ # Only known wrappers are traversed. Never promote nested success or stop proof.
+ current=result;cleanup=[]
+ for _ in range(2):
+  if type(current) is not dict:break
+  reason=current.get('reason');child=current.get('sessionResult')
+  if reason not in CLEANUP_ERRORS or type(child) is not dict:break
+  errors=current.get('errors')
+  known=[] if type(errors) is not list else [e for e in errors if type(e) is str and e in CLEANUP_ERRORS[reason]]
+  cleanup.append({'stage':reason,'errors':list(dict.fromkeys(known))})
+  current=child
+ return current,cleanup
+
+def valid_cleanup(value):
+ if type(value) is not list or not 1<=len(value)<=2:return False
+ for item in value:
+  if type(item) is not dict or set(item)!={'stage','errors'} or item.get('stage') not in CLEANUP_ERRORS:return False
+  errors=item['errors']
+  if type(errors) is not list or len(errors)>8 or any(type(e) is not str or e not in CLEANUP_ERRORS[item['stage']] for e in errors):return False
+  if len(set(errors))!=len(errors):return False
+ return True
+
 def record_failure(stats,stage,exc):
  # Keep the original failure even if output cleanup raises a second exception.
  # No exception text, filenames, HID payloads or output coordinates are saved.
@@ -17,10 +56,11 @@ def record_failure(stats,stage,exc):
  kind='OSError' if isinstance(exc,OSError) else type(exc).__name__
  number=getattr(exc,'errno',None) if isinstance(exc,OSError) else None
  stats['receiveFailure']={'stage':stage,'type':kind if kind in ERRORS else 'other',
-   'errno':number if type(number) is int and 0<=number<=4095 else None}
+   'errno':number if type(number) is int and 0<=number<=4095 else None,
+   'code':FAILURE_CODES.get(str(exc))}
 
 def valid_failure(value):
- return (type(value) is dict and set(value)=={'stage','type','errno'} and
+ return (type(value) is dict and {'stage','type','errno'}<=set(value)<={'stage','type','errno','code'} and value.get('code') in (None,*FAILURE_CODES.values()) and
    value['stage'] in STAGES and value['type'] in ERRORS and
    (value['errno'] is None or (value['type']=='OSError' and type(value['errno']) is int and 0<=value['errno']<=4095)))
 
