@@ -13,7 +13,7 @@ Host checks were run on macOS. Hardware validation of the public package version
 
 ## Runtime checks
 
-The checked public builds are controller/receiver 0.9.104 and scheduler 0.0.97.
+The checked public builds are controller/receiver 0.9.106 and scheduler 0.0.99.
 
 - Every packaged runtime module is reachable through static imports from the controller/receiver entrypoints; a clean host process can import all modules without device operations.
 - A retired request blocks the controller/receiver before native checks, signal setup, or connection work. Ordinary stop/recovery records remain eligible for their existing handlers.
@@ -68,3 +68,7 @@ A subsequent approximately 0.7-second IR power-off/on test launched a new receiv
 ## Vertical pointer travel
 
 The vertical gain is reduced by 20%, from 2180.25 to 1744.2; the horizontal gain remains 1453.5. The vertical/horizontal conversion ratio is now 1.2 instead of 1.5. Filtering, rest detection, and render timing are unchanged. Identical synthetic movements produced an unchanged horizontal output sequence and approximately 0.8 of the previous vertical output, with the same first-output time. Integer rounding and TV processing may affect perceived travel. Private test packages are controller/receiver 0.9.103 and scheduler 0.0.96. All 410 installed files matched their build hashes. The user confirmed that the adjusted balance feels good.
+
+## MENU Back mapping
+
+MENU now dispatches Back on release. The existing release, chord, reconnect, and shared-key collision checks pass with the new mapping; all 142 input/publication Python tests pass. Private controller/receiver 0.9.105 and scheduler 0.0.98 were installed with all 410 files matching their build hashes. The user confirmed that MENU returns to the previous screen. Pointer settings, infrared configuration, and the private microphone behavior were preserved. Public builds remain separate and retain microphone → Back.

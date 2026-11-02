@@ -93,6 +93,6 @@ class Tests(unittest.TestCase):
   feed(0);feed(1);self.held.add(KEYS['home']);feed(0)
   self.assertFalse(controls.closed);self.assertFalse(sink.failed);self.assertEqual(self.writes,[])
   self.held.remove(KEYS['home']);feed(32);feed(0)
-  self.assertEqual(self.writes,[(KEYS['settings'],1),(KEYS['settings'],0)]);self.assertFalse(controls.closed)
+  self.assertEqual(self.writes,[(KEYS['back'],1),(KEYS['back'],0)]);self.assertFalse(controls.closed)
 
 if __name__=='__main__':unittest.main()

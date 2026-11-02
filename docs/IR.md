@@ -48,4 +48,4 @@ The delay selector is a firmware setting, not seconds. Selector `02` gives a hol
 
 The working remote also has an immediate IR Home entry, and the Bluetooth decoder maps the TV button to Home. A long press may therefore reach Home before the delayed power command. The two routes do not guarantee mutually exclusive short-press and long-press actions.
 
-MENU → Settings and microphone → Back are mappings in the TV input program. They do not require corresponding IR entries in the remote.
+MENU → Back and microphone → Back are mappings in the TV input program. They do not require corresponding IR entries in the remote.

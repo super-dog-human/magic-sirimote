@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parent
 A = 'org.codex.siriremote.autocoord20261029v'
 B = 'org.codex.siriremote.hidgattrouterb20261029u'
 S = 'org.codex.siriremote.v20scheduler20261031a'
-PAIR_VERSION = '0.9.104'
-SCHEDULER_VERSION = '0.0.97'
+PAIR_VERSION = '0.9.106'
+SCHEDULER_VERSION = '0.0.99'
 APP_ROOT = '/media/developer/apps/usr/palm/applications/'
 EXAMPLES = {'remoteAddress':'02:00:00:00:00:01', 'adapterAddress':'02:00:00:00:00:02',
             'remoteName':'EXAMPLE_REMOTE_SERIAL'}

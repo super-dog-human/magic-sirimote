@@ -2,7 +2,7 @@
 
 Thank you to the open-source Siri Remote and LG webOS communities—especially [open-appleremote](https://github.com/a-funk/open-appleremote), [SiriRemote-Linux](https://github.com/Yanndroid/SiriRemote-Linux), [Clean Your TV](https://github.com/Razdva122/clean-your-tv-lg-webos), and [webOSbrew](https://www.webosbrew.org/)—for sharing the tools, code, and discoveries that made this project possible.
 
-**Use a first-generation Siri Remote to control an LG TV, with the input program running inside the TV.** Swipe to select an app, move the remote to move the pointer, press to select, open settings, go back, and control volume and power over infrared. No Mac, Apple TV, or other computer needs to stay on for everyday use.
+**Use a first-generation Siri Remote to control an LG TV, with the input program running inside the TV.** Swipe to select an app, move the remote to move the pointer, press to select, go back, and control volume and power over infrared. No Mac, Apple TV, or other computer needs to stay on for everyday use.
 
 The repository contains the TV runtime, package builder, configuration reference, and setup guide.
 
@@ -33,12 +33,12 @@ The webOS platform version and TV firmware version are separate values. The plat
 ## 2. What you can do
 
 - Turn the TV on or off and adjust the volume using infrared.
-- Open Settings, go back, return to Home, and play or pause video.
+- Go back, return to Home, and play or pause video.
 - Swipe the touch surface to move the selection up, down, left, or right.
 - Press the touch surface to click at the pointer position or select the highlighted item.
 - Move the on-screen pointer with the remote's motion sensors, with your finger off the touch surface.
 
-**MENU opens Settings**, **the microphone button goes Back**, and a **short press of the TV-picture button opens Home**. Voice input is not implemented.
+**MENU and the microphone button go Back**, and a **short press of the TV-picture button opens Home**. Voice input is not implemented.
 
 Normal TV off/on and automatic input resumption are verified on this configuration.
 
@@ -53,7 +53,7 @@ There are two independent routes from the remote to the TV:
 ```mermaid
 flowchart LR
     R["Siri Remote A1513"] -->|"Bluetooth: touch, buttons, orientation"| B["Program inside the LG TV"]
-    B --> UI["LG interface: pointer, selection, settings, back"]
+    B --> UI["LG interface: pointer, selection, back"]
     R -->|"Infrared: volume and power"| IR["TV infrared receiver"]
     PC["Computer during setup"] -. "Install, inspect, configure" .-> B
 ```
@@ -356,9 +356,9 @@ The output contains:
 
 | Package | Role |
 | --- | --- |
-| `org.codex.siriremote.autocoord20261029v_0.9.104_arm.ipk` | Connection controller |
-| `org.codex.siriremote.hidgattrouterb20261029u_0.9.104_arm.ipk` | Input receiver |
-| `org.codex.siriremote.v20scheduler20261031a_0.0.97_arm.ipk` | Startup app and service |
+| `org.codex.siriremote.autocoord20261029v_0.9.106_arm.ipk` | Connection controller |
+| `org.codex.siriremote.hidgattrouterb20261029u_0.9.106_arm.ipk` | Input receiver |
+| `org.codex.siriremote.v20scheduler20261031a_0.0.99_arm.ipk` | Startup app and service |
 
 The long internal package names are retained for compatibility with the tested implementation. Do not rename just one package: the components verify one another's identities and file hashes.
 
@@ -373,9 +373,9 @@ Before updating an existing installation, stop its input session cooperatively a
 On a prepared, verified TV, the package installation commands are:
 
 ```sh
-ares-install --device my-tv build/my-tv/org.codex.siriremote.autocoord20261029v_0.9.104_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.hidgattrouterb20261029u_0.9.104_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.v20scheduler20261031a_0.0.97_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.autocoord20261029v_0.9.106_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.hidgattrouterb20261029u_0.9.106_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.v20scheduler20261031a_0.0.99_arm.ipk
 ```
 
 Then:

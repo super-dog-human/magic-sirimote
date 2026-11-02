@@ -3,9 +3,9 @@
 Button-bit reference: https://github.com/a-funk/open-appleremote/blob/main/docs/PROTOCOL.md
 The cited capture is A1962; this project separately verified the mapping on A1513/G3.
 Callers must supply an independently verified, bounded semantic key emitter.
-MENU maps to LG Settings; Siri/microphone maps to Back. Voice is not enabled.
+MENU and Siri/microphone map to Back. Voice is not enabled.
 """
-MASK_TO_ACTION={0x01:'home',0x08:'playpause',0x20:'settings',0x10:'back'}
+MASK_TO_ACTION={0x01:'home',0x08:'playpause',0x20:'back',0x10:'back'}
 
 def observed_mask(report):
  if type(report) not in (bytes,bytearray) or not report or report[0]!=0xfc:return None
