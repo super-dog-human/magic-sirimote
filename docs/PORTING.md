@@ -11,7 +11,7 @@ This document distinguishes the successful private installation from what a new 
 
 ## What is not a completed public workflow
 
-A clean-TV installation has not been re-run from this export. First pairing, discovering app runtime UIDs without starting input, permission validation, an operator-friendly provisioning/status tool, and a general IR backup/programming tool are still missing. These are real deployment prerequisites, not optional documentation details.
+A clean-TV installation has not been re-run from this export. The [setup audit](../reviews/setup-audit.md) lists each missing operation and the first-install dependency cycle. First pairing, discovering app runtime UIDs without starting input, permission validation, an operator-friendly provisioning/status tool, and a general IR backup/programming tool are still missing. These are real deployment prerequisites, not optional documentation details.
 
 The three IPKs are useful build artifacts for a developer completing those checks. They are not a universal consumer release. The source can also be reused independently—for example, the decoder, button mapping, navigation state machine, and output framing.
 
@@ -45,7 +45,7 @@ Changing the JSON config does not change every platform assumption:
 | CPU/input ABI | ARM32; `struct input_event` represented by `=iiHHi` |
 | Native launch | Small ARM ELF executable calls `/usr/bin/python3 -I -B .../native_probe.py` |
 | Startup app | ARM ELF calls `/usr/bin/node .../main.js` with `NODE_PATH=/usr/lib/nodejs:/usr/lib/node_modules` |
-| Python runtime | Existing TV Python, Linux `fcntl`, `ctypes`, and `/proc` |
+| Python runtime | Existing TV Python **3.10+**, Linux `fcntl`, `ctypes`, and `/proc`; the source evaluates `str | None` / `float | None` annotations |
 | Native libraries | Existing `libluna-service2.so.3`, `libglib-2.0.so.0` |
 | JavaScript platform | Existing `palmbus` under the native app/service identity |
 | App root | `/media/developer/apps/usr/palm/applications` |
