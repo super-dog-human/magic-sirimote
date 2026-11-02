@@ -15,9 +15,13 @@ A clean-TV installation has not been re-run from this export. The [setup audit](
 
 The three IPKs are useful build artifacts for a developer completing those checks. They are not a universal consumer release. The source can also be reused independently—for example, the decoder, button mapping, navigation state machine, and output framing.
 
+## Interrupted startup recovery
+
+After a full TV restart, the controller can archive an expired request from before that boot if the pinned receiver never wrote its durable start record, no receiver or recovery journal exists, and the previous controller has exited. The original records are retained as `unstarted` archives. This does not create a successful-session or sensor-stop receipt. An interrupted session that reached the receiver continues to require the existing recovery checks.
+
 ## Build configuration and validation
 
-The source builds controller/receiver **0.9.72** and scheduler **0.0.65**. Hardware testing covers controller/receiver 0.9.71 and scheduler 0.0.64. Hardware validation of the public package versions is pending; see `reviews/verification.md` for computer-side checks.
+The source builds controller/receiver **0.9.74** and scheduler **0.0.67**. Hardware testing covers controller/receiver 0.9.73 and scheduler 0.0.66. Hardware validation of the public package versions is pending; see `reviews/verification.md` for computer-side checks.
 
 - `src/build.py` uses your local configuration for device identities and measured developer/controller/receiver UIDs. Source defaults and test fixtures are not target measurements.
 - `src/build_support.py` provides archive construction and native launchers. The builder generates matching package hashes and an explicit runtime source inventory defines the included modules.

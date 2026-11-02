@@ -2,7 +2,7 @@
 
 Host checks were run on macOS. Hardware validation of the public package versions is pending.
 
-- **87 input/publication Python tests passed:** the 76 baseline input tests, 6 publication checks, and 5 runtime layout/retired-request checks.
+- **100 input/publication Python tests passed,** including 13 checks for interrupted launch recovery and diagnostic logging.
 - **10 scheduler Python tests passed.**
 - **22 JavaScript test files passed,** including admission, concurrency, interruption, startup binding, standby resume, package-pin tampering, expiry, and the public expiry-policy gate.
 - Two independent builds produced identical bytes for all three IPKs. Archive paths, file hashes, cross-package pins, ARM ELF headers, compiled Python payloads, and the disabled maintenance policy were checked.
@@ -13,11 +13,15 @@ Host checks were run on macOS. Hardware validation of the public package version
 
 ## Runtime checks
 
-The checked public builds are controller/receiver 0.9.72 and scheduler 0.0.65.
+The checked public builds are controller/receiver 0.9.74 and scheduler 0.0.67.
 
 - Every packaged runtime module is reachable through static imports from the controller/receiver entrypoints; a clean host process can import all modules without device operations.
 - A retired request blocks the controller/receiver before native checks, signal setup, or connection work. Ordinary stop/recovery records remain eligible for their existing handlers.
 - A retired scheduler request blocks before service-bus access or state writes; dangling symlinks are also blocked.
+
+## Interrupted startup recovery
+
+On the tested TV, runtime 0.9.73 and startup package 0.0.66 archived an expired launch request left by an earlier boot before the receiver started. Input resumed, followed by automatic restart on an ordinary power cycle. The tests reject live receivers, sensor journals, current-boot requests, changed packages, duplicate archives, and symlinks; interrupted archival resumes without overwriting evidence. A long power-off cycle after this repair has not yet been repeated.
 
 ## Scope
 

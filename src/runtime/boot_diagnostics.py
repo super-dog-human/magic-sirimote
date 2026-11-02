@@ -1,6 +1,6 @@
 """Bounded fixed-vocabulary bootstrap diagnostics; no device operations."""
 import json,os,re,stat
-ALLOW=re.compile(r'^(?:bootstrap|idle)-[a-z0-9-]{1,64}(?:-(?:RuntimeError|OSError|ValueError|TypeError|AttributeError|FileExistsError|TimeoutError))?$')
+ALLOW=re.compile(r'^(?:bootstrap|idle)-[a-z0-9-]{1,64}(?:-(?:RuntimeError|OSError|ValueError|TypeError|AttributeError|FileExistsError|FileNotFoundError|PermissionError|TimeoutError))?$')
 class BootTrace:
  def __init__(self):self.events=[]
  def add(self,event):
