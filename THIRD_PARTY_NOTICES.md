@@ -2,7 +2,7 @@
 
 The project is licensed under the root MIT `LICENSE`. The public export includes project-developed Python/JavaScript source, tests, and package-building helpers. It does not bundle TV firmware, LG native libraries, Node.js, Python, LLVM, captured Bluetooth traffic, diagnostic cable firmware, or whole upstream remote-control/homebrew packages.
 
-The project-developed touch helper snapshots (`touch_click.py`, `touch_coordinates.py`, and `touch_dpad.py`) live directly under `src/runtime`. Their former `vendor/` folder and duplicate session-policy module were removed. These helpers are not an installation of the upstream `open-appleremote` package.
+The project-developed touch helper snapshots (`touch_click.py`, `touch_coordinates.py`, and `touch_dpad.py`) live directly under `src/runtime`. These helpers are not an installation of the upstream `open-appleremote` package.
 
 The following work informed the investigation and deserves credit:
 

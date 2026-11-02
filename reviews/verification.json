@@ -11,8 +11,6 @@
   "publicPackagesInstalledOnTV": false,
   "privateDataScan": "No original device address/serial, author home path or private-key marker found in exported text. Live state, keys, logs and binaries not exported.",
   "publicBuild": "controller/receiver 0.9.72; scheduler 0.0.65",
-  "runtimeModules": 132,
-  "schedulerSourceFiles": 29,
   "retiredRequestGuardsTested": true,
   "dependencyInventoryVerified": true,
   "freshInstallWorkflowComplete": false,

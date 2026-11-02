@@ -15,26 +15,16 @@ A clean-TV installation has not been re-run from this export. The [setup audit](
 
 The three IPKs are useful build artifacts for a developer completing those checks. They are not a universal consumer release. The source can also be reused independently—for example, the decoder, button mapping, navigation state machine, and output framing.
 
-## Export changes compared with the accepted installation
+## Build configuration and validation
 
-The baseline was controller/receiver 0.9.71 and scheduler 0.0.64. The owner physically accepted MENU → Settings and microphone → Back on November 2, 2026.
+The source builds controller/receiver **0.9.72** and scheduler **0.0.65**. The owner-tested installation uses controller/receiver 0.9.71 and scheduler 0.0.64. The public packages have not been validated on the owner's TV; see `reviews/verification.md` for computer-side checks.
 
-The public export:
+- `src/build.py` uses your local configuration for device identities and measured developer/controller/receiver UIDs. Source defaults and test fixtures are not target measurements.
+- `src/build_support.py` provides archive construction and native launchers. The builder generates matching package hashes and an explicit runtime source inventory defines the included modules.
+- Developer Mode maintenance defaults to disabled through `expiry-policy.js`.
+- Startup rejects unsupported development requests while preserving them for reconciliation.
 
-1. Replaces the owner's remote/adapter addresses and remote serial with example identities. `src/build.py` substitutes the local configuration when building.
-2. Substitutes measured developer/controller/receiver UIDs in the packaged sources. Source defaults and old test fixtures retain baseline numeric IDs.
-3. Replaces machine-specific build dependencies with local `build_support.py` and a single three-package builder.
-4. Regenerates controller and receiver hash pins together.
-5. Defaults Developer Mode maintenance to disabled through `expiry-policy.js`. The original scheduler's extension implementation is retained behind that explicit policy.
-6. Adds configuration validation, packet inspection, an environment metadata tool, and publication tests.
-7. Updates outdated docstrings and removes obsolete experiment-specific repair paths. The cleaned source builds controller/receiver **0.9.72** and scheduler **0.0.65**.
-8. Moves scheduler tests into `tests/scheduler`, removes the duplicate session-policy helper, and extracts the unchanged active HID helpers from the old standalone experiment into `hid_input.py`.
-9. Requires an explicit `runtime-files.json` inventory and checks that all runtime modules are reachable through imports from the two native entrypoints. Package pins are generated, not stored as stale source.
-10. Blocks startup if retired development requests remain, leaving them untouched for reconciliation.
-
-No new public package was installed on the owner's TV as part of publishing this repository. The baseline's physical acceptance therefore does **not** certify all these export changes on hardware. See `reviews/verification.md` for host checks actually performed.
-
-`docs/source-provenance.json` maps exported files to hashes of the baseline sources. Its initial-export hashes are provenance, not the current package pins. Removed-file entries are available in Git history; moved files retain their original export path. Build manifests are the authority for generated package contents.
+`docs/source-provenance.json` identifies baseline source files. Its provenance hashes are not checksums of the current checkout; build manifests describe generated package contents.
 
 ## Fixed platform assumptions
 
@@ -124,9 +114,9 @@ ares-install --device my-tv --remove org.codex.siriremote.v20scheduler20261031a
 
 These commands remove the TV apps, not the remote's IR settings. Do not execute them as a substitute for the stop/cancel checks above.
 
-### Removed development requests
+### Unsupported development requests
 
-The public cleanup removes the old run-specific repair/archive handlers and the scheduler handler tied to an old numeric Activity ID. These are available in Git history at commit `8651328`; they are not included in new packages.
+The runtime does not execute the development-only repair/archive requests listed below. Any retained request must be reconciled before startup.
 
 The native entrypoints now reject these **unarchived request filenames** before opening an input session:
 

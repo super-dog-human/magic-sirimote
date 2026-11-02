@@ -10,8 +10,8 @@ Date: November 2, 2026. Code baseline: `a96a93b`. Scope: read the public guide i
 
 | Stage | Evidence in the repository | Finding and effect |
 | --- | --- | --- |
-| Computer prerequisites | [Runtime lifecycle](../src/runtime/lifecycle.py), [GATT reader](../src/runtime/direct_gatt_read.py) | Both evaluate union type annotations without postponed evaluation. The previous Python 3.9+ claim was wrong; the source requires 3.10+. This also applies on the TV. Documentation corrected. Minimum-version execution itself was not tested in this audit. |
-| Developer connection | README previously showed listing commands but omitted key retrieval | Added CLI installation, interactive TV registration, key retrieval and connection checks using LG's official guides. These prepare developer access, not remote pairing or native permissions. |
+| Computer prerequisites | [Runtime lifecycle](../src/runtime/lifecycle.py), [GATT reader](../src/runtime/direct_gatt_read.py) | Both evaluate union type annotations without postponed evaluation. The source requires Python 3.10+ on the computer and TV. Minimum-version execution itself was not tested in this audit. |
+| Developer connection | README developer connection steps | CLI installation, interactive TV registration, key retrieval and connection checks follow LG's official guides. These prepare developer access, not remote pairing or native permissions. |
 | Bluetooth pairing | [README pairing history](../README.md#step-2-establish-bluetooth-pairing); no exported pairing command | The historical DCSD-assisted repair coordinated TV pairing, remote peer selection, HID connection and input initialization. A general first-pairing tool and validation are missing. A reader cannot execute the historical outline with the current checkout alone. |
 | Identity collection | [Metadata reader](../src/tv_inventory.py) | Reports only current-process identity, machine/word size, executable presence and selected node metadata. It does not retrieve Bluetooth identities, firmware, app runtime UIDs or interpreter versions, or prove native app/service access. |
 | App identities before build | [Configuration validation](../src/build.py), [example configuration](../config.example.json) | Builder requires three measured role UIDs before producing the final packages. The guide installed those apps only afterward. An inert bootstrap installation and identity-discovery/update procedure is missing. File owner, SSH UID and native app runtime UID are different concepts. |
@@ -39,12 +39,10 @@ The table above is an audit, not an executable installer. Completing the workflo
 
 Changing the order in the README does not implement the missing tools. In particular, do not use the example IPKs or guessed account IDs to break the bootstrap dependency.
 
-## Checks and corrections in this audit
+## Verification scope
 
 - A clean export containing only Git-tracked files passed 87 input/publication/layout Python tests, 10 scheduler Python tests, and 22 JavaScript test files. The publication suite built all three packages twice and compared output bytes and pins. This checks host reproducibility, not a fresh TV install.
 - Compared the owner's recorded pairing repair and IR writes with the published prerequisites; no private addresses, serials, receipts or commands bound to the owner's hardware were copied into this report.
-- Reorganized README into capabilities, architecture and setup. Added an up-front completeness table, corrected Python requirements, and expanded developer connection instructions.
-- Made the UID bootstrap cycle, status verification, stop/resume transition and automatic startup prerequisites explicit. Preserved the distinction between IR packet encoding and remote programming.
 - No installer, pairing tool, device permission change, IR write or TV runtime update was performed by this audit.
 
 Official references checked: [LG CLI installation](https://webostv.developer.lge.com/develop/tools/cli-installation), [LG Developer Mode connection and key setup](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app). These support the developer-access steps only; they do not validate this project's native runtime or pairing workflow.

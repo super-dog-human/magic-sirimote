@@ -148,8 +148,8 @@ src/
   build_support.py      # Deterministic IPK archives and tiny ARM launchers
   runtime-files.json    # Explicit list of source modules allowed in packages
   ir_packets.py         # Pure IR configuration packet encoder; never transmits
-  runtime/              # 132 modules: controller, receiver, decoding, lifecycle
-  scheduler/            # 29 source files: startup, standby, expiry service
+  runtime/              # Controller, receiver, decoding, lifecycle
+  scheduler/            # Startup, standby, expiry service
   tv_inventory.py       # Read-only environment metadata on a TV
 config.example.json     # Fake device identities; historical example UIDs
 reviews/                # Public export verification results
@@ -174,11 +174,9 @@ Start with these files if you want to understand or adapt the behavior:
 | Standby resume checks | [`standby-resume.js`](src/scheduler/standby-resume.js) |
 | Developer Mode maintenance | [`expiry.js`](src/scheduler/expiry.js), [`expiry-policy.js`](src/scheduler/expiry-policy.js) |
 
-The runtime is split into small modules because input decoding, device identity, connection management, process coordination, and verified shutdown have different responsibilities. Some modules also share helper classes through inheritance. The file count is not a count of user-visible features.
+The runtime separates input decoding, device identity, connection management, process coordination, and verified shutdown. Scheduler tests live under `tests/scheduler`; package hashes are generated during the build. An explicit source inventory and dependency test define which modules belong in the packages.
 
-The first public snapshot included development leftovers. The cleanup reduces `runtime` from **175 to 132 Python modules** and `scheduler` from **54 to 29 source files**. It removes obsolete one-off repair paths, old standalone experiments, a duplicate helper, an empty module, and stale generated pins. Scheduler tests now live under `tests/scheduler`; package pins are generated during the build. Historical code remains available in [the first public commit](https://github.com/super-dog-human/magic-sirimote/tree/8651328ebb4eab1f693121e89a050c9a325d87cf).
-
-An explicit source inventory and dependency test keep unreferenced files out of future packages. Normal connection recovery, sensor shutdown, package verification, and standby resume remain. A retained request for a removed development operation blocks startup for review; it is not silently ignored. Some algorithms retain historical names and conservative experimental flags. Read [PORTING.md](docs/PORTING.md) for deployment limits. Provenance is recorded in [`docs/source-provenance.json`](docs/source-provenance.json).
+Read [PORTING.md](docs/PORTING.md) for deployment requirements and handling of unsupported state records. Source provenance is recorded in [`docs/source-provenance.json`](docs/source-provenance.json).
 
 Useful contributions include a verified clean-install workflow, additional TV/remote compatibility reports, better bounded status reporting, and investigation of complete touch-plus-orientation input. Include your model, firmware, steps, expected behavior, and actual behavior. Remove addresses, serials, tokens, private keys, and raw recordings from public reports.
 

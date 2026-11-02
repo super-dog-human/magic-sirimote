@@ -972,13 +972,5 @@
       "sourceSha256": "c170425666c49e8697469afcf289cd251cba15129d3e0f5c6138dce57a8032ad",
       "publishedSha256": "c170425666c49e8697469afcf289cd251cba15129d3e0f5c6138dce57a8032ad"
     }
-  ],
-  "cleanup": {
-    "baselineCommit": "8651328ebb4eab1f693121e89a050c9a325d87cf",
-    "runtimeBefore": 175,
-    "runtimeAfter": 132,
-    "schedulerSourceBefore": 54,
-    "schedulerSourceAfter": 29,
-    "note": "Removed files remain in Git history. HID helper functions extracted without changing their bodies. New inventory, retired-request guards and tests are project-authored."
-  }
+  ]
 }
