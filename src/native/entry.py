@@ -82,8 +82,16 @@ class Setup:
             self.done = True
 
     def handle(self, event, canvas):
+        if event[0] == 'close':
+            if self.infrared is None or not self.infrared.busy:
+                canvas.stop_text()
+                self.done = True
+            return
         if self.infrared is not None:
+            was_editing = self.infrared.editing
             self.infrared.handle(event)
+            if was_editing != self.infrared.editing:
+                (canvas.start_text if self.infrared.editing else canvas.stop_text)()
             if self.infrared.done:
                 self.infrared = None
             return
@@ -169,11 +177,13 @@ def main():
     try:
         app.draw(canvas)
         while not app.done:
-            dirty = app.infrared.tick() if app.infrared is not None else False
+            if app.infrared is not None and app.infrared.tick():
+                app.draw(canvas)
             for event in canvas.events():
                 app.handle(event, canvas)
-                dirty = True
-            if dirty and not app.done:
+                if app.done:
+                    break
+                # Rebuild click targets before handling the next queued event.
                 app.draw(canvas)
             time.sleep(.02)
     finally:

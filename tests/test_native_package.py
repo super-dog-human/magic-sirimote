@@ -1,3 +1,4 @@
+import hashlib
 import importlib.util
 import io
 import json
@@ -30,6 +31,8 @@ class NativePackageTest(unittest.TestCase):
             members = build_support.read_ar((outputs[0] / name).read_bytes())
             with tarfile.open(fileobj=io.BytesIO(members['data.tar.gz']), mode='r:gz') as archive:
                 files = {entry.name: archive.extractfile(entry).read() for entry in archive if entry.isfile()}
+                self.assertEqual({name: hashlib.sha256(data).hexdigest() for name, data in files.items()}, results[0]['package']['files'])
+                self.assertEqual(hashlib.sha256((outputs[0] / name).read_bytes()).hexdigest(), results[0]['package']['packageSha256'])
                 appinfos = [name for name in files if name.endswith('/appinfo.json')]
                 self.assertEqual(len(appinfos), 1)
                 info = json.loads(files[appinfos[0]])

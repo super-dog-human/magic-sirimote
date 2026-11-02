@@ -34,7 +34,21 @@ class InfraredScreen:
         self.boxes = []
         self.results = queue.Queue()
         self.message = 'Choose a button, a press type, and an IR or TV action.'
-        self.detail = 'Current remote settings cannot be read. No assignments are loaded automatically.'
+        self.detail = 'Current infrared settings cannot be read from the remote.'
+        self.refresh_saved_tv()
+
+    def refresh_saved_tv(self):
+        try:
+            self.tv_bindings = tv_assignments.load(self.state)['bindings']
+        except (OSError, ValueError):
+            self.tv_bindings = None
+
+    def saved_tv_label(self):
+        if self.tv_bindings is None:
+            return 'Saved TV assignment could not be read. Check storage before making changes.'
+        key = tv_assignments.slot(BUTTONS[self.button][1], self.delay)
+        choice = 'Screen off / restore (inactive preview)' if key in self.tv_bindings else 'None'
+        return 'Saved TV assignment for this button / press: ' + choice
 
     def tick(self):
         try:
@@ -44,6 +58,7 @@ class InfraredScreen:
         self.busy = False
         self.review = None
         self.focus = 5
+        self.refresh_saved_tv()
         status = result.get('status')
         if status == 'configured-only':
             self.message = 'TV assignment saved locally; not active in this preview.' if result.get('operation') == 'set' else 'Saved TV assignment deleted.'
@@ -60,8 +75,10 @@ class InfraredScreen:
         else:
             self.message = 'The result is unknown. The request was not repeated.'
             self.detail = 'Test the button before making another change. An operation record was saved if possible.'
+        if result.get('receiptSaved') is False:
+            self.detail += ' The final operation record could not be saved.'
         if result.get('clientReleased') is False:
-            self.detail = 'Connection cleanup was not confirmed. Check Bluetooth before another change.'
+            self.detail += ' Connection cleanup was not confirmed.'
         return True
 
     def choose(self, index):
@@ -94,6 +111,7 @@ class InfraredScreen:
                 else:
                     self.delay = options[index][1]
             self.selecting = None; self.focus = target
+            self.refresh_saved_tv()
             return
         if self.picking:
             if index < len(PRESETS):
@@ -174,6 +192,8 @@ class InfraredScreen:
             step = ARROWS[value]
             if (self.picking or self.selecting == 'button') and value in (1073741906, 1073741905):
                 step *= 2
+            elif self.editing and value in (1073741906, 1073741905):
+                step *= 6
             self.focus = (self.focus + step) % count
         elif kind == 'key' and value in (13, 1073741912):
             self.choose(self.focus)
@@ -237,7 +257,7 @@ class InfraredScreen:
             button(2, 'Action: ' + action, (64, 312, 1152, 65))
             for index, title in enumerate((set_label, delete_label, 'Back'), 3):
                 button(index, title, (64+(index-3)*390, 411, 372, 64))
-            canvas.text('TV assignments are saved locally; input runtime integration is still pending.' if tv else 'Choose an action, or enter a two-digit LG infrared code directly.', 66, 503, 21)
+            canvas.text(self.saved_tv_label(), 66, 503, 21)
         canvas.text(self.message, 66, 570, 22, max_width=1148)
         canvas.text(self.detail, 66, 612, 20, (155, 170, 190), max_width=1148)
         canvas.text('TV: local configuration only. IR: explicit programming of the remote.', 66, 663, 20, (155, 170, 190))

@@ -3,7 +3,7 @@
 The A1513 can store IR commands and transmit them without the TV's Bluetooth input program. This is how the tested setup handles volume and power, including powering the TV on while the receiver program is not processing input.
 
 The [native setup app](NATIVE_APP.md) includes a **Buttons** screen with explicit
-**Set** and **Delete** actions. Version 0.2.5 has passed offline transaction and UI
+**Set** and **Delete** actions. Version 0.2.6 has passed offline transaction and UI
 tests; the new screen and its native Bluetooth transport still need hardware
 validation. Installing or opening the app never programs the remote.
 
@@ -24,7 +24,7 @@ validation. Installing or opening the app never programs the remote.
 4. Select **Action** and choose a named action such as **Power on/off (IR)**
    or **Back (IR)**. Alternatively, choose **Enter code directly (IR)** and
    enter exactly two hexadecimal digits (`00`–`FF`) using the on-screen keys,
-   then select **Done**. Select **Set**, review the button, press type and
+   then select **Done**. A USB keyboard can also enter the code. Select **Set**, review the button, press type and
    action, then confirm with **Set**. Choosing an action alone sends nothing.
 5. To remove that entry, select **Delete** and confirm with **Delete**.
    No action code is needed. Other buttons and delay selectors are untouched.
@@ -77,7 +77,9 @@ previous assignment cannot be reconstructed from a receipt.
 infrared command or a two-digit code. Its intended behavior is to keep audio
 playing while the picture is off, then restore the picture on the next press.
 Choose a button and normal/long press, then confirm **Save**. **Delete**
-removes only that locally saved TV assignment. Neither operation changes the
+removes only that locally saved TV assignment. The main Buttons screen shows
+the saved TV choice for the selected button and press type, including after
+reopening the app. Neither operation changes the
 remote's infrared entries or sends a power command.
 
 **The native preview saves this choice but does not activate it.** Its input
@@ -135,7 +137,9 @@ The app calls the TV Bluetooth service as its own native app account, without
 root or a system-service identity. It obtains a GATT client for identity and
 sensor-state reads and releases that client afterwards. It never disconnects
 the whole HID link or changes pairing. On uncertain communication, cleanup may
-also be unconfirmed; the result reports that separately.
+also be unconfirmed; the result reports that separately. If the final operation
+record cannot be saved, the app preserves the delivery result and reports the
+recording failure without retrying the remote write.
 
 The configuration path and bytes were used in earlier targeted Bluetooth
 procedures. Their integration into this generic app still needs an on-TV test,

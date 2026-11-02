@@ -83,8 +83,9 @@ def program(values, action, button, delay, code, call, record, idle=runtime_idle
               'code': code.upper() if action == 'set' else None,
               'readbackVerified': False, 'automaticRetries': 0}
 
-    def invoke(method, params, timeout=5, identity=True):
-        idle()
+    def invoke(method, params, timeout=5, identity=True, check_idle=True):
+        if check_idle:
+            idle()
         reply = call(method, params, timeout)
         if type(reply) is not dict or reply.get('returnValue') is not True:
             raise RuntimeError('The TV rejected the request. No automatic retry was made.')
@@ -145,13 +146,19 @@ def program(values, action, button, delay, code, call, record, idle=runtime_idle
     finally:
         if client is not None:
             try:
-                reply = invoke('gatt/disconnect', {'clientId': client}, 8, identity=False)
+                # Release only our client even if another runtime has since started.
+                reply = invoke('gatt/disconnect', {'clientId': client}, 8, identity=False, check_idle=False)
                 if 'clientId' in reply and reply['clientId'] != client:
                     raise RuntimeError('Configuration connection release was not confirmed.')
                 result['clientReleased'] = True
             except Exception:
                 result['clientReleased'] = False
-        record(dict(result))
+        try:
+            record(dict(result))
+            result['receiptSaved'] = True
+        except Exception:
+            # Preserve delivery evidence if final disk recording fails.
+            result['receiptSaved'] = False
     return result
 
 
@@ -182,6 +189,12 @@ def execute(state, action, button, delay, code):
                 view = view[written:]
             os.ftruncate(receipt, len(raw))
             os.fsync(receipt)
+
+        parent = os.open(state, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            os.fsync(parent)  # Persist the new receipt name before any remote write.
+        finally:
+            os.close(parent)
 
         with Luna() as call:
             return program(values, action, button, delay, code, call, record)

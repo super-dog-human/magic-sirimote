@@ -36,7 +36,7 @@ def validate(value):
 def load(directory):
     from settings import _unique
     try:
-        fd = os.open(Path(directory) / FILE, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        fd = os.open(Path(directory) / FILE, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
     except FileNotFoundError:
         return {'schema': 1, 'bindings': {}}
     try:

@@ -115,7 +115,10 @@ class Canvas:
             if kind == 0x100 or (kind == 0x200 and raw[12] == 14):
                 yield ('close', None)
             elif kind == 0x300:  # SDL_KeyboardEvent: keysym.sym is at byte 20.
-                yield ('key', int.from_bytes(raw[20:24], 'little', signed=True))
+                key = int.from_bytes(raw[20:24], 'little', signed=True)
+                # A held OK/Back must not activate controls repeatedly.
+                if not raw[13] or key in (1073741906, 1073741905, 1073741904, 1073741903):
+                    yield ('key', key)
             elif kind == 0x303:
                 yield ('text', raw[12:44].split(b'\0', 1)[0].decode('utf-8', 'replace'))
             elif kind == 0x402 and raw[16] == 1:  # Left mouse button release.
