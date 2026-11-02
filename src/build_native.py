@@ -8,7 +8,7 @@ import build_support
 
 ROOT = Path(__file__).resolve().parent
 APP = 'org.magicsirimote.app'
-VERSION = '0.2.0'
+VERSION = '0.2.1'
 SOURCES = ('entry.py', 'settings.py', 'graphics.py', 'device_check.py',
            'ir_screen.py', 'ir_programmer.py', 'native_luna.py')
 

@@ -3,7 +3,7 @@
 The A1513 can store IR commands and transmit them without the TV's Bluetooth input program. This is how the tested setup handles volume and power, including powering the TV on while the receiver program is not processing input.
 
 The [native setup app](NATIVE_APP.md) includes an **Infrared** screen with explicit
-**Set** and **Delete** actions. Version 0.2.0 has passed offline transaction and UI
+**Set (IR)** and **Delete (IR)** actions. Version 0.2.1 has passed offline transaction and UI
 tests; the new screen and its native Bluetooth transport still need hardware
 validation. Installing or opening the app never programs the remote.
 
@@ -17,14 +17,22 @@ validation. Installing or opening the app never programs the remote.
    an existing installation for you. Use the original LG remote for setup.
 3. Open **Infrared**. Select the physical button and **Immediate (00)** or
    **Hold about 0.7 seconds (02)**. These are separate stored entries.
-4. To assign an LG action, enter its two-digit hexadecimal code, select **Set**,
-   review the selected button and press type, then select **Set assignment**.
-   Examples: `02` volume up, `03` volume down, `08` power, `43` settings, `7C` home.
-5. To remove that entry, select **Delete**, then **Delete assignment**. No
-   action code is needed. Other buttons and delay selectors are untouched.
+4. Select **Action** and choose a named action such as **Power on/off (IR)**
+   or **Back (IR)**. Alternatively, choose **Enter code directly (IR)** and
+   enter exactly two hexadecimal digits (`00`–`FF`) using the on-screen keys,
+   then select **Done**. Select **Set (IR)**, review the button, press type and
+   action, then confirm with **Set (IR)**. Choosing an action alone sends nothing.
+5. To remove that entry, select **Delete (IR)** and confirm with **Delete (IR)**.
+   No action code is needed. Other buttons and delay selectors are untouched.
 6. Test the button physically. A TV service acknowledgement is shown as
    **Request sent**, not proof that the remote saved the entry. An interrupted
    or missing acknowledgement is shown as unknown and never retried automatically.
+
+The named choices are Power on/off (`08`), Back (`28`), Home (`7C`),
+Settings (`43`), Volume + (`02`), Volume − (`03`), Mute (`09`), Play (`B0`)
+and Pause (`BA`). These are LG command choices, not settings read from your
+remote or factory defaults. Support depends on the TV and active app; Play
+and Pause are separate commands. See the [LG IR code reference](https://gscs-b2c.lge.com/open/downloadFile?fileId=JzkdczeDuzRq6UZINzzTJw).
 
 The screen currently encodes LG TV commands using the tested NEC format. It
 is not a universal manufacturer selector. A command code alone does not

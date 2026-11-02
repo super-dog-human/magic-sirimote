@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src/native'), str(ROOT / 'src')]
 import ir_programmer as ir
-from ir_screen import InfraredScreen
+from ir_screen import InfraredScreen, PRESETS
 
 VALUES = {'schema': 1, 'remoteAddress': '02:aa:bb:cc:dd:01',
           'adapterAddress': '02:aa:bb:cc:dd:02', 'remoteName': 'TEST_REMOTE'}
@@ -119,6 +119,41 @@ class InfraredTest(unittest.TestCase):
         self.assertEqual(calls, [])
         app.choose(3)  # Set needs a code; Delete does not.
         self.assertIsNone(app.review)
+
+    def test_preset_and_custom_selection_do_not_send_until_confirmed(self):
+        calls = []
+        app = InfraredScreen(Path('/unused'), submit=lambda *args: calls.append(args))
+        app.choose(2)
+        app.choose(next(i for i, (name, code) in enumerate(PRESETS) if name == 'Back'))
+        self.assertEqual(app.code, '28')
+        self.assertFalse(app.picking)
+        app.choose(2); app.choose(len(PRESETS))
+        app.choose(16); app.choose(16)  # Erase the selected preset.
+        app.handle(('text', 'g4'))  # Ignore non-hexadecimal characters.
+        app.choose(17)
+        self.assertTrue(app.editing)  # Incomplete codes cannot be accepted.
+        app.handle(('text', 'd'))
+        app.choose(17)
+        self.assertEqual(app.code, '4D')
+        self.assertFalse(app.editing)
+        app.choose(3)
+        self.assertEqual(app.review, 'set')
+        self.assertEqual(calls, [])
+        app.choose(0)
+        self.assertEqual(calls, [])
+
+    def test_cancel_custom_code_preserves_previous_selection(self):
+        app = InfraredScreen(Path('/unused'))
+        app.choose(2); app.choose(0)
+        self.assertEqual(app.code, '08')
+        app.choose(2); app.choose(len(PRESETS))
+        app.choose(16)
+        app.handle(('key', 27))
+        self.assertTrue(app.picking)
+        app.handle(('key', 27))
+        self.assertFalse(app.picking)
+        self.assertEqual(app.code, '08')
+        self.assertFalse(app.done)
 
     def test_confirm_runs_once_and_busy_ignores_repeated_input(self):
         import threading
