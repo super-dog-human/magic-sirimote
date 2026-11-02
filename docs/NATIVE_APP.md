@@ -1,35 +1,122 @@
 # Native app
 
-The single-app version is being developed as a **native webOS application**, with a service inside the same IPK. The native setup preview is available below. It is not yet a replacement for the working three-package input runtime.
+The available IPK is a **native webOS settings preview**. It does not include an input receiver or background service, and is not a replacement for the working three-package input runtime. The intended integrated design is described below.
 
 ## Try the setup preview
 
-[Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.2.6_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
+[Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.2.7_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
 
 This package contains a native settings screen, a remote-friendly character picker, settings validation and a non-mutating input-access check. It contains **no device addresses or serial numbers**. Saving settings changes only this app's saved configuration. It does not pair a remote, start remote control or register automatic startup. The **Buttons** screen provides a list of all seven physical buttons and separate normal/long-press selectors. It offers named LG actions and direct two-digit code entry, and can explicitly set or delete one stored assignment; it never writes automatically. The new IR integration is not yet hardware-validated.
 
 The preview requires the same tested G3 environment, including the TV's 32-bit Python 3.10+ interpreter, SDL2 and SDL_ttf. It uses a font already installed on the TV. These dependencies are not bundled. Other TV models remain unverified.
 
-1. Set up Developer Mode and the computer-to-TV connection using [the existing guide](../README.md#step-1-set-up-developer-access).
-2. Install the IPK, replacing `my-tv` with the device name registered in your LG CLI:
+## Install on a TV
+
+These commands install the settings preview only. They do not pair a Siri Remote,
+start input reception, or migrate an existing controller/receiver/startup installation.
+Keep the working three packages installed. No diagnostic cable is needed to
+install or open this preview.
+
+### First connection from a Mac
+
+Skip this section if your Mac already connects to the TV with the LG CLI.
+
+1. Install the [webOS CLI](https://webostv.developer.lge.com/develop/tools/cli-installation)
+   and connect the Mac and TV to the same network. If you have an older CLI,
+   follow LG's migration instructions instead of installing competing versions.
+2. On the TV, install **Developer Mode** from LG Apps, sign in, and enable
+   **Dev Mode Status**. First-time activation reboots the TV. If it is already
+   On, leave it On. Reopen the app and enable **Key Server**.
+3. Run `ares-setup-device` on the Mac and select **add**. Use `my-tv` as the device
+   name (or substitute your own name below), the TV's network IP address,
+   port `9922`, and user `prisoner`. The network IP is not a Bluetooth address.
+4. Retrieve the connection key, entering the passphrase shown on the TV:
 
    ```sh
-   ares-install -d my-tv releases/native-preview/org.magicsirimote.app_0.2.6_arm.ipk
-   ares-launch -d my-tv org.magicsirimote.app
+   ares-novacom --device my-tv --getkey
+   ares-device --system-info --device my-tv
    ```
 
-3. Use the original LG remote's arrows and OK button to select a field. Choose characters on the screen; a USB keyboard can also enter text. **Back** leaves the character picker, and **Save settings** saves the completed form.
-4. Select **Check this TV**. The check briefly opens the existing `LGE RCU` and `ClickableMouse` nodes and closes them without reading or writing events. Passing this check establishes native input access; it does not establish Bluetooth pairing or prove the complete remote-control runtime works.
-5. To configure IR or save the TV-side screen-off choice, open **Buttons** and follow the [Set and Delete instructions](IR.md). IR programming requires the input runtime to be stopped; this preview does not pause it for you. **Screen off / restore (TV)** saves a local assignment only and remains inactive until input runtime integration is complete.
-6. Select **Close** to return to the TV. The preview does not run a background input program.
+   Continue when system information is returned successfully. See
+   [LG's connection guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app).
 
-To remove only this preview:
+### Install and open the preview
+
+Run from the repository root. Replace `my-tv` with the registered device name.
+Install only the latest IPK; older IPKs are not dependencies.
 
 ```sh
-ares-install -d my-tv -r org.magicsirimote.app
+ares-install --device my-tv releases/native-preview/org.magicsirimote.app_0.2.7_arm.ipk
+ares-launch --device my-tv org.magicsirimote.app
 ```
 
-The existing controller, receiver and startup packages are separate and remain unchanged. Developer Mode expiry is managed separately using your usual tools.
+The TV should show **Magic Sirimote** with device fields and **Gyro cursor**.
+It can also be opened later from the TV launcher as **Magic Sirimote Setup**.
+If it does not appear, installation or launch is not verified; do not infer
+success merely because the file was transferred. The native dependencies listed
+above still need to be present on the TV.
+
+1. Use the original LG remote's arrows and OK button to enter the device
+   identities. A USB keyboard can also enter text. **Save settings** saves them.
+2. Select **Check this TV**. It opens and closes the existing input-device nodes
+   without reading or sending input. A successful check establishes access only;
+   it does not verify pairing or remote-control operation.
+3. **Gyro cursor** defaults to On. Its On/Off choice and **Buttons → Screen off /
+   restore (TV)** can be saved, but do not affect the current input runtime yet.
+4. IR programming is a separate operation. Before using **Set** or **Delete**
+   for an IR action, complete the prerequisites in [the IR guide](IR.md), including
+   stopping the input runtime and automatic restarts. This preview has no
+   Stop/Resume control. Opening the app alone never programs the remote.
+5. Select **Close** when finished. No background receiver starts.
+
+### Update an existing preview
+
+Wait for any IR operation to finish and close the preview using its **Close**
+button. Note your device fields, gyro choice and saved TV assignments before
+updating. Retain any operation receipts you need separately; they are not a
+readback or backup of the remote's IR memory.
+
+Install the newer IPK using the same `ares-install` command above, then launch
+it with the same app ID. Do not uninstall first as a routine update step.
+Settings retention across webOS package replacement has not been verified for
+this preview: check the values after reopening and re-enter them if needed.
+This update does not modify the separately installed three-package runtime.
+
+### Remove only this preview
+
+After any pending IR operation has finished and the preview is closed:
+
+```sh
+ares-install --device my-tv --remove org.magicsirimote.app
+```
+
+Removing the app does not undo IR commands already stored in the Siri Remote.
+Do not rely on its local settings or receipts surviving removal. Developer Mode
+expiry is managed separately using your usual tools.
+
+The install, launch, list and remove commands are described in the
+[LG CLI guide](https://webostv.developer.lge.com/develop/tools/cli-dev-guide).
+
+## Package contents
+
+The preview contains 15 payload files: ten Python modules, one small ARM launcher,
+an icon, app metadata, package metadata, and `state/README.txt`. All Python modules
+are reachable from the launcher's entry point. `native_probe.py` is the active
+startup wrapper despite its historical name; it is not an unused diagnostic.
+`state/README.txt` supplies the initial private state-directory placeholder.
+
+The old controller, receiver and scheduler, test files, build tools, bytecode
+caches, logs, saved identities, operation receipts and previous IPKs are not
+bundled. Builds use an explicit source list and start in a new output directory;
+they do not package an old working directory wholesale. The package test checks
+the exact inventory and module reachability.
+
+Only app and package directories are installed; this preview contains no bundled
+service. The Python/SDL/font dependencies are supplied by the tested TV, which
+is why the IPK is small. A small package does not imply compatibility with every TV.
+
+This describes the IPK itself. It is not an inventory or cleanup of files already
+on a TV from earlier installations.
 
 ## Settings
 

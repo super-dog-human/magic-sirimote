@@ -3,7 +3,7 @@
 The A1513 can store IR commands and transmit them without the TV's Bluetooth input program. This is how the tested setup handles volume and power, including powering the TV on while the receiver program is not processing input.
 
 The [native setup app](NATIVE_APP.md) includes a **Buttons** screen with explicit
-**Set** and **Delete** actions. Version 0.2.6 has passed offline transaction and UI
+**Set** and **Delete** actions. Version 0.2.7 has passed offline transaction and UI
 tests; the new screen and its native Bluetooth transport still need hardware
 validation. Installing or opening the app never programs the remote.
 

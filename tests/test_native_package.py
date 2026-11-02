@@ -1,3 +1,4 @@
+import ast
 import hashlib
 import importlib.util
 import io
@@ -29,6 +30,10 @@ class NativePackageTest(unittest.TestCase):
                 self.assertFalse(result['automaticInfraredWrites'])
                 self.assertFalse(result['hardwareValidated'])
             members = build_support.read_ar((outputs[0] / name).read_bytes())
+            with tarfile.open(fileobj=io.BytesIO(members['control.tar.gz']), mode='r:gz') as control:
+                self.assertEqual(control.getnames(), ['control'])
+                self.assertIn(b'Description: Magic Sirimote native settings and IR programming preview',
+                              control.extractfile('control').read())
             with tarfile.open(fileobj=io.BytesIO(members['data.tar.gz']), mode='r:gz') as archive:
                 files = {entry.name: archive.extractfile(entry).read() for entry in archive if entry.isfile()}
                 self.assertEqual({name: hashlib.sha256(data).hexdigest() for name, data in files.items()}, results[0]['package']['files'])
@@ -41,6 +46,24 @@ class NativePackageTest(unittest.TestCase):
                 self.assertEqual(info['requiredACG'], [])
                 self.assertFalse(any('/services/' in name or name.endswith('/settings.json') for name in files))
                 prefix = 'usr/palm/applications/org.magicsirimote.app/'
+                expected = {'appinfo.json', 'device_check.py', 'entry', 'entry.py',
+                            'graphics.py', 'icon.png', 'ir_packets.py', 'ir_programmer.py',
+                            'ir_screen.py', 'native_luna.py', 'native_probe.py', 'settings.py',
+                            'tv_assignments.py', 'state/README.txt'}
+                self.assertEqual(set(files), {prefix + item for item in expected} |
+                                 {'usr/palm/packages/org.magicsirimote.app/packageinfo.json'})
+                modules = {Path(path).stem: content for path, content in files.items() if path.endswith('.py')}
+                visited, pending = set(), ['native_probe']
+                while pending:
+                    module = pending.pop()
+                    if module in visited:
+                        continue
+                    visited.add(module)
+                    for node in ast.walk(ast.parse(modules[module])):
+                        imports = ([item.name.split('.')[0] for item in node.names] if isinstance(node, ast.Import)
+                                   else [node.module.split('.')[0]] if isinstance(node, ast.ImportFrom) and node.module else [])
+                        pending.extend(item for item in imports if item in modules and item not in visited)
+                self.assertEqual(visited, set(modules), 'Bundled Python modules must be used by the app')
                 for name in build_native.SOURCES:
                     compile(files[prefix + name], name, 'exec')
                 self.assertTrue(files[prefix + 'entry'].startswith(b'\x7fELF'))

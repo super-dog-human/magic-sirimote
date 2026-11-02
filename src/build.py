@@ -73,7 +73,7 @@ def configured(text, config):
     return re.sub(pattern,lambda m:mapping[m.group()],text).encode()
 
 
-def package(out, app, version, files, service=None):
+def package(out, app, version, files, service=None, *, description='Experimental TV-local Siri Remote runtime'):
     root='usr/palm/applications/'+app
     info_root='usr/palm/packages/'+app
     info=js({'id':app,'version':version,'app':app,'services':[app+'.service'] if service else []})
@@ -90,7 +90,7 @@ def package(out, app, version, files, service=None):
     owners[info_root+'/packageinfo.json']=(501,20)
     owners.update({p:(501,20) for p in dirs}); owners[root]=owners[root+'/state']=(5999,5000)
     control=(f'Package: {app}\nVersion: {version}\nArchitecture: arm\n'
-             'Maintainer: magic-sirimote contributors\nDescription: Experimental TV-local Siri Remote runtime\n').encode()
+             f'Maintainer: magic-sirimote contributors\nDescription: {description}\n').encode()
     raw=pkg.make_ar({'debian-binary':b'2.0\n',
         'control.tar.gz':pkg.tar_gz({'control':control},set(),{'control':0o644},{'control':(0,0)}),
         'data.tar.gz':pkg.tar_gz(content,dirs,modes,owners)})
