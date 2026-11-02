@@ -9,7 +9,7 @@
   "packageHashesAndPinsChecked": true,
   "publicPackagesInstalledOnTV": false,
   "privateDataScan": "No original device address/serial, local home path or private-key marker found in exported text. Live state, keys, logs and binaries not exported.",
-  "publicBuild": "controller/receiver 0.9.102; scheduler 0.0.95",
+  "publicBuild": "controller/receiver 0.9.104; scheduler 0.0.97",
   "retiredRequestGuardsTested": true,
   "dependencyInventoryVerified": true,
   "freshInstallWorkflowComplete": false,
@@ -47,5 +47,10 @@
   "repeatedHomeWithoutStopVerified": true,
   "buttonReleasePowerCycleAutomaticResumeVerified": true,
   "immediatePowerOnInputReadyVerified": false,
-  "irConfigurationChanged": false
+  "irConfigurationChanged": false,
+  "verticalPointerGainRatio": 0.8,
+  "verticalToHorizontalGainRatio": 1.2,
+  "horizontalPointerSequenceUnchanged": true,
+  "hardwareVerticalGainBuild": "controller/receiver 0.9.103; scheduler 0.0.96",
+  "verticalGainPhysicalAcceptanceVerified": true
 }

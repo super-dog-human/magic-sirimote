@@ -13,7 +13,7 @@ Host checks were run on macOS. Hardware validation of the public package version
 
 ## Runtime checks
 
-The checked public builds are controller/receiver 0.9.102 and scheduler 0.0.95.
+The checked public builds are controller/receiver 0.9.104 and scheduler 0.0.97.
 
 - Every packaged runtime module is reachable through static imports from the controller/receiver entrypoints; a clean host process can import all modules without device operations.
 - A retired request blocks the controller/receiver before native checks, signal setup, or connection work. Ordinary stop/recovery records remain eligible for their existing handlers.
@@ -64,3 +64,7 @@ Bounded diagnostics retain the original session failure when resource or applica
 All 142 input and publication tests passed. Private hardware packages are controller/receiver 0.9.101 and scheduler 0.0.94, with all 410 installed files verified. The user confirmed that an uncovered Home press returns to Home and subsequent navigation and MENU still work. Repeated Home operations and MENU/microphone release timing were also physically confirmed without another stop. The public build remains a separate export.
 
 A subsequent approximately 0.7-second IR power-off/on test launched a new receiver automatically. Controls were initially reported unavailable, then worked without a manual restart. Immediate readiness after power-on is not verified; the startup delay was not measured in this trial. IR configuration was not changed.
+
+## Vertical pointer travel
+
+The vertical gain is reduced by 20%, from 2180.25 to 1744.2; the horizontal gain remains 1453.5. The vertical/horizontal conversion ratio is now 1.2 instead of 1.5. Filtering, rest detection, and render timing are unchanged. Identical synthetic movements produced an unchanged horizontal output sequence and approximately 0.8 of the previous vertical output, with the same first-output time. Integer rounding and TV processing may affect perceived travel. Private test packages are controller/receiver 0.9.103 and scheduler 0.0.96. All 410 installed files matched their build hashes. The user confirmed that the adjusted balance feels good.

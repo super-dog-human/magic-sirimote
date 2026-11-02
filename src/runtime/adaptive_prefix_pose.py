@@ -17,7 +17,7 @@ class AdaptivePrefixPose:
     PERIOD = .020
     ANGLE_DEADBAND = .00035
     MAX_SINGLE_REPORT_ROTATION = 1.0
-    AXIS_GAINS = (1453.5, 2180.25)
+    AXIS_GAINS = (1453.5, 1744.2)
     # Resting-pose noise must not accumulate into visible cursor creep.
     REST_RADIUS = .0012
     REST_SECONDS = .20
