@@ -2,12 +2,12 @@
 
 The A1513 can store IR commands and transmit them without the TV's Bluetooth input program. This is how the tested setup handles volume and power, including powering the TV on while the receiver program is not processing input.
 
-The [native setup app](NATIVE_APP.md) includes an **Infrared** screen with explicit
-**Set (IR)** and **Delete (IR)** actions. Version 0.2.2 has passed offline transaction and UI
+The [native setup app](NATIVE_APP.md) includes a **Buttons** screen with explicit
+**Set (IR)** and **Delete (IR)** actions. Version 0.2.3 has passed offline transaction and UI
 tests; the new screen and its native Bluetooth transport still need hardware
 validation. Installing or opening the app never programs the remote.
 
-## Use the Infrared screen
+## Use infrared assignments
 
 1. Save the correct device identities on the setup screen. Pairing and an
    existing HID/GATT connection are prerequisites; this screen does not pair.
@@ -15,7 +15,7 @@ validation. Installing or opening the app never programs the remote.
    deployment procedure. The screen refuses to operate while another project
    app is running or the remote's motion sensors are active. It does not stop
    an existing installation for you. Use the original LG remote for setup.
-3. Open **Infrared**, select **Button (IR)** and choose a physical button
+3. Open **Buttons**, select **Button** and choose a physical button
    from the list: TV / Home, Volume +, Volume −, Play / Pause, Microphone,
    MENU, or Surface click. All seven buttons have the same Set/Delete options.
    Select **Press** and choose **Normal press (immediate)** or
@@ -66,6 +66,30 @@ backup, invent factory defaults, or present saved operation receipts as remote
 readback. Receipts in `state/ir-operation-*.json` record what this app attempted;
 keep them private. Known code/selector values can be set again, but an unknown
 previous assignment cannot be reconstructed from a receipt.
+
+## Screen off / restore (TV)
+
+**Buttons → Action → Screen off / restore (TV)** is a TV-side choice, not an
+infrared command or a two-digit code. Its intended behavior is to keep audio
+playing while the picture is off, then restore the picture on the next press.
+Choose a button and normal/long press, then confirm **Save (TV)**. **Delete (TV)**
+removes only that locally saved TV assignment. Neither operation changes the
+remote's infrared entries or sends a power command.
+
+**The native preview saves this choice but does not activate it.** Its input
+runtime is not integrated yet. Saving reports “not active in this preview”;
+closing the settings app does not start a background listener. The existing
+three-package runtime does not read this new file either.
+
+`state/tv-assignments.json` stores schema 1 and a `bindings` object whose keys
+are `BUTTON:PRESS` in hexadecimal (for example `10:00` for the microphone's
+normal press), and whose values are `screen-toggle`. `00` requests normal
+release behavior and `02` requests a hold of about 0.7 seconds. They are TV-side
+binding identifiers in this file, not IR writes. A future runtime must handle
+short/long selection, suppress wake-producing motion/click output while the
+screen is off, and keep receiving the restore button. The earlier standalone
+TV implementation demonstrated that suppression is necessary; calling screen
+off alone can allow the next cursor event to wake the picture immediately.
 
 ## Packet reference
 

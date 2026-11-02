@@ -122,7 +122,7 @@ class Setup:
             return
         canvas.clear()
         canvas.text('Magic Sirimote', 64, 42, 40)
-        canvas.text('Device setup and infrared assignments', 66, 94, 23, (114, 191, 227))
+        canvas.text('Device setup and button assignments', 66, 94, 23, (114, 191, 227))
         self.boxes = []
         if self.editing is not None:
             canvas.text(settings.LABELS[self.editing], 66, 160, 27)
@@ -144,13 +144,13 @@ class Setup:
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
                 canvas.text(self.values[field] or 'Select to enter', 82, y + 44, 25, max_width=1110)
                 self.boxes.append((index, box))
-            for index, title in enumerate(('Check this TV', 'Save settings', 'Infrared', 'Close'), 3):
+            for index, title in enumerate(('Check this TV', 'Save settings', 'Buttons', 'Close'), 3):
                 box = (64 + (index - 3) * 292, 480, 274, 61)
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
                 canvas.text(title, box[0] + 25, box[1] + 17, 25)
                 self.boxes.append((index, box))
             canvas.text(self.message, 66, 568, 22, max_width=1148)
-            canvas.text('Infrared changes require Set or Delete. Pairing and input startup are separate.', 66, 630, 21, (155, 170, 190))
+            canvas.text('IR programs the remote. TV assignments are saved only; input startup is separate.', 66, 630, 21, (155, 170, 190))
             canvas.text('Developer Mode expiry is managed separately using your usual tools.', 66, 663, 20, (155, 170, 190))
         canvas.present()
 

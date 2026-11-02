@@ -127,7 +127,7 @@ class InfraredTest(unittest.TestCase):
         app.choose(next(i for i, (name, code) in enumerate(PRESETS) if name == 'Back'))
         self.assertEqual(app.code, '28')
         self.assertFalse(app.picking)
-        app.choose(2); app.choose(len(PRESETS))
+        app.choose(2); app.choose(len(PRESETS)+1)
         app.choose(16); app.choose(16)  # Erase the selected preset.
         app.handle(('text', 'g4'))  # Ignore non-hexadecimal characters.
         app.choose(17)
@@ -146,7 +146,7 @@ class InfraredTest(unittest.TestCase):
         app = InfraredScreen(Path('/unused'))
         app.choose(2); app.choose(0)
         self.assertEqual(app.code, '08')
-        app.choose(2); app.choose(len(PRESETS))
+        app.choose(2); app.choose(len(PRESETS)+1)
         app.choose(16)
         app.handle(('key', 27))
         self.assertTrue(app.picking)
