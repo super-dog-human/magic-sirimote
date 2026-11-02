@@ -8,12 +8,12 @@ The repository contains the TV runtime, package builder, configuration reference
 
 > **Setup status:** the runtime has been tested on the hardware listed below, but **following this README from top to bottom does not yet reproduce a fresh installation**, even on the same remote and TV models. Pairing, app-account discovery, device-access checks, IR programming, and startup/maintenance operations still need setup tooling. See the [setup audit](reviews/setup-audit.md) for the exact gaps. The published package versions have passed computer-side tests; hardware validation is pending.
 
-- [1. Environment](#1-environment)
+- [1. Tested Configuration](#1-tested-configuration)
 - [2. What you can do](#2-what-you-can-do)
 - [3. How it works](#3-how-it-works)
 - [4. Setup guide](#4-setup-guide)
 
-## 1. Environment
+## 1. Tested Configuration
 
 The tested hardware and software configuration is:
 
@@ -32,24 +32,13 @@ The webOS platform version and TV firmware version are separate values. The plat
 
 ## 2. What you can do
 
-### Verified behavior
+- Turn the TV on or off and adjust the volume using infrared.
+- Open Settings, go back, return to Home, and play or pause video.
+- Swipe the touch surface to move the selection up, down, left, or right.
+- Press the touch surface to click at the pointer position or select the highlighted item.
+- Move the on-screen pointer with the remote's motion sensors, with your finger off the touch surface.
 
-The following controls are verified on the configuration listed in Environment.
-
-| Action | Result | Path |
-| --- | --- | --- |
-| Swipe the touch surface | Move the highlighted selection up, down, left, or right; hide the pointer | Bluetooth → TV program |
-| Press the surface while a selection is highlighted | Select/open the highlighted item | Bluetooth → native Enter key |
-| Move the remote deliberately, with your finger off the surface | Show and move the pointer | Bluetooth → TV program |
-| Press the surface in pointer mode | Click at the pointer position | Bluetooth → mouse click |
-| Short-press MENU | Open LG settings | Bluetooth → native Settings key |
-| Short-press the microphone button | Go back | Bluetooth → native Back key |
-| Short-press the TV-picture button | Go to LG Home | Bluetooth Home action; an IR Home entry also exists in the tested remote |
-| Hold the TV-picture button for about **0.7 seconds**, then release | Toggle TV power | Infrared from the remote |
-| Volume + / − | Adjust TV volume | Infrared from the remote |
-| Play/Pause | Pause/resume video in the tested app | Bluetooth; chooses Play or Pause from current media state |
-
-**MENU opens Settings**, and **the microphone button goes Back**. Voice input is not implemented.
+**MENU opens Settings**, **the microphone button goes Back**, and a **short press of the TV-picture button opens Home**. Voice input is not implemented.
 
 Normal TV off/on and automatic input resumption are verified on this configuration.
 
