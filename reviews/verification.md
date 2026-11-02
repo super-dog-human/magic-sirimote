@@ -13,7 +13,7 @@ Host checks were run on macOS. Hardware validation of the public package version
 
 ## Runtime checks
 
-The checked public builds are controller/receiver 0.9.82 and scheduler 0.0.75.
+The checked public builds are controller/receiver 0.9.94 and scheduler 0.0.87.
 
 - Every packaged runtime module is reachable through static imports from the controller/receiver entrypoints; a clean host process can import all modules without device operations.
 - A retired request blocks the controller/receiver before native checks, signal setup, or connection work. Ordinary stop/recovery records remain eligible for their existing handlers.
@@ -43,3 +43,10 @@ Test packages 0.9.79 / 0.0.72 were installed with all 410 files verified. The us
 
 
 Resting-pose suppression uses a 0.20-second quiet window within 0.0012 radians and a separate 0.0025-radian movement threshold to resume. The held reference follows very slow drift, while normal tracking keeps the existing filter and gain. Suppressed displacement is discarded at departure. Four additional tests cover resting noise with drift, normal movement resumption, settling after movement, and departure without a queued jump. A read-only trial on 1,200 real stationary reports produced zero candidate motion frames. These thresholds trade the smallest resting movements for a stable pointer; the user confirmed that fine movements remained usable and that the pointer stopped when the remote was placed down. The revised test packages are controller/receiver 0.9.81 and scheduler 0.0.74.
+
+
+## Pointer travel adjustment
+
+Horizontal and vertical conversion gains are multiplied by 0.45, from 3230 / 4845 to 1453.5 / 2180.25. Initialization, rest detection, filter parameters, and the 20 ms render period are unchanged. Comparing identical synthetic movements on each axis produced output ratios of approximately 0.45 and the same first-output time, with identical filter and rest-state decisions. Integer output rounding and TV acceleration mean this does not promise an exact 55% reduction in displayed pixels for every movement.
+
+The user accepted this travel setting on the TV with controller/receiver 0.9.93 and scheduler 0.0.86. All 410 installed files matched the build hashes. The public packages remain a separate export; all 124 input and publication tests passed.
