@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "remoteAddress": "02:00:00:00:00:01",
+  "adapterAddress": "02:00:00:00:00:02",
+  "remoteName": "EXAMPLE_REMOTE_SERIAL",
+  "developerUid": 5415,
+  "controllerUid": 6959,
+  "receiverUid": 5636,
+  "devmodeMaintenance": "disabled"
+}

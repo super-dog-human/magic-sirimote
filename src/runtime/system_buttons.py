@@ -1,0 +1,42 @@
+"""A1513 system-button decoder; no device or network operations.
+
+Button-bit reference: https://github.com/a-funk/open-appleremote/blob/main/docs/PROTOCOL.md
+The cited capture is A1962; this project separately verified the mapping on A1513/G3.
+Callers must supply an independently verified, bounded semantic key emitter.
+MENU maps to LG Settings; Siri/microphone maps to Back. Voice is not enabled.
+"""
+MASK_TO_ACTION={0x01:'home',0x08:'playpause',0x20:'settings',0x10:'back'}
+
+def observed_mask(report):
+ if type(report) not in (bytes,bytearray) or not report or report[0]!=0xfc:return None
+ if len(report)<3:return None
+ kind=report[1]
+ valid=((kind==0 and len(report)==3) or (kind==1 and len(report)==14) or
+        (kind==2 and len(report)==21) or (kind in (4,5,6) and len(report)==21) or
+        (kind==0x10 and len(report) in (3,21)))
+ return report[2] if valid else None
+
+class SystemButtons:
+ def __init__(self,emit,*,max_actions=128):
+  if not callable(emit) or type(max_actions) is not int or not 1<=max_actions<=1024:raise ValueError('invalid output')
+  self.emit=emit;self.max_actions=max_actions;self.generation=None;self.armed=False;self.actions=0;self.failed=False
+ def bind(self,generation):
+  if type(generation) is not int or generation<=0 or self.generation is not None or self.failed:raise ValueError('invalid generation')
+  self.generation=generation;self.armed=False
+ def feed(self,generation,report):
+  if self.failed or generation!=self.generation or self.generation is None:return False
+  mask=observed_mask(report)
+  if mask is None:return False
+  if mask==0:self.armed=True;return False
+  action=MASK_TO_ACTION.get(mask)
+  if not self.armed or action is None:
+   self.armed=False;return False
+  self.armed=False
+  if self.actions>=self.max_actions:self.failed=True;raise RuntimeError('action budget exhausted')
+  try:sent=self.emit(action)
+  except BaseException:self.failed=True;raise
+  if sent is False:return False
+  self.actions+=1;return True
+ def unbind(self,generation):
+  if generation!=self.generation or self.generation is None:return False
+  self.generation=None;self.armed=False;return True

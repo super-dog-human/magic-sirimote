@@ -1,0 +1,14 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+/build/
+/dist/
+/config.local.json
+/local/
+*.ipk
+*.pem
+*.key
+*.pcap
+*.pcapng

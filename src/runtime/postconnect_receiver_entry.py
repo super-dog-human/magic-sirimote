@@ -1,0 +1,110 @@
+"""One receiver started after connection; offline composition only.
+
+Caller must start its own fresh status watcher after app launch and supply
+verified paired-target and external feature-exclusivity checks. This code has
+no CLI and is not installed. The caller remains responsible for watcher and
+lease lifetime and for recovery from a killed process or ambiguous lookup.
+"""
+import math,re
+from combined_receiver import CombinedReceiver
+from borrowed_receive_bridge import receive_once
+from borrowed_sustained_receive import receive_sustained
+from media_receive_session import receive_with_media
+from borrowed_session_runner import run_once
+from input_session_policy import InputSessionPolicy
+import borrowed_runtime
+
+def diagnostic_code(exc):
+ # Persist only fixed, non-sensitive categories, not arbitrary exception text.
+ text=str(exc)
+ if re.fullmatch(r'gatt-rejected-(?:[0-9]{1,4}|unknown)',text):return text
+ if text in ('notification-control-unavailable','notification-intent-unrecorded','notification-enable-unconfirmed','notification-setting-unsupported','notification-proof-unrecorded'):return text
+ if re.fullmatch(r'preborrow-(?:lease|feature|snapshot|age|hid|gatt|exception)',text):return text
+ fixed={'input handoff unconfirmed':'input-handoff-unconfirmed','receiver connection unavailable':'input-handoff-no-connection','input handoff intent not recorded':'input-handoff-journal-failed','input handoff not recorded':'input-handoff-ack-journal-failed','target inventory incomplete':'target-inventory-incomplete','target not unique':'target-not-unique','target not present':'target-not-present','target ambiguous':'target-ambiguous','target inventory invalid':'target-inventory-invalid','target node invalid':'target-node-invalid','target node changed':'target-node-changed','target identity mismatch':'target-identity-mismatch','Call guard rejected dispatch':'guard-rejected','Native application identity unverified':'native-identity-rejected','Luna call timed out':'luna-timeout','Luna call timed out during monitor pump':'luna-timeout','Luna command returned nonzero':'luna-nonzero','Luna response was not valid JSON':'luna-invalid-json','invalid borrowed view':'borrowed-view-invalid','control changed after lookup':'control-changed','receive-unconfirmed':'receive-unconfirmed','output-release-unverified':'output-release-unverified','control-not-ready':'receive-control-not-ready'}
+ return fixed.get(text,'other-'+type(exc).__name__ if type(exc).__name__ in ('ValueError','RuntimeError','LunaCallError','TimeoutError','OSError') else 'other-error')
+
+def run_connected_once(*,watch,lease,paired_check,external_feature_guard,record,
+                       open_target,open_outputs,close_target,duration,abort,
+                       clock,receive_clock=None,read_fn=None,sleep_fn=None,on_ready=None,on_progress=None,open_system_keys=None,close_system_keys=None,input_handoff_check=None,gatt_lookup_reply=None):
+ if not all(callable(x) for x in (paired_check,external_feature_guard,record,open_target,open_outputs,close_target,abort,clock)) or not callable(getattr(watch,'snapshot',None)) or (on_ready is not None and not callable(on_ready)) or (on_progress is not None and not callable(on_progress)) or (duration is not None and (type(duration) not in (int,float) or not math.isfinite(duration) or not 0<duration<=7200)):
+  raise ValueError('missing receiver dependency')
+ initial=watch.snapshot()
+ if (type(initial) is not dict or type(initial.get('generation')) is not int or initial['generation']<=0
+     or paired_check() is not True or external_feature_guard() is not True):
+  return {'status':'not-ready','reason':'connection-or-feature-unavailable'}
+ if (open_system_keys is None)!=(close_system_keys is None) or (open_system_keys is not None and not all(callable(x) for x in (open_system_keys,close_system_keys))):raise ValueError('invalid system key dependencies')
+ stage='input-start';generation=initial['generation'];fd=None;outputs=None;system_sink=None;system_fd=None;receive_stats={};out={'status':'attention','reason':'setup-unconfirmed'};close_errors=[];receive_started=False
+ try:
+  if input_handoff_check is None:
+   input_start=borrowed_runtime.initialize_input(watch=watch,lease=lease,paired=True,external_feature_guard=external_feature_guard,record=record,clock=clock)
+  else:
+   input_start=borrowed_runtime.accept_prelaunch_input(watch=watch,lease=lease,paired=True,external_feature_guard=external_feature_guard,record=record,handoff_check=input_handoff_check,clock=clock,gatt_lookup_reply=gatt_lookup_reply)
+  stage='after-input-start'
+  if abort() is not False:raise RuntimeError('stopped after input start')
+  stage='open-target'
+  fd=open_target()
+  if type(fd) is not int or fd<0:raise RuntimeError('target open unconfirmed')
+  stage='open-outputs'
+  outputs=open_outputs()
+  if open_system_keys is not None:
+   stage='open-system-keys'
+   system_sink,system_fd=open_system_keys()
+   if type(system_fd) is not int or system_fd<0 or not callable(getattr(system_sink,'pulse',None)) or not callable(getattr(system_sink,'verify_released',None)):raise RuntimeError('system key open unconfirmed')
+  stage='connection-recheck'
+  current=watch.snapshot()
+  if type(current) is not dict or type(current.get('generation')) is not int or current['generation']!=generation or paired_check() is not True or external_feature_guard() is not True:raise RuntimeError('connection changed during open')
+  if abort() is not False:raise RuntimeError('stopped before sensor preparation')
+  stage='receiver-setup'
+  receiver=None
+  if duration is not None and duration<=60 and system_sink is None:
+   policy=InputSessionPolicy.sustained(duration) if duration>30 else None
+   receiver=CombinedReceiver(outputs,clock=clock,session_policy=policy,max_actions=12 if policy is None else policy.max_actions,action_history_limit=None if policy is None else 32)
+   if receiver.bind(generation) is not True:raise RuntimeError('receiver bind failed')
+  def prepare():return borrowed_runtime.prepare(watch=watch,lease=lease,paired=True,external_feature_guard=external_feature_guard,record=record,clock=clock,input_start=input_start)
+  def receive(session):
+   nonlocal receive_started
+   if abort() is not False:raise RuntimeError('stopped before receiving')
+   def publish_ready():
+    nonlocal receive_started
+    if abort() is not False or session.control_valid() is not True:return False
+    if on_ready is not None and on_ready(session) is not True:return False
+    receive_started=True;return True
+   publish_progress=None if on_progress is None else lambda value:on_progress(session,value)
+   if receiver is None:
+    if system_sink is not None:
+     return receive_with_media(session,outputs,fd,system_key_sink=system_sink,duration=duration,abort=abort,clock=receive_clock or clock,read_fn=read_fn,sleep_fn=sleep_fn,stats=receive_stats,on_ready=publish_ready,on_progress=publish_progress)
+    return receive_sustained(session,outputs,fd,duration=duration,abort=abort,clock=receive_clock or clock,read_fn=read_fn,sleep_fn=sleep_fn,stats=receive_stats,on_ready=publish_ready,on_progress=publish_progress)
+   return receive_once(session,receiver,fd,duration=duration,abort=abort,clock=receive_clock or clock,read_fn=read_fn,sleep_fn=sleep_fn,stats=receive_stats,on_ready=publish_ready)
+  stage='session'
+  out=run_once(prepare,receive,classify=diagnostic_code)
+  if type(out) is dict:
+   summary=outputs.summary()
+   out={**out,'outputCounts':{k:summary[k] for k in ('keyFrameWrites','clickFrameWrites','motionFrameWrites')},'readStats':receive_stats}
+ except Exception as exc:
+  code=diagnostic_code(exc)
+  if code.startswith('other-'):code='setup-'+stage
+  out={'status':'attention','reason':'setup-'+type(exc).__name__,'diagnostic':code}
+ finally:
+  if system_fd is not None:
+   try:
+    if system_sink is None or system_sink.verify_released() is not True:close_errors.append('system-key-release-unverified')
+   except Exception:close_errors.append('system-key-release-error')
+   try:close_system_keys(system_fd)
+   except Exception:close_errors.append('system-key-close-error')
+  if outputs is not None:
+   try:
+    # Do not send release events for a setup that never processed input.
+    if outputs.verify_released() is not True:raise RuntimeError('release unverified')
+   except Exception:
+    if not receive_started:close_errors.append('output-release-unverified')
+    else:
+     try:
+      if outputs.best_effort_release() is not True or outputs.verify_released() is not True:close_errors.append('output-release-unverified')
+     except Exception:close_errors.append('output-release-error')
+   try:outputs.close()
+   except Exception:close_errors.append('output-close-error')
+  if fd is not None:
+   try:close_target(fd)
+   except Exception:close_errors.append('target-close-error')
+ if close_errors:return {'status':'attention','reason':'resource-close-unverified','errors':close_errors,'sessionResult':out}
+ return out
