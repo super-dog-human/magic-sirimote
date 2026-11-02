@@ -1,11 +1,11 @@
 # Porting and deployment checkpoints
 
-This document distinguishes the successful private installation from what a new checkout can reproduce. It is an engineering guide for completing a port, not a claim that installation is automatic.
+This document describes the platform requirements, configuration, and deployment contracts. First-time installation still requires the tooling identified below.
 
 ## What is reproducible now
 
 - Run the input and scheduler host tests.
-- Build all three IPKs without any files from the author's computer.
+- Build all three IPKs from the repository and local configuration.
 - Substitute device identities and three measured role UIDs during the build.
 - Inspect complete runtime and scheduler sources, including session lifecycle handling.
 
@@ -17,7 +17,7 @@ The three IPKs are useful build artifacts for a developer completing those check
 
 ## Build configuration and validation
 
-The source builds controller/receiver **0.9.72** and scheduler **0.0.65**. The owner-tested installation uses controller/receiver 0.9.71 and scheduler 0.0.64. The public packages have not been validated on the owner's TV; see `reviews/verification.md` for computer-side checks.
+The source builds controller/receiver **0.9.72** and scheduler **0.0.65**. Hardware testing covers controller/receiver 0.9.71 and scheduler 0.0.64. Hardware validation of the public package versions is pending; see `reviews/verification.md` for computer-side checks.
 
 - `src/build.py` uses your local configuration for device identities and measured developer/controller/receiver UIDs. Source defaults and test fixtures are not target measurements.
 - `src/build_support.py` provides archive construction and native launchers. The builder generates matching package hashes and an explicit runtime source inventory defines the included modules.
@@ -84,7 +84,7 @@ The lifecycle for a **fresh, verified** startup registration is implemented in `
 7. Once the request's outcome is fully verified, archive the exact request rather than leaving an expired `intentional-action.json` in the dispatch path. Keep the creator receipts and service binding state. These have different purposes.
 8. Perform ordinary standby and full-restart tests without manually launching the controller.
 
-This request contract is documentation for an installer author. There is deliberately no copied live request or credential-bearing Activity binding in the repository. The old working installation's numeric Activity ID is not portable.
+An installer must implement this request contract and generate fresh requests and authenticated Activity bindings for the target TV. Numeric Activity IDs are not portable between installations.
 
 If creation or binding times out, **do not immediately retry** or invent an Activity ID. The operation may already have happened. Reconcile the returned records with the Activity and creator identity first.
 
@@ -133,8 +133,8 @@ Ordinary `recovery-request.json`, controller stop requests, session journals, st
 
 ## Why touch plus pointer motion remains separate
 
-In the accepted LG input path, reports observed by the normal receiver were 21 bytes long. With no touch, the available prefix contains useful orientation information. With touch present, enough touch data arrives for navigation, but the complete orientation payload was not available in that path.
+In the tested LG input path, reports observed by the normal receiver were 21 bytes long. With no touch, the available prefix contains useful orientation information. With touch present, enough touch data arrives for navigation, but the complete orientation payload was not available in that path.
 
 A bounded attempt to change the transport MTU did not recover a usable complete stream; normal input degraded and the earlier behavior was restored. This is not proof that simultaneous touch and orientation is impossible, nor proof that all firmware truncates data in the same way. It is the reason this release does not fabricate missing sensor fields or enable unvalidated touch-time pointer movement.
 
-Several historical algorithm result flags still say `physicalAxesValidated: false` or `complete_sensor_report: false`. The latter correctly describes the limited packet view; the former is a conservative module-level flag, not a live report that the owner's pointer test failed. Physical acceptance is documented separately in the README.
+Several historical algorithm result flags still say `physicalAxesValidated: false` or `complete_sensor_report: false`. The latter correctly describes the limited packet view; the former is a conservative module-level flag, not a live pointer-test result. Verified controls and hardware versions are listed in the README.

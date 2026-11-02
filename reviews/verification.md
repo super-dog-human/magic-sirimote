@@ -1,6 +1,6 @@
-# Public export verification — November 2, 2026
+# Build and runtime verification
 
-The exported source was verified on the development Mac. No public build was installed on the TV, and the existing working installation was left unchanged.
+Host checks were run on macOS. Hardware validation of the public package versions is pending.
 
 - **87 input/publication Python tests passed:** the 76 baseline input tests, 6 publication checks, and 5 runtime layout/retired-request checks.
 - **10 scheduler Python tests passed.**
@@ -9,7 +9,7 @@ The exported source was verified on the development Mac. No public build was ins
 - The pure IR packet encoder ran locally without device access.
 - All nine README Mermaid diagrams passed the Mermaid 11 parser. This was a syntax check, not a GitHub screenshot/render comparison.
 - 55 local Markdown links/anchors were checked, including the pre-existing root LICENSE at the destination repository.
-- Python source compiled; an export scan found no original device addresses/serial, author home-directory paths, or private-key markers. No live runtime state, authentication receipts, recordings, keys, or firmware was included.
+- Python source compiled; an export scan found no original device addresses/serial, local home-directory paths, or private-key markers. No live runtime state, authentication receipts, recordings, keys, or firmware was included.
 
 ## Runtime checks
 
@@ -21,7 +21,7 @@ The checked public builds are controller/receiver 0.9.72 and scheduler 0.0.65.
 
 ## Scope
 
-These checks support the build and the published explanation. They do not validate fresh pairing, native app permissions on a different TV, the parameterized public build on hardware, every possible failure recovery path, or indefinite Developer Mode renewal. Owner-confirmed baseline behavior and the deployment prerequisites are stated in the README and PORTING.md.
+These checks support the build and the published explanation. They do not validate fresh pairing, native app permissions on a different TV, the parameterized public build on hardware, every possible failure recovery path, or indefinite Developer Mode renewal. Verified controls, tested package versions, and deployment prerequisites are stated in the README and PORTING.md.
 
 ## Setup audit
 

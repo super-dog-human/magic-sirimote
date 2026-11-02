@@ -1,5 +1,5 @@
 {
-  "baseline": "A/B 0.9.71; scheduler 0.0.64; physical button acceptance 2026-11-02",
+  "baseline": "A/B 0.9.71; scheduler 0.0.64",
   "note": "Exported project-authored runtime, test and scheduler sources. Device identifiers replaced with non-routable examples; subsequent changes documented in docs/PORTING.md. sourceSha256 identifies the private baseline source; publishedSha256 identifies the initial public export at commit 8651328, before cleanup. These are provenance hashes, not checksums of the current checkout or deployed binaries.",
   "files": [
     {

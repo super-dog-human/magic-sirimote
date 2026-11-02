@@ -1,5 +1,4 @@
 {
-  "date": "2026-11-02",
   "baseline": "controller/receiver 0.9.71; scheduler 0.0.64",
   "inputAndPublicationPythonTests": 87,
   "schedulerPythonTests": 10,
@@ -9,7 +8,7 @@
   "reproduciblePackageBuild": true,
   "packageHashesAndPinsChecked": true,
   "publicPackagesInstalledOnTV": false,
-  "privateDataScan": "No original device address/serial, author home path or private-key marker found in exported text. Live state, keys, logs and binaries not exported.",
+  "privateDataScan": "No original device address/serial, local home path or private-key marker found in exported text. Live state, keys, logs and binaries not exported.",
   "publicBuild": "controller/receiver 0.9.72; scheduler 0.0.65",
   "retiredRequestGuardsTested": true,
   "dependencyInventoryVerified": true,

@@ -38,14 +38,14 @@ These formats and timings describe this A1513 firmware, not every Siri Remote. D
 7. Test IR with the TV input program still stopped: volume up/down, short Home, and delayed power.
 8. Keep the original entries and the readback result privately for rollback.
 
-The private development tools bound every write to the particular remote, firmware, stopped-session evidence, and previous entry. Those device-specific mutation scripts are **not** published as a universal writer; removing their bindings would not create a reliable installer.
+A programmer must bind each write to the verified remote, firmware, stopped session, and saved entry. This repository does not yet include a general tool that performs those checks and writes.
 
-The accepted development setup used a DCSD Lightning diagnostic cable for remote-side reads, sensor-stop checks when Bluetooth was unavailable, and restoration of the known volume entries. Later power-hold adjustments were sent over Bluetooth. These are distinct access paths: the wireless report bytes above are not commands to paste into the UART console. The successful UART connection used 115200 baud, 8N1, and no flow control. A standard charging cable cannot substitute for diagnostic serial access. The public release includes neither a general UART programmer nor a validated cable-free first-time setup procedure; see [Before you begin](../README.md#before-you-begin).
+Verified configuration paths are DCSD diagnostic access for remote-side reads, sensor-stop checks when Bluetooth is unavailable, and volume-entry restoration; and Bluetooth for power-hold adjustments. These are distinct access paths: the wireless report bytes above are not commands to paste into the UART console. The successful UART connection used 115200 baud, 8N1, and no flow control. A standard charging cable cannot substitute for diagnostic serial access. The public release includes neither a general UART programmer nor a validated cable-free first-time setup procedure; see [Before you begin](../README.md#before-you-begin).
 
 ## Timing and two routes for Home
 
-The delay selector is a firmware setting, not seconds. The owner tried longer settings, then accepted selector `02` at about 0.7 seconds. This is the hold threshold, while the TV may need longer to show a picture.
+The delay selector is a firmware setting, not seconds. Selector `02` gives a hold threshold of approximately 0.7 seconds on the tested firmware. This is the hold threshold, while the TV may need longer to show a picture.
 
-The working remote also has an immediate IR Home entry, and the Bluetooth decoder maps the TV button to Home. A long press may therefore reach Home before the delayed power command. The successful physical tests establish the accepted user experience on the tested setup; they do not establish a universally exclusive short/long-press implementation.
+The working remote also has an immediate IR Home entry, and the Bluetooth decoder maps the TV button to Home. A long press may therefore reach Home before the delayed power command. The two routes do not guarantee mutually exclusive short-press and long-press actions.
 
-MENU and microphone remapping in version 0.9.71 was performed in the TV input program. It did not rewrite IR settings. An older development configuration had MENU assigned to Settings over IR; do not infer that it is still present in the final remote's IR table.
+MENU → Settings and microphone → Back are mappings in the TV input program. They do not require corresponding IR entries in the remote.

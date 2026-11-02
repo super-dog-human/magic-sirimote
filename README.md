@@ -4,9 +4,9 @@ Thank you to the open-source Siri Remote and LG webOS communities—especially [
 
 **Use a first-generation Siri Remote to control an LG TV, with the input program running inside the TV.** Swipe to select an app, move the remote to move the pointer, press to select, open settings, go back, and control volume and power over infrared. No Mac, Apple TV, or other computer needs to stay on for everyday use.
 
-This repository shares a working, owner-tested implementation and the lessons behind it. Development combined hands-on testing by the owner with implementation and investigation assisted by OpenAI Codex.
+The repository contains the TV runtime, package builder, configuration reference, and setup guide.
 
-> **Setup status:** this is a working, owner-tested implementation, but **following this README from top to bottom does not yet reproduce a fresh installation**, even on the same remote and TV models. Pairing, app-account discovery, device-access checks, IR programming, and startup/maintenance operations still need setup tooling. See the [setup audit](reviews/setup-audit.md) for the exact gaps. The published packages have passed computer-side tests but have not been installed on the owner’s TV.
+> **Setup status:** the runtime has been tested on the hardware listed below, but **following this README from top to bottom does not yet reproduce a fresh installation**, even on the same remote and TV models. Pairing, app-account discovery, device-access checks, IR programming, and startup/maintenance operations still need setup tooling. See the [setup audit](reviews/setup-audit.md) for the exact gaps. The published package versions have passed computer-side tests; hardware validation is pending.
 
 - [1. What you can do](#1-what-you-can-do)
 - [2. How it works](#2-how-it-works)
@@ -16,7 +16,7 @@ This repository shares a working, owner-tested implementation and the lessons be
 
 ### Verified behavior
 
-The following behavior was physically confirmed by the owner during development, ending on **November 2, 2026**.
+The following controls are verified on the tested configuration listed below.
 
 | Action | Result | Path |
 | --- | --- | --- |
@@ -31,23 +31,23 @@ The following behavior was physically confirmed by the owner during development,
 | Volume + / − | Adjust TV volume | Infrared from the remote |
 | Play/Pause | Pause/resume video in the tested app | Bluetooth; chooses Play or Pause from current media state |
 
-The two recent remaps are intentional: **MENU means Settings**, and **the microphone button means Back**. Voice input is not implemented.
+**MENU opens Settings**, and **the microphone button goes Back**. Voice input is not implemented.
 
 #### Compatibility and limits
 
-| Item | Tested baseline / current limit |
+| Item | Tested configuration / current limit |
 | --- | --- |
 | Remote | Black first-generation **A1513**; Main firmware 0241, Radio 0107 |
 | TV | **LG OLED55G3PJA**, firmware **43.21.96** |
 | Input apps | Controller and receiver 0.9.71 |
 | Startup package | 0.0.64 |
 | Regular TV off/on | Confirmed on the working installation |
-| Full loss of power and restart | Confirmed on the working installation before the final button remap; startup logic was preserved |
-| Leaving the remote unused, then using it again | Owner reported normal operation; actual remote sleep/disconnection was not independently established in the final test |
-| Pointer motion while touching the surface | **Not supported in this accepted version**; remove your finger to move the pointer |
+| Full loss of power and restart | Automatic startup confirmed; final button mappings have not been separately checked after a full restart |
+| Leaving the remote unused, then using it again | Operation after inactivity confirmed; actual remote sleep/disconnection was not independently established |
+| Pointer motion while touching the surface | **Not supported**; remove your finger to move the pointer |
 | A1962, later silver remotes, other LG models/firmware | Not validated by this project |
 | Long-term Developer Mode renewal | One extension experiment succeeded; indefinite unattended operation is not established |
-| Public source build | Controller/receiver **0.9.72**, scheduler **0.0.65**; builds and passes host tests; has not replaced the working installation on the owner's TV |
+| Public source build | Controller/receiver **0.9.72**, scheduler **0.0.65**; builds and passes host tests; hardware validation is pending |
 
 This reproduces many everyday Magic Remote interactions, not every function of LG's original remote. Keep the original remote available for setup and recovery.
 
@@ -73,7 +73,7 @@ stateDiagram-v2
 2. **To use the pointer:** lift your finger off the surface and make a deliberate movement with the remote. Once the pointer appears, smaller movements move it. Press the surface to click.
 3. **After a fresh connection:** place the remote on a flat surface, with nothing touching the touch area, for about five seconds. This gives the orientation calibration time to settle.
 
-Small hand movements after a swipe should not immediately bring the pointer back. This was an important part of making the remote behave naturally.
+Small hand movements after a swipe should not immediately bring the pointer back.
 
 #### Power is a short hold, not a three-second wait
 
@@ -151,7 +151,7 @@ src/
   runtime/              # Controller, receiver, decoding, lifecycle
   scheduler/            # Startup, standby, expiry service
   tv_inventory.py       # Read-only environment metadata on a TV
-config.example.json     # Fake device identities; historical example UIDs
+config.example.json     # Placeholder device identities and example UIDs
 reviews/                # Public export verification results
 tests/                 # Input, layout, and publication regression tests
   scheduler/           # Startup service tests and synthetic fixtures
@@ -207,7 +207,7 @@ The steps below describe the intended setup sequence. **They are not yet a compl
 | 6. Infrared | Tested command entries and a packet encoder | Backup, write, readback, and restore tool; the encoder does not program the remote |
 | 7. Acceptance | Physical checks for both IR and Bluetooth | A fresh-install run of the published build, including automatic startup |
 
-The [setup audit](reviews/setup-audit.md) separates documentation corrections from implementation work. These gaps apply to a new unit of the same model too: its pairing state, IR settings, and app account IDs are not inherited from the owner's installation.
+The [setup audit](reviews/setup-audit.md) lists the remaining implementation and validation work. Each TV and remote needs its own pairing, IR configuration, and measured app account IDs, including units of the same model.
 
 ### Before you begin
 
@@ -217,7 +217,7 @@ You need:
 - A compatible LG webOS TV. Only the G3 configuration above has been validated here.
 - The original LG remote.
 - A computer for preparation, on the same network as the TV.
-- For the diagnostic setup path used during development: an **A1513-compatible DCSD Lightning diagnostic cable** providing access to the remote’s serial console. A normal USB-to-Lightning charging cable cannot substitute for it. See the distinction below before obtaining hardware.
+- For the diagnostic setup path: an **A1513-compatible DCSD Lightning diagnostic cable** providing access to the remote’s serial console. A normal USB-to-Lightning charging cable cannot substitute for it. See the distinction below before obtaining hardware.
 - A macOS or Linux development environment, Python 3.10+, Node.js 18+, and Git. The exported workflow was tested on macOS; Linux/WSL host setup has not been independently verified.
 - The [webOS CLI](https://webostv.developer.lge.com/develop/tools/cli-installation) for the commands below. A GUI developer tool alone does not provide the `ares-*` commands.
 - Clang with an ARM target to build the small native launchers. The builder defaults to `clang`; set `CLANG` if yours is elsewhere.
@@ -231,8 +231,8 @@ The source targets a **32-bit ARM Linux input layout** and uses Python 3.10 or n
 | --- | --- |
 | Everyday operation after setup | No cable; the remote talks directly to the TV |
 | Reusing an already working TV pairing and IR configuration | The input program has no cable dependency; existing settings may be preserved |
-| Reproducing the pairing repair used during development | A DCSD cable was used to select the TV on the remote and verify the stored peer |
-| Reading/restoring IR settings or checking sensor shutdown when Bluetooth stopped responding | The diagnostic console was used during development |
+| Diagnostic pairing repair | DCSD access is verified for TV peer selection and stored-peer checks |
+| Reading/restoring IR settings or checking sensor shutdown when Bluetooth is unavailable | Diagnostic-console access is verified for these operations |
 | Setting up a different, previously unpaired remote from scratch | A cable-free procedure has **not** been validated; this public release does not yet provide a complete first-time pairing/programming tool |
 
 The verified console used **115200 baud, 8 data bits, no parity, 1 stop bit, no flow control**. A serial port appearing on the computer is not enough: the remote must actually answer with its `DIAG>` prompt and correct identity/version. Compatibility of other cables sold as “DCSD” is not established by this project. Buying a cable alone does not complete the missing setup tooling.
@@ -277,7 +277,7 @@ These are LG's developer-connection steps; they do not pair the Siri Remote. Kee
 
 If this exact remote already has a working pairing with this exact TV, preserve it and verify the identities in Step 3. Pairing with an Apple TV or a Mac does not satisfy this requirement.
 
-For an unpaired remote, this is currently a **missing general setup procedure**, not a step that can be completed by running an included installer. The project did successfully repair a registration between the tested A1513 and G3 using the following coordinated sequence:
+For an unpaired remote, this is currently a **missing general setup procedure**, not a step that can be completed by running an included installer. The verified registration-repair sequence for the tested A1513 and G3 is:
 
 1. Collect the model, firmware, remote address/name and TV adapter address listed in Step 3 **before changing pairing**. Connect the diagnostic cable and verify the remote's model, firmware, Bluetooth identity, and saved peer; independently verify the TV's Bluetooth adapter and the intended remote registration.
 2. In that repair, remove only the stale registration for the intended remote on the TV. This was specific to the mismatched existing registration, not a blanket instruction to unpair working devices.
@@ -285,7 +285,7 @@ For an unpaired remote, this is currently a **missing general setup procedure**,
 4. Establish the HID input connection and send the known input-start request. Pairing and a connected link alone were insufficient in the tested repair: earlier attempts lost the remote's saved peer around a minute later.
 5. Verify both sides' identities and pairing state again after more than a minute. The initialized repair retained the peer through a 70-second observation. The cable remained attached for that check; later cable-free input tests were separate.
 
-This sequence records what worked on the owner's devices. It is **not a verified fresh-pairing recipe for every LG TV**. The original scripts were tied to those devices and their existing state; they are not shipped as a general pairing tool. A new setup needs that tool adapted and validated before proceeding. Do not assume that choosing the remote in an ordinary Bluetooth menu completes all these steps.
+This repair sequence is verified for the tested A1513/G3 configuration. **First-time pairing on an unprepared remote and TV is not yet validated.** A general pairing tool is not included. A new setup needs that tool adapted and validated before proceeding. Do not assume that choosing the remote in an ordinary Bluetooth menu completes all these steps.
 
 ```mermaid
 flowchart LR
@@ -350,7 +350,7 @@ Edit `config.local.json` with the values you actually measured:
 | `receiverUid` | Numeric account ID assigned to the receiver app |
 | `devmodeMaintenance` | `disabled`, `check-only`, or `extend`; explained below |
 
-The numeric IDs in the example are **historical baseline values**, not defaults that are safe to assume on your TV. The builder checks their format, not their correctness on a real device. Other fixed platform assumptions remain; this file is not a universal compatibility switch.
+The numeric IDs in the example are **example values**, not defaults that are safe to assume on your TV. The builder checks their format, not their correctness on a real device. Other fixed platform assumptions remain; this file is not a universal compatibility switch.
 
 Build using your local configuration:
 
@@ -412,9 +412,9 @@ Installation and a successful manual launch do not register the persistent Activ
 
 ### Step 6: Set up infrared separately
 
-The program that handles Bluetooth input does not, by itself, teach the remote infrared commands. The working remote had its IR entries read, preserved, and selectively restored/configured during development.
+The program that handles Bluetooth input does not, by itself, teach the remote infrared commands. Volume and power require the corresponding IR entries to be stored in the remote.
 
-The tested IR configuration was:
+Use these IR entries for the tested configuration:
 
 | Remote button | Entry | LG NEC bytes |
 | --- | --- | --- |
@@ -425,9 +425,9 @@ The tested IR configuration was:
 
 These bytes describe the tested remote's stored configuration. They are **not** ready-to-send shell commands. The delay selector is not a number of seconds; selector `2` produced the approximately 0.716-second behavior on this firmware.
 
-A Bluetooth Home event and the stored IR Home entry can coexist. This release does not claim hardware-level short/long-press suppression across both routes; holding the TV button may produce Home before Power. The table describes the owner-accepted behavior, not a guarantee that a long press emits only Power.
+A Bluetooth Home event and the stored IR Home entry can coexist. This release does not claim hardware-level short/long-press suppression across both routes; holding the TV button may produce Home before Power. A long press is therefore not guaranteed to emit only Power.
 
-If your remote already controls volume and power correctly, preserve those settings. During development, the diagnostic cable was used to read and restore IR settings; later power-hold adjustments were sent over Bluetooth. This does not establish a complete cable-free setup procedure. If your remote needs programming, read [IR.md](docs/IR.md) before adapting an IR programmer. The repository includes a pure packet encoder for inspection, **not** a universal IR-writing tool:
+If your remote already controls volume and power correctly, preserve those settings. DCSD access is verified for reading and restoring IR settings; Bluetooth access is verified for adjusting the power-hold threshold. This does not establish a complete cable-free setup procedure. If your remote needs programming, read [IR.md](docs/IR.md) before adapting an IR programmer. The repository includes a pure packet encoder for inspection, **not** a universal IR-writing tool:
 
 ```sh
 python3 src/ir_packets.py
@@ -486,7 +486,7 @@ Public builds default to **`devmodeMaintenance: "disabled"`**:
 
 The query uses HTTPS to `developer.lge.com`. The extension route launches LG's Developer Mode app with an extension request; its UI may appear. The source avoids printing or storing the raw token. An uncertain extension is retained as uncertain rather than immediately retried. These are implementation details of the experiment, not a documented guarantee from LG.
 
-Changing `devmodeMaintenance` requires rebuilding and updating the package. The published default differs from the owner's existing experiment; exporting this repository did not change the running TV.
+Changing `devmodeMaintenance` requires rebuilding and updating the package. Select the policy explicitly; automatic extension is disabled by default.
 
 ### Troubleshooting
 

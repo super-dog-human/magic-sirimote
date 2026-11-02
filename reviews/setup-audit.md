@@ -1,10 +1,10 @@
 # Fresh-install reproducibility audit
 
-Date: November 2, 2026. Code baseline: `a96a93b`. Scope: read the public guide in order, trace each required operation to the exported implementation, compare the recorded owner setup, and run host checks from a clean Git export. No TV or remote was contacted or changed.
+Code reviewed: `a96a93b`. Scope: setup sequence, implementation coverage, recorded hardware tests, and host checks from a clean Git export. No device operations were performed during this audit.
 
 ## Verdict
 
-**The guide cannot yet reproduce the owner's complete environment from an unprepared TV and remote, even with the same models and firmware.** The runtime and package builder are available; several installation and maintenance operations still exist only as device-specific development procedures or engineering contracts. A working owner installation is not evidence that the public installation path is complete.
+**The guide cannot yet reproduce the complete configuration from an unprepared TV and remote, even with the tested models and firmware.** The runtime and package builder are available; several installation and maintenance operations still exist only as device-specific development procedures or engineering contracts. Hardware-tested runtime behavior does not establish a complete installation path.
 
 ## Findings by stage
 
@@ -21,8 +21,8 @@ Date: November 2, 2026. Code baseline: `a96a93b`. Scope: read the public guide i
 | IR setup | [Encoder](../src/ir_packets.py), [IR contract](../docs/IR.md) | Encoder prints bytes only. There is no public backup/write/readback/restore tool or full treatment of existing enable flags. Thus new remotes do not acquire volume and delayed power merely by running the documented encoder. |
 | Stop and resume | [Stop protocol](../src/runtime/stop_request.py), [deployment contract](../docs/PORTING.md#stopping-updating-and-removing) | Protocol exists, but no supported operator command coordinates live-instance discovery, stop publication, sensor-stop/process-exit verification and subsequent reconciliation/resume. This is needed between the running Step 5 test and the stopped Step 6 IR test. |
 | Automatic startup | [Request dispatcher](../src/scheduler/main.js), [creator](../src/scheduler/creator.js) | The implementation exists, but no public operator tool creates and verifies the complete provisioning transaction. Installing the scheduler does not register the persistent Activity. Restart tests depend on this missing operation. |
-| Developer Mode longevity | [Policy](../src/scheduler/expiry-policy.js), [maintenance](../src/scheduler/expiry.js) | Default is disabled, unlike the owner's extension experiment. Choosing `extend` still requires a working startup path and target verification. One successful experiment does not establish indefinite renewal. |
-| Rollback and fresh acceptance | [Verification report](verification.md), README removal guidance | TV package backup does not include remote pairing/IR settings. A complete cancel/stop/update/restore tool and a fresh end-to-end installation/rollback test are missing. The public build has not replaced the accepted owner build. |
+| Developer Mode longevity | [Policy](../src/scheduler/expiry-policy.js), [maintenance](../src/scheduler/expiry.js) | Default is disabled. Choosing `extend` still requires a working startup path and target verification. One successful experiment does not establish indefinite renewal. |
+| Rollback and fresh acceptance | [Verification report](verification.md), README removal guidance | TV package backup does not include remote pairing/IR settings. A complete cancel/stop/update/restore tool and a fresh end-to-end installation/rollback test are missing. Hardware validation of the public build is pending. |
 
 ## Intended dependency order
 
@@ -42,7 +42,7 @@ Changing the order in the README does not implement the missing tools. In partic
 ## Verification scope
 
 - A clean export containing only Git-tracked files passed 87 input/publication/layout Python tests, 10 scheduler Python tests, and 22 JavaScript test files. The publication suite built all three packages twice and compared output bytes and pins. This checks host reproducibility, not a fresh TV install.
-- Compared the owner's recorded pairing repair and IR writes with the published prerequisites; no private addresses, serials, receipts or commands bound to the owner's hardware were copied into this report.
+- Pairing and IR prerequisites were checked against hardware-test records. Private addresses, serials, and receipts are excluded from this report.
 - No installer, pairing tool, device permission change, IR write or TV runtime update was performed by this audit.
 
 Official references checked: [LG CLI installation](https://webostv.developer.lge.com/develop/tools/cli-installation), [LG Developer Mode connection and key setup](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app). These support the developer-access steps only; they do not validate this project's native runtime or pairing workflow.
