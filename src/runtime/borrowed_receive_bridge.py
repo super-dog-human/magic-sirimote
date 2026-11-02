@@ -5,7 +5,7 @@ session. This does not open or close device handles, install, or auto-start.
 """
 import math
 from borrowed_motion_gate import BorrowedMotionGate
-from autonomous_gyro_b import receive_actions
+from hid_input import receive_actions
 
 def receive_once(session,receiver,fd,*,duration,abort,read_fn=None,clock=None,sleep_fn=None,stats=None,on_ready=None):
  if type(fd) is not int or fd<0 or type(duration) not in (int,float) or not math.isfinite(duration) or not 0<duration<=60 or not callable(abort) or (on_ready is not None and not callable(on_ready)):raise ValueError('invalid finite receiver')

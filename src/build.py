@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parent
 A = 'org.codex.siriremote.autocoord20261029v'
 B = 'org.codex.siriremote.hidgattrouterb20261029u'
 S = 'org.codex.siriremote.v20scheduler20261031a'
-PAIR_VERSION = '0.9.71'
-SCHEDULER_VERSION = '0.0.64'
+PAIR_VERSION = '0.9.72'
+SCHEDULER_VERSION = '0.0.65'
 APP_ROOT = '/media/developer/apps/usr/palm/applications/'
 EXAMPLES = {'remoteAddress':'02:00:00:00:00:01', 'adapterAddress':'02:00:00:00:00:02',
             'remoteName':'EXAMPLE_REMOTE_SERIAL'}
@@ -23,8 +23,8 @@ SERVICE_FILES = ('service.js','callback-admission.js','runtime-bridge.js','callb
  'continuity-marker.js','coordinator-launcher.js','pins.js','private-directory.js','service-entry.js',
  'expiry.js','expiry-query.py','expiry-policy.js','standby-resume.js','resume-evidence.py','creator.js',
  'state-summary.js','native-checker.js','wake-checker.js','power-read.py')
-APP_FILES = ('main.js','recovery.js','creator.js','strict-json.js','pins.js','private-directory.js',
- 'public-status.js','diagnose.js','maintenance.js','rearm.js','rearm-request.js','expiry-request.js',
+APP_FILES = ('main.js','creator.js','strict-json.js','pins.js','private-directory.js',
+ 'public-status.js','diagnose.js','rearm.js','rearm-request.js','expiry-request.js',
  'native-checker.js','resume-evidence.py','standby-resume.js')
 
 
@@ -120,19 +120,20 @@ def build(config,out,example=False):
     out.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.magic-build-',dir=out.parent) as temp:
         dest=Path(temp)/'result';dest.mkdir()
-        sources={str(p.relative_to(ROOT/'runtime')):configured(p.read_text(),config)
-                 for p in sorted((ROOT/'runtime').rglob('*.py'))}
+        names=json.loads((ROOT/'runtime-files.json').read_text())
+        if (not isinstance(names,list) or not names or len(set(names))!=len(names) or
+            any(type(n) is not str or re.fullmatch(r'[a-z][a-z0-9_]*\.py',n) is None for n in names)):
+            raise ValueError('Invalid runtime source inventory')
+        if set(names)!={p.name for p in (ROOT/'runtime').glob('*.py')}:
+            raise ValueError('Runtime source inventory differs from checkout')
+        sources={name:configured((ROOT/'runtime'/name).read_text(),config) for name in names}
         def pair(app,entry,extra=None):
             files=dict(sources)
             identity=b'org.codex.siriremote.hidgattroutera20261029u'
             if files['native_app_identity.py'].count(identity)!=1:raise ValueError('Native identity changed')
             files['native_app_identity.py']=files['native_app_identity.py'].replace(identity,app.encode())
-            role='controller' if app==A else 'receiver'
             wrapper=("import os,sys,traceback\nroot=os.path.dirname(os.path.realpath(__file__))\nsys.path.insert(0,root)\ntry:\n"
-                " from native_handoff_diagnostic import maybe_diagnose\n"
-                f" if maybe_diagnose({role!r}): raise SystemExit(0)\n"
-                " from owner_repair_embedded import maybe_repair\n"
-                f" if maybe_repair({role!r}): raise SystemExit(0)\n from {entry} import main\n code=main()\n"
+                f" from {entry} import main\n code=main()\n"
                 "except Exception:\n text=traceback.format_exc()[-4000:]\n try:\n"
                 "  p=os.path.join(root,'state','startup-error.txt')\n"
                 "  fd=os.open(p,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o640)\n"

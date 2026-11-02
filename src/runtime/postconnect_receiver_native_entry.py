@@ -51,6 +51,8 @@ def controller_stop_proof(record,*,controller_app,controller_package,pin,proc_pa
  return {'process':p,'executableVerified':matches[0].get('exeVerified') is not False}
 
 def main():
+ from retired_requests import reject_retired_requests
+ reject_retired_requests(ROOT/APP/'state')
  stop=threading.Event()
  for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda _s,_f:stop.set())
  from controller_start_record import read_record

@@ -5,7 +5,7 @@ folder. A project-local lock alone does not establish system-wide exclusivity.
 No CLI is exposed while crash recovery and the TV launch contract are open.
 """
 import os,threading,time
-from autonomous_gyro_b import ordinary
+from hid_input import ordinary
 from persistent_status_pump import PersistentConnectedStatusPump
 from local_feature_lease import LocalFeatureLease
 from atomic_session_directory import AtomicSessionDirectory

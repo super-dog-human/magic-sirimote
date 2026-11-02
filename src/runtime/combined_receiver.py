@@ -6,11 +6,6 @@ unless a test or a future independently verified device path explicitly opts in.
 """
 import time
 from collections import deque
-import sys
-from pathlib import Path
-_VENDOR = Path(__file__).resolve().parent / "vendor"
-if str(_VENDOR) not in sys.path:
-    sys.path.insert(0, str(_VENDOR))
 from gated_hidraw_router import GatedHidrawRouter
 from input_router import InputRouter
 from output_bridge import BTN_LEFT, KEY_ENTER, KEYS, _frame

@@ -3,13 +3,6 @@
 This module opens no device and sends nothing itself. A caller must provide an
 exact-target B read FD and separately verified, owned output callbacks.
 """
-from pathlib import Path
-import sys
-
-VENDOR = Path(__file__).resolve().parent / 'vendor'
-if str(VENDOR) not in sys.path:
-    sys.path.insert(0, str(VENDOR))
-
 from touch_click import TouchClick
 from touch_dpad import TouchDpad
 

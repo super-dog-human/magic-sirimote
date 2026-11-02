@@ -9,7 +9,7 @@ from receive_diagnostics import valid as valid_receive_diagnostics
 APP='org.codex.siriremote.hidgattrouterb20261029u'
 
 def _process_identity():
- from autonomous_gyro_b import ordinary
+ from hid_input import ordinary
  from local_attestation import _start_ticks
  return {'pid':os.getpid(),'startTicks':_start_ticks(Path('/proc/self/stat')),'status':ordinary()}
 

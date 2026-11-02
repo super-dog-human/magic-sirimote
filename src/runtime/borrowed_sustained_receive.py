@@ -6,7 +6,7 @@ sensor stop and all device closes. No device is opened on import.
 import math
 from borrowed_mode_session import BorrowedModeSession
 from rolling_receiver import RollingReceiver
-from autonomous_gyro_b import receive_actions
+from hid_input import receive_actions
 from receive_diagnostics import capture
 
 def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=300,read_fn=None,sleep_fn=None,stats=None,on_ready=None,system_key_emit=None,on_progress=None):

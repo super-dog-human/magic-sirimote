@@ -60,7 +60,7 @@ The two recent remaps are intentional: **MENU means Settings**, and **the microp
 | Pointer motion while touching the surface | **Not supported in this accepted version**; remove your finger to move the pointer |
 | A1962, later silver remotes, other LG models/firmware | Not validated by this project |
 | Long-term Developer Mode renewal | One extension experiment succeeded; indefinite unattended operation is not established |
-| Public parameterized build | Builds and passes host tests; has not replaced the working installation on the owner's TV |
+| Public source build | Controller/receiver **0.9.72**, scheduler **0.0.65**; builds and passes host tests; has not replaced the working installation on the owner's TV |
 
 This reproduces many everyday Magic Remote interactions, not every function of LG's original remote. Keep the original remote available for setup and recovery.
 
@@ -269,9 +269,9 @@ The output contains:
 
 | Package | Role |
 | --- | --- |
-| `org.codex.siriremote.autocoord20261029v_0.9.71_arm.ipk` | Connection controller |
-| `org.codex.siriremote.hidgattrouterb20261029u_0.9.71_arm.ipk` | Input receiver |
-| `org.codex.siriremote.v20scheduler20261031a_0.0.64_arm.ipk` | Startup app and service |
+| `org.codex.siriremote.autocoord20261029v_0.9.72_arm.ipk` | Connection controller |
+| `org.codex.siriremote.hidgattrouterb20261029u_0.9.72_arm.ipk` | Input receiver |
+| `org.codex.siriremote.v20scheduler20261031a_0.0.65_arm.ipk` | Startup app and service |
 
 The long internal package names are retained for compatibility with the tested implementation. Do not rename just one package: the components verify one another's identities and file hashes.
 
@@ -286,9 +286,9 @@ Before updating an existing installation, stop its input session cooperatively a
 On a prepared, verified TV, the package installation commands are:
 
 ```sh
-ares-install --device my-tv build/my-tv/org.codex.siriremote.autocoord20261029v_0.9.71_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.hidgattrouterb20261029u_0.9.71_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.v20scheduler20261031a_0.0.64_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.autocoord20261029v_0.9.72_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.hidgattrouterb20261029u_0.9.72_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.v20scheduler20261031a_0.0.65_arm.ipk
 ```
 
 Then:
@@ -455,13 +455,15 @@ src/
   check.py              # Host-only test runner
   build.py              # Configured three-package builder; no TV contact
   build_support.py      # Deterministic IPK archives and tiny ARM launchers
+  runtime-files.json    # Explicit list of source modules allowed in packages
   ir_packets.py         # Pure IR configuration packet encoder; never transmits
-  runtime/              # Controller, receiver, decoding, output, lifecycle
-  scheduler/            # Startup/standby/expiry service and host tests
+  runtime/              # 132 modules: controller, receiver, decoding, lifecycle
+  scheduler/            # 29 source files: startup, standby, expiry service
   tv_inventory.py       # Read-only environment metadata on a TV
 config.example.json     # Fake device identities; historical example UIDs
 reviews/                # Public export verification results
-tests/                 # Input and publication regression tests
+tests/                 # Input, layout, and publication regression tests
+  scheduler/           # Startup service tests and synthetic fixtures
 ```
 
 Start with these files if you want to understand or adapt the behavior:
@@ -479,7 +481,11 @@ Start with these files if you want to understand or adapt the behavior:
 | Standby resume checks | [`standby-resume.js`](src/scheduler/standby-resume.js) |
 | Developer Mode maintenance | [`expiry.js`](src/scheduler/expiry.js), [`expiry-policy.js`](src/scheduler/expiry-policy.js) |
 
-Some files retain historical names and conservative experimental flags from development. Read [PORTING.md](docs/PORTING.md) before interpreting them as a fresh-install API or a general recovery command. Provenance is recorded in [`docs/source-provenance.json`](docs/source-provenance.json).
+The runtime is split into small modules because input decoding, device identity, connection management, process coordination, and verified shutdown have different responsibilities. Some modules also share helper classes through inheritance. The file count is not a count of user-visible features.
+
+The first public snapshot included development leftovers. The cleanup reduces `runtime` from **175 to 132 Python modules** and `scheduler` from **54 to 29 source files**. It removes obsolete one-off repair paths, old standalone experiments, a duplicate helper, an empty module, and stale generated pins. Scheduler tests now live under `tests/scheduler`; package pins are generated during the build. Historical code remains available in [the first public commit](https://github.com/super-dog-human/magic-sirimote/tree/8651328ebb4eab1f693121e89a050c9a325d87cf).
+
+An explicit source inventory and dependency test keep unreferenced files out of future packages. Normal connection recovery, sensor shutdown, package verification, and standby resume remain. A retained request for a removed development operation blocks startup for review; it is not silently ignored. Some algorithms retain historical names and conservative experimental flags. Read [PORTING.md](docs/PORTING.md) for deployment limits. Provenance is recorded in [`docs/source-provenance.json`](docs/source-provenance.json).
 
 Useful contributions include a verified clean-install workflow, additional TV/remote compatibility reports, better bounded status reporting, and investigation of complete touch-plus-orientation input. Include your model, firmware, steps, expected behavior, and actual behavior. Remove addresses, serials, tokens, private keys, and raw recordings from public reports.
 

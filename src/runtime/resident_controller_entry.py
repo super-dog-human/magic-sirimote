@@ -1,11 +1,7 @@
-"""Offline resident post-connect controller entry; no boot registration.
-
-Source overlay, not installed or device-validated. Its receiver config is provisioned only by
-an explicitly scoped installer and must pin the separately built B package.
-"""
+"""Resident TV controller: connect, supervise, stop, and recover verified sessions."""
 import json,os,signal,stat,threading,time
 from pathlib import Path
-from autonomous_gyro_b import ordinary
+from hid_input import ordinary
 from persistent_status_pump import PersistentConnectedStatusPump
 from supervisor_lease import SupervisorLease
 from stop_request import StopMonitor, publish_instance
@@ -22,7 +18,6 @@ B='org.codex.siriremote.hidgattrouterb20261029u'
 ROOT=Path('/media/developer/apps/usr/palm/applications')
 PKG=Path('/media/developer/apps/usr/palm/packages')
 STATE=ROOT/APP/'state'
-EXPECTED_PROVISIONER_UID=5415  # observed developer UID on this TV; revalidate after firmware/account changes
 
 def load_config():
  from controller_pin_client import read_pin
@@ -71,30 +66,12 @@ def recover_retained_if_connected(*,lease,pin,stop,timeout=90,clock=time.monoton
   if pump.stop() is not True:raise RuntimeError('recovery watch termination unconfirmed')
 
 def main():
+ from retired_requests import reject_retired_requests
+ reject_retired_requests(STATE)
  ordinary();pin=load_config();stop=threading.Event()
  for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda _s,_f:stop.set())
  lease=SupervisorLease(STATE);pump=None;stop_monitor=None
  try:
-  # A maintenance request runs only under this app's supervisor lease.
-  # Never continue into ordinary connection handling after an attempted repair.
-  from generic_native import run_if_requested as generic_presensor
-  generic_result=generic_presensor(lease=lease,pin=pin)
-  if generic_result is not None:return 0 if generic_result.get('status')=='archived' else 2
-  from next_retry_native import run_if_requested as next_retry
-  next_retry_result=next_retry(lease=lease,pin=pin)
-  if next_retry_result is not None:return 0 if next_retry_result.get('status')=='archived' else 2
-  from next_native import run_if_requested as next_maintenance
-  next_result=next_maintenance(lease=lease,pin=pin)
-  if next_result is not None:return 0 if next_result.get('status')=='archived' else 2
-  from retry_native import run_if_requested as retry_maintenance
-  retry=retry_maintenance(lease=lease,pin=pin)
-  if retry is not None:return 0 if retry.get('status')=='archived' else 2
-  from inspection_native import run_if_requested as inspect_maintenance
-  inspection=inspect_maintenance(lease=lease,pin=pin)
-  if inspection is not None:return 0
-  from maintenance_native import run_if_requested
-  maintenance=run_if_requested(lease=lease,pin=pin)
-  if maintenance is not None:return 0 if maintenance.get('status')=='archived' else 2
   process=_process_identity()
   import secrets
   instance=secrets.token_hex(16)

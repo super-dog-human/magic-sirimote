@@ -28,11 +28,14 @@ The public export:
 4. Regenerates controller and receiver hash pins together.
 5. Defaults Developer Mode maintenance to disabled through `expiry-policy.js`. The original scheduler's extension implementation is retained behind that explicit policy.
 6. Adds a local demo, configuration validation, packet inspection, environment metadata tool, and publication tests.
-7. Updates a few outdated docstrings. Historical recovery modules are retained as guarded reference code.
+7. Updates outdated docstrings and removes obsolete experiment-specific repair paths. The cleaned source builds controller/receiver **0.9.72** and scheduler **0.0.65**.
+8. Moves scheduler tests into `tests/scheduler`, removes the duplicate session-policy helper, and extracts the unchanged active HID helpers from the old standalone experiment into `hid_input.py`.
+9. Requires an explicit `runtime-files.json` inventory and checks that all runtime modules are reachable through imports from the two native entrypoints. Package pins are generated, not stored as stale source.
+10. Blocks startup if retired development requests remain, leaving them untouched for reconciliation.
 
 No new public package was installed on the owner's TV as part of publishing this repository. The baseline's physical acceptance therefore does **not** certify all these export changes on hardware. See `reviews/verification.md` for host checks actually performed.
 
-`docs/source-provenance.json` maps exported files to hashes of the baseline sources. Its initial-export hashes are provenance, not the current package pins. Build manifests are the authority for generated package contents.
+`docs/source-provenance.json` maps exported files to hashes of the baseline sources. Its initial-export hashes are provenance, not the current package pins. Removed-file entries are available in Git history; moved files retain their original export path. Build manifests are the authority for generated package contents.
 
 ## Fixed platform assumptions
 
@@ -122,11 +125,22 @@ ares-install --device my-tv --remove org.codex.siriremote.v20scheduler20261031a
 
 These commands remove the TV apps, not the remote's IR settings. Do not execute them as a substitute for the stop/cancel checks above.
 
-### Historical recovery code
+### Removed development requests
 
-Files such as `prior_attempt.py`, `next_evidence.py`, `owner_repair_embedded.py`, and `scheduler/maintenance.js` contain narrowly bound recovery logic from earlier experiments. Some include historical run IDs, hashes, or a specific old Activity ID. They are not secrets, but they are not general repair recipes either.
+The public cleanup removes the old run-specific repair/archive handlers and the scheduler handler tied to an old numeric Activity ID. These are available in Git history at commit `8651328`; they are not included in new packages.
 
-On a clean installation their corresponding requests do not exist, so the paths should remain inactive. Do not manufacture those requests or relax their evidence checks for a different TV. A new port needs its own documented recovery process. Retaining the baseline code here preserves the implementation for review; it is not a recommendation to execute every module.
+The native entrypoints now reject these **unarchived request filenames** before opening an input session:
+
+- `handoff-diagnostic-request.json`
+- `owner-mode-repair-request.json`
+- `serial-zero-archive-request.json` and `serial-zero-archive-v2-request.json`
+- `serial-zero-archive-next-request.json` and `serial-zero-archive-next-v2-request.json`
+- `maintenance-inspection-request.json`
+- `generic-presensor-request-<run>.json` or `generic-presensor-request-<run>-<operation>.json`
+
+The scheduler similarly refuses a retained `maintenance-request.json`. This includes dangling symlinks. Records are not read, deleted, or replayed by this check, and even expired requests require review. Confirm the old operation's outcome using the retained baseline and reconcile/archive the exact request before upgrading. Do not clear a whole state directory to bypass the check.
+
+Ordinary `recovery-request.json`, controller stop requests, session journals, startup cancellation, rearming, and standby recovery remain part of the supported lifecycle. They are **not** treated as retired experiment requests.
 
 ## Why touch plus pointer motion remains separate
 

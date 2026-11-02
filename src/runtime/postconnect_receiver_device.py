@@ -5,7 +5,7 @@ import. This does not initiate a connection or send an input/sensor command.
 """
 import os,stat,subprocess,time
 import tv_bluetooth
-from autonomous_gyro_b import scan_devices,identity
+from hid_input import scan_devices,identity
 from hid_orphan import unregistered
 
 def paired_target(invoke=subprocess.Popen):

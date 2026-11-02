@@ -2,14 +2,15 @@
 const fs=require('fs'),path=require('path'),{parseStrict}=require('./strict-json'),creator=require('./creator');
 const STATE='/media/developer/apps/usr/palm/applications/'+creator.APP+'/state';
 async function main({state=STATE,Handle,now=Date.now,verify=creator.verifyPins,automaticResume=false}={}){
+ // A retained one-off development request is never ignored or replayed.
+ try{fs.lstatSync(path.join(state,'maintenance-request.json'));throw Error('retired-maintenance-request-retained');}
+ catch(e){if(e.code!=='ENOENT')throw e;}
  if(automaticResume)require('./native-checker').report(state,{status:'native-entry'});
  const expiry=require('./expiry-request');
  if(expiry.hasRequest(state))return expiry.run({state,Handle,now});
  let handle;
  const rearm=require('./rearm-request');
  if(rearm.hasRequest(state))return rearm.run({state,Handle,now,verify,report:event=>require('./public-status').publish(state,{...event,action:'rearm'})});
- const maintenance=require('./maintenance');
- if(maintenance.hasRequest(state))return maintenance.run({state,Handle,now});
  const diagnostic=require('./diagnose');
  if(diagnostic.hasRequest(state))return diagnostic.run({state,now,verify});
  const file=path.join(state,'intentional-action.json');
