@@ -2,6 +2,7 @@
 LIMIT=100000000
 KINDS=('no-touch','one-touch','two-touch','rejected')
 POINTER=('reports','validPose','blocked','calibrationResets','jumps','geometryRejected','renderTicks','motionFrames','gaps')
+TRANSPORT_REASONS=(None,'clock-invalid','deadline','write-uncertain','queue-overflow','queue-age-exceeded','reentrant-call','motion-encoding-rejected','semantic-dispatch-uncertain','semantic-dispatch-rejected','stopped')
 ENDS=(None,'stop-requested','control-or-policy-ended','duration-ended','receive-exception')
 STOPS=(None,'requested','control-lost','clock-invalid','drain-deadline-without-neutral','receiver-failed','receive-aborted','receive-ended','receiver-ended','combined-output-error')
 FAILURES=(None,'closed','lease','snapshot','clock','age','identity','hid','gatt','external','exception','session-inactive')
@@ -49,7 +50,8 @@ def capture(stats,summary,end_reason,control):
   transport=current.get('transport') or {}
   value['motionTransport']={'budgetDrops':min(LIMIT,current['motionBudgetDrops']),
     'bodyWrites':min(LIMIT,transport.get('bodyWrites',0)),
-    'neutralWrites':min(LIMIT,transport.get('neutralWrites',0))}
+    'neutralWrites':min(LIMIT,transport.get('neutralWrites',0)),
+    'reason':transport.get('reason') if transport.get('reason') in TRANSPORT_REASONS else None}
  if not valid(value):raise ValueError('invalid receive diagnostics')
  stats['receiveDiagnostics']=value
 
@@ -59,7 +61,9 @@ def valid(value):
  if 'receiveFailure' in value and not valid_failure(value['receiveFailure']):return False
  if 'motionTransport' in value:
   t=value['motionTransport']
-  if type(t) is not dict or set(t)!={'budgetDrops','bodyWrites','neutralWrites'} or not all(count(v) for v in t.values()):return False
+  keys={'budgetDrops','bodyWrites','neutralWrites'}
+  if type(t) is not dict or not keys<=set(t)<=keys|{'reason'} or not all(count(t[k]) for k in keys):return False
+  if t.get('reason') not in TRANSPORT_REASONS:return False
  if value['endReason'] not in ENDS or value['receiverStopReason'] not in STOPS or value['controlFailure'] not in FAILURES or value['watchState'] not in WATCH:return False
  if value['watchAgeMs'] is not None and not count(value['watchAgeMs']):return False
  if type(value['pointerCalibrated']) is not bool or not count(value['shapeOverflow']):return False

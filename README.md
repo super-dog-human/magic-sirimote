@@ -93,7 +93,7 @@ stateDiagram-v2
 
 1. **To navigate by selection:** swipe. The pointer disappears. Swipe again to move the highlight, then press the surface to open the selected item.
 2. **To use the pointer:** lift your finger off the surface and make a deliberate movement with the remote. Once the pointer appears, smaller movements move it. Press the surface to click.
-3. **After a fresh connection:** place the remote on a flat surface, with nothing touching the touch area, for about five seconds. This gives the orientation calibration time to settle.
+3. **After a fresh connection:** lift your finger off the touch area and move the remote normally. The pointer establishes its starting orientation from a brief continuous sequence of valid reports; you do not need to put the remote down or wait for it to become still.
 
 Small hand movements after a swipe should not immediately bring the pointer back.
 
@@ -354,9 +354,9 @@ The output contains:
 
 | Package | Role |
 | --- | --- |
-| `org.codex.siriremote.autocoord20261029v_0.9.78_arm.ipk` | Connection controller |
-| `org.codex.siriremote.hidgattrouterb20261029u_0.9.78_arm.ipk` | Input receiver |
-| `org.codex.siriremote.v20scheduler20261031a_0.0.71_arm.ipk` | Startup app and service |
+| `org.codex.siriremote.autocoord20261029v_0.9.82_arm.ipk` | Connection controller |
+| `org.codex.siriremote.hidgattrouterb20261029u_0.9.82_arm.ipk` | Input receiver |
+| `org.codex.siriremote.v20scheduler20261031a_0.0.75_arm.ipk` | Startup app and service |
 
 The long internal package names are retained for compatibility with the tested implementation. Do not rename just one package: the components verify one another's identities and file hashes.
 
@@ -371,9 +371,9 @@ Before updating an existing installation, stop its input session cooperatively a
 On a prepared, verified TV, the package installation commands are:
 
 ```sh
-ares-install --device my-tv build/my-tv/org.codex.siriremote.autocoord20261029v_0.9.78_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.hidgattrouterb20261029u_0.9.78_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.v20scheduler20261031a_0.0.71_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.autocoord20261029v_0.9.82_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.hidgattrouterb20261029u_0.9.82_arm.ipk
+ares-install --device my-tv build/my-tv/org.codex.siriremote.v20scheduler20261031a_0.0.75_arm.ipk
 ```
 
 Then:
@@ -388,7 +388,7 @@ Then:
    ```
 
 5. Verify the current run’s `receiver-ready-<run>.json` in the receiver’s `state` directory against the live receiver PID/start ticks and current session. The file contains `sensorModeVerified: 1`. An old ready file or a launch acknowledgement is insufficient. A supported status command that performs these checks is still missing.
-6. Stop pressing the surface and place the remote still for about five seconds to let the motion calibration settle.
+6. Stop pressing the surface, lift your finger, and move the remote to check the pointer. No stationary calibration step is required.
 
 The controller obtains the receiver's current file hashes from the startup service. Installing that service is therefore required even for manual controller launch. **Installing it does not automatically register startup.** Startup provisioning is a separate operation described in [PORTING.md](docs/PORTING.md#startup-provisioning).
 
@@ -450,7 +450,7 @@ Changing `devmodeMaintenance` requires rebuilding and updating the package. Sele
 | Volume works, but swipes do nothing | IR and Bluetooth are separate. Check controller/receiver readiness and the paired target |
 | Pointer stops when my finger touches the surface | Expected in this version; lift your finger |
 | Pointer does not appear after a swipe | Finger off; deliberate larger movement. Small hand tremors deliberately keep selection mode |
-| Pointer never starts after connection | Place the remote still with no surface contact for about five seconds; inspect calibration/readiness |
+| Pointer never starts after connection | Wake the remote, lift your finger off the surface, and move it; inspect receiver readiness and valid orientation reports if the pointer does not start |
 | Click works with the pointer but not after swiping | Confirm the matching receiver build; selection mode must emit Enter, not a mouse click |
 | Settings works but microphone does not go back | Confirm the final button mapping and supported packet shape; no voice processing is needed |
 | Play/Pause does nothing in one app | Media state may be missing or stale; the implementation does not blindly guess a toggle |

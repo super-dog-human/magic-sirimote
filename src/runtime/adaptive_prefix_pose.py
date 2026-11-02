@@ -1,6 +1,6 @@
 """Offline-only FC21 pose experiment using the existing gain-85 filter.
 
-Calibrates from orientation stability, not the missing angular-rate fields.
+Initializes from a short continuous pose stream, without waiting for stillness.
 All axes, stillness thresholds and the device's truncated data remain unproven.
 No device, Bluetooth or native input operations are performed here.
 """
@@ -10,14 +10,19 @@ from vector_adaptive_pose_pointer import ReducedGainVectorAdaptivePosePointer
 
 
 class AdaptivePrefixPose:
-    CALIBRATION_SECONDS = 1.0
-    CALIBRATION_SAMPLES = 20
-    STATIONARY_RADIANS = .025
+    CALIBRATION_SECONDS = .15
+    CALIBRATION_SAMPLES = 8
+    STARTUP_MAX_REPORT_ROTATION = .20
     MAX_GAP = .06
     PERIOD = .020
     ANGLE_DEADBAND = .00035
     MAX_SINGLE_REPORT_ROTATION = 1.0
     AXIS_GAINS = (3230., 4845.)
+    # Resting-pose noise must not accumulate into visible cursor creep.
+    REST_RADIUS = .0012
+    REST_SECONDS = .20
+    RESUME_RADIUS = .0025
+    REST_TRACK_SECONDS = 1.0
     # Reuse the existing shared-vector filter, not fabricated sensor rates.
     _alpha = staticmethod(ReducedGainVectorAdaptivePosePointer._alpha)
     MIN_CUTOFF_HZ = ReducedGainVectorAdaptivePosePointer.MIN_CUTOFF_HZ
@@ -28,8 +33,7 @@ class AdaptivePrefixPose:
     def __init__(self):
         self.last_time = None
         self.reference_inverse = None
-        self.origin = self.epoch = None
-        self.samples = 0
+        self._reset_calibration()
         self.closed = False
         self.stats = dict.fromkeys(('reports','validPose','blocked','calibrationResets','jumps','geometryRejected','renderTicks','motionFrames','gaps'), 0)
         self._clear_tracking()
@@ -38,10 +42,12 @@ class AdaptivePrefixPose:
         self.previous = self.last_pose = self.pending = self.previous_q = None
         self.output_angles = self.render_at = self.next_tick_at = None
         self.unwrapped = [0., 0.]
+        self.rest_anchor = self.rest_since = None
+        self.resting = True
         self._adaptive_previous_raw = self._adaptive_filtered = self._adaptive_derivative = None
 
     def _reset_calibration(self):
-        self.origin = self.epoch = None
+        self.origin = self.epoch = self.initial_at = None
         self.samples = 0
 
     def _time(self, now):
@@ -80,17 +86,21 @@ class AdaptivePrefixPose:
         self.stats['validPose'] += 1
         self.previous = now
         if self.reference_inverse is None:
-            if self.origin is None:
-                self.origin, self.epoch, self.samples = q, now, 1
-                return
-            angular_change = 2 * math.acos(min(1., abs(sum(a*b for a, b in zip(self.origin, q)))))
-            if angular_change > self.STATIONARY_RADIANS:
-                self.stats['calibrationResets'] += 1
-                self.origin, self.epoch, self.samples = q, now, 1
-                return
+            # A baseline is a coordinate reference, not a stationary bias estimate.
+            # Check continuity and adjacent-sample plausibility while allowing
+            # normal movement. Discard all warm-up displacement at acceptance.
+            if self.origin is not None:
+                step = 2 * math.acos(min(1., abs(sum(a*b for a, b in zip(self.origin, q)))))
+                if now - self.initial_at > self.MAX_GAP or step > self.STARTUP_MAX_REPORT_ROTATION:
+                    self.stats['calibrationResets'] += 1
+                    self._reset_calibration()
+            if self.epoch is None:
+                self.epoch = now
+            self.origin, self.initial_at = q, now
             self.samples += 1
             if now - self.epoch >= self.CALIBRATION_SECONDS and self.samples >= self.CALIBRATION_SAMPLES:
                 self.reference_inverse = conjugate(q)
+                self._reset_calibration()
                 self._clear_tracking()
             return
         if self.previous_q is not None:
@@ -136,6 +146,10 @@ class AdaptivePrefixPose:
             return None
         self.render_at, self.next_tick_at = now, now + self.PERIOD
         filtered = self._render_target(target, elapsed)
+        if self._hold_resting_noise(filtered, now, elapsed):
+            self.output_angles = list(filtered)
+            self.stats['renderTicks'] += 1
+            return None
         result = []
         for axis, gain in enumerate(self.AXIS_GAINS):
             difference = filtered[axis] - self.output_angles[axis]
@@ -147,6 +161,31 @@ class AdaptivePrefixPose:
             self.stats['motionFrames'] += 1
             return tuple(result)
         return None
+
+    def _hold_resting_noise(self, target, now, elapsed):
+        if self.rest_anchor is None:
+            self.rest_anchor = list(target)
+            self.rest_since = now
+        distance = math.hypot(*(target[i] - self.rest_anchor[i] for i in range(2)))
+        if self.resting:
+            if distance <= self.RESUME_RADIUS:
+                # Follow very slow sensor drift while resting, but retain a
+                # threshold for deliberate movement. Never replay held motion.
+                alpha = 1. - math.exp(-elapsed / self.REST_TRACK_SECONDS)
+                self.rest_anchor = [a + alpha * (b-a) for a,b in zip(self.rest_anchor,target)]
+                return True
+            self.resting = False
+            self.rest_anchor = list(target)
+            self.rest_since = now
+            return True  # Rebase at departure; do not jump over the dead zone.
+        if distance > self.REST_RADIUS:
+            self.rest_anchor = list(target)
+            self.rest_since = now
+        elif now - self.rest_since >= self.REST_SECONDS:
+            self.resting = True
+            self.rest_anchor = list(target)
+            return True
+        return False
 
     def summary(self):
         return {**self.stats, 'calibrated': self.reference_inverse is not None, 'physicalAxesValidated': False, 'rawReportsPersisted': False}

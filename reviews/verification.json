@@ -1,6 +1,6 @@
 {
   "baseline": "controller/receiver 0.9.71; scheduler 0.0.64",
-  "inputAndPublicationPythonTests": 109,
+  "inputAndPublicationPythonTests": 124,
   "schedulerPythonTests": 10,
   "schedulerJavascriptTestFiles": 22,
   "mermaidDiagramsSyntaxValidated": 8,
@@ -9,7 +9,7 @@
   "packageHashesAndPinsChecked": true,
   "publicPackagesInstalledOnTV": false,
   "privateDataScan": "No original device address/serial, local home path or private-key marker found in exported text. Live state, keys, logs and binaries not exported.",
-  "publicBuild": "controller/receiver 0.9.78; scheduler 0.0.71",
+  "publicBuild": "controller/receiver 0.9.82; scheduler 0.0.75",
   "retiredRequestGuardsTested": true,
   "dependencyInventoryVerified": true,
   "freshInstallWorkflowComplete": false,
@@ -21,5 +21,15 @@
   "hardwareOutputStartupBuild": "controller/receiver 0.9.77; scheduler 0.0.70",
   "outputStartupColdBootRetestPending": true,
   "outputStartupNormalControlsVerified": true,
-  "initialPointerCalibrationDelayRemains": true
+  "initialPointerCalibrationDelayRemains": false,
+  "pointerStartupTests": 10,
+  "transportReasonTests": 1,
+  "hardwarePointerStartupBuild": "controller/receiver 0.9.81; scheduler 0.0.74",
+  "pointerStartsWithoutStationaryWaitVerified": true,
+  "priorOutputFailureCauseUnresolved": true,
+  "restingNoiseTests": 4,
+  "stationaryReadOnlySamples": 1200,
+  "stationaryCandidateMotionFrames": 0,
+  "restingPointerStopsVerified": true,
+  "finePointerMovementUsableVerified": true
 }
