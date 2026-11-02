@@ -1,8 +1,58 @@
-# Infrared configuration: preserve before changing
+# Infrared assignments: set and delete
 
 The A1513 can store IR commands and transmit them without the TV's Bluetooth input program. This is how the tested setup handles volume and power, including powering the TV on while the receiver program is not processing input.
 
-This repository includes `src/ir_packets.py`, a **pure encoder** for the observed configuration packet format. It prints examples. It never connects to a remote or transmits a packet.
+The [native setup app](NATIVE_APP.md) includes an **Infrared** screen with explicit
+**Set** and **Delete** actions. Version 0.2.0 has passed offline transaction and UI
+tests; the new screen and its native Bluetooth transport still need hardware
+validation. Installing or opening the app never programs the remote.
+
+## Use the Infrared screen
+
+1. Save the correct device identities on the setup screen. Pairing and an
+   existing HID/GATT connection are prerequisites; this screen does not pair.
+2. Stop the input runtime and its automatic restarts through the existing
+   deployment procedure. The screen refuses to operate while another project
+   app is running or the remote's motion sensors are active. It does not stop
+   an existing installation for you. Use the original LG remote for setup.
+3. Open **Infrared**. Select the physical button and **Immediate (00)** or
+   **Hold about 0.7 seconds (02)**. These are separate stored entries.
+4. To assign an LG action, enter its two-digit hexadecimal code, select **Set**,
+   review the selected button and press type, then select **Set assignment**.
+   Examples: `02` volume up, `03` volume down, `08` power, `43` settings, `7C` home.
+5. To remove that entry, select **Delete**, then **Delete assignment**. No
+   action code is needed. Other buttons and delay selectors are untouched.
+6. Test the button physically. A TV service acknowledgement is shown as
+   **Request sent**, not proof that the remote saved the entry. An interrupted
+   or missing acknowledgement is shown as unknown and never retried automatically.
+
+The screen currently encodes LG TV commands using the tested NEC format. It
+is not a universal manufacturer selector. A command code alone does not
+identify the complete IR signal for other brands.
+
+**Delete removes an assignment; it does not restore its previous value.**
+It does not disable Bluetooth button reports or change the TV runtime's button
+mapping. Deleting an immediate entry also does not delete a held-button entry.
+The app never clears the entire IR table and never automatically deletes before
+setting: Set replaces/adds only the selected button/delay entry.
+
+Current IR settings cannot be read back through the verified public workflow
+on this locked firmware. The app does not require an unavailable full-table
+backup, invent factory defaults, or present saved operation receipts as remote
+readback. Receipts in `state/ir-operation-*.json` record what this app attempted;
+keep them private. Known code/selector values can be set again, but an unknown
+previous assignment cannot be reconstructed from a receipt.
+
+## Packet reference
+
+`src/ir_packets.py` is still a pure encoder: running it prints examples and
+never transmits. The native app uses this encoder with a separate, explicitly
+invoked transport. That transport checks the saved remote/adapter identity,
+remote serial, exact supported firmware, feature report, and stopped sensor
+mode before sending one persistent request. A private lock serializes this
+app's operations; process checks detect the legacy project apps. These are
+cooperative checks, not exclusion of all possible third-party Bluetooth tools.
+Do not run another configuration tool simultaneously.
 
 ## Working entries
 
@@ -27,20 +77,24 @@ F0 02 BUTTON DELAY
 
 These formats and timings describe this A1513 firmware, not every Siri Remote. Do not replace a four-byte command with a byte-reversed integer copied from an unrelated IR library. The bytes above are in the order used by the tested configuration reports.
 
-## What a real programmer must do
+## Transport and validation limits
 
-1. Verify the remote model, firmware, address, and current connection independently.
-2. Read and privately save **all existing IR entries** and any relevant enable/configuration flags, together with enough identity information to know which device the backup belongs to.
-3. Cleanly stop the TV input session and verify the remote's sensor mode is stopped. An unresponsive Bluetooth query is not proof of a stopped sensor.
-4. Review a diff containing only the intended IR entry changes. Preserve unrelated entries and the immediate Home entry when adjusting the power hold time.
-5. Send each intended change once. An absent response means uncertainty, not permission to replay it.
-6. Read back the settings and compare them with the intended result.
-7. Test IR with the TV input program still stopped: volume up/down, short Home, and delayed power.
-8. Keep the original entries and the readback result privately for rollback.
+The app calls the TV Bluetooth service as its own native app account, without
+root or a system-service identity. It obtains a GATT client for identity and
+sensor-state reads and releases that client afterwards. It never disconnects
+the whole HID link or changes pairing. On uncertain communication, cleanup may
+also be unconfirmed; the result reports that separately.
 
-A programmer must bind each write to the verified remote, firmware, stopped session, and saved entry. This repository does not yet include a general tool that performs those checks and writes.
+The configuration path and bytes were used in earlier targeted Bluetooth
+procedures. Their integration into this generic app still needs an on-TV test,
+including service permissions, settings persistence, receipt storage and
+connection cleanup. There is no automatic runtime pause/resume integration yet.
+A configuration transport error does not trigger a permission change, a UART
+fallback, a sensor stop, or a repeated IR write.
 
-Verified configuration paths are DCSD diagnostic access for remote-side reads, sensor-stop checks when Bluetooth is unavailable, and volume-entry restoration; and Bluetooth for power-hold adjustments. These are distinct access paths: the wireless report bytes above are not commands to paste into the UART console. The successful UART connection used 115200 baud, 8N1, and no flow control. A standard charging cable cannot substitute for diagnostic serial access. The public release includes neither a general UART programmer nor a validated cable-free first-time setup procedure; see [Before you begin](../README.md#before-you-begin).
+DCSD diagnostic access is a separate path used during development. Its UART
+commands differ from the Bluetooth reports above. Neither that cable nor this
+app currently provides a verified complete IR-table backup procedure.
 
 ## Timing and two routes for Home
 

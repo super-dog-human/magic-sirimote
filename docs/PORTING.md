@@ -11,7 +11,7 @@ This document describes the platform requirements, configuration, and deployment
 
 ## What is not a completed public workflow
 
-A clean-TV installation has not been re-run from this export. The [setup audit](../reviews/setup-audit.md) lists each missing operation and the first-install dependency cycle. First pairing, discovering app runtime UIDs without starting input, permission validation, an operator-friendly provisioning/status tool, and a general IR backup/programming tool are still missing. These are real deployment prerequisites, not optional documentation details.
+A clean-TV installation has not been re-run from this export. The [setup audit](../reviews/setup-audit.md) lists each missing operation and the first-install dependency cycle. First pairing, discovering app runtime UIDs without starting input, permission validation, an operator-friendly provisioning/status tool, and on-TV validation of the native IR programmer are still missing. Full IR-table readback is unavailable; the Set/Delete workflow does not depend on it. These are real deployment prerequisites, not optional documentation details.
 
 The three IPKs are useful build artifacts for a developer completing those checks. They are not a universal consumer release. The source can also be reused independently—for example, the decoder, button mapping, navigation state machine, and output framing.
 

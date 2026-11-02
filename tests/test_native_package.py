@@ -14,7 +14,7 @@ import build_support
 
 
 class NativePackageTest(unittest.TestCase):
-    def test_generic_single_native_package_is_reproducible_and_inert(self):
+    def test_generic_single_native_package_is_reproducible_and_requires_explicit_ir_action(self):
         with tempfile.TemporaryDirectory() as path:
             outputs = [Path(path) / 'a', Path(path) / 'b']
             results = [build_native.build(out) for out in outputs]
@@ -24,6 +24,9 @@ class NativePackageTest(unittest.TestCase):
                 self.assertFalse(result['controlsRemote'])
                 self.assertFalse(result['deviceIdentitiesEmbedded'])
                 self.assertFalse(result['registersAutomaticStartup'])
+                self.assertTrue(result['programsInfrared'])
+                self.assertFalse(result['automaticInfraredWrites'])
+                self.assertFalse(result['hardwareValidated'])
             members = build_support.read_ar((outputs[0] / name).read_bytes())
             with tarfile.open(fileobj=io.BytesIO(members['data.tar.gz']), mode='r:gz') as archive:
                 files = {entry.name: archive.extractfile(entry).read() for entry in archive if entry.isfile()}
@@ -38,6 +41,7 @@ class NativePackageTest(unittest.TestCase):
                 for name in build_native.SOURCES:
                     compile(files[prefix + name], name, 'exec')
                 self.assertTrue(files[prefix + 'entry'].startswith(b'\x7fELF'))
+                compile(files[prefix + 'ir_packets.py'], 'ir_packets.py', 'exec')
                 state = archive.getmember(prefix + 'state')
                 self.assertEqual((state.uid, state.gid, state.mode), (5999, 5000, 0o770))
 

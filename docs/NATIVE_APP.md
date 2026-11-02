@@ -4,9 +4,9 @@ The single-app version is being developed as a **native webOS application**, wit
 
 ## Try the setup preview
 
-[Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.1.0_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
+[Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.2.0_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
 
-This package contains a native settings screen, a remote-friendly character picker, settings validation and a non-mutating input-access check. It contains **no device addresses or serial numbers**. Saving settings changes only this app's saved configuration. It does not pair a remote, program infrared, start remote control or register automatic startup.
+This package contains a native settings screen, a remote-friendly character picker, settings validation and a non-mutating input-access check. It contains **no device addresses or serial numbers**. Saving settings changes only this app's saved configuration. It does not pair a remote, start remote control or register automatic startup. The **Infrared** screen can explicitly set or delete one stored assignment; it never writes automatically. The new IR integration is not yet hardware-validated.
 
 The preview requires the same tested G3 environment, including the TV's 32-bit Python 3.10+ interpreter, SDL2 and SDL_ttf. It uses a font already installed on the TV. These dependencies are not bundled. Other TV models remain unverified.
 
@@ -14,13 +14,14 @@ The preview requires the same tested G3 environment, including the TV's 32-bit P
 2. Install the IPK, replacing `my-tv` with the device name registered in your LG CLI:
 
    ```sh
-   ares-install -d my-tv releases/native-preview/org.magicsirimote.app_0.1.0_arm.ipk
+   ares-install -d my-tv releases/native-preview/org.magicsirimote.app_0.2.0_arm.ipk
    ares-launch -d my-tv org.magicsirimote.app
    ```
 
 3. Use the original LG remote's arrows and OK button to select a field. Choose characters on the screen; a USB keyboard can also enter text. **Back** leaves the character picker, and **Save settings** saves the completed form.
 4. Select **Check this TV**. The check briefly opens the existing `LGE RCU` and `ClickableMouse` nodes and closes them without reading or writing events. Passing this check establishes native input access; it does not establish Bluetooth pairing or prove the complete remote-control runtime works.
-5. Select **Close** to return to the TV. The preview does not run a background input program.
+5. To configure IR, follow the [Set and Delete instructions](IR.md). Use this only with the input runtime stopped; this preview does not pause it for you.
+6. Select **Close** to return to the TV. The preview does not run a background input program.
 
 To remove only this preview:
 
@@ -42,7 +43,7 @@ Only these device identities are entered manually in the preview:
 
 Entering these values **does not create a pairing**. A pairing/setup workflow still has to be integrated. The app's account identifiers and input-device paths are implementation details to discover on the TV, not information users should have to guess. The setup preview does not accept LG account credentials or Developer Mode tokens.
 
-The intended complete app will also provide Start/Stop controls, automatic-startup provisioning and a separate, explicit infrared backup/programming operation. Those controls are not included in this preview.
+The intended complete app will also provide Start/Stop controls and automatic-startup provisioning. Those controls are not included in this preview. IR Set/Delete is implemented; a full-table readback or factory-default restoration is not provided.
 
 ## Intended single-package design
 
@@ -80,7 +81,7 @@ On the tested G3, an isolated single-IPK probe demonstrated all of the following
 
 The service itself cannot see `/dev/input` or the application directory, so placing the receiver directly inside a normal service does not work. The native process can see the bundled service directory. The proposed layout uses that shared location for the two roles' code and handoff state, preserving process and file verification.
 
-**Still to integrate and verify:** the real controller/receiver handoff, sensor shutdown and crash recovery, opening settings while input is active, startup after full boot, standby/resume, first pairing and IR backup/programming. The preview must not be presented as a completed one-app remote-control release.
+**Still to integrate and verify:** the real controller/receiver handoff, sensor shutdown and crash recovery, opening settings while input is active, startup after full boot, standby/resume, first pairing and on-TV validation of the new IR Set/Delete screen. The preview must not be presented as a completed one-app remote-control release.
 
 ## Build from source
 
@@ -93,6 +94,6 @@ python3 -m unittest discover -s tests -p 'test_native_*.py'
 
 The build writes one generic IPK, `SHA256SUMS` and a manifest describing the preview's limited purpose. It never contacts a TV. No per-TV configuration is required to build it. The existing `src/build.py` continues to build the separate controller/receiver/startup packages.
 
-Source files are in [`src/native`](../src/native). Installed settings belong to the app's `state` directory; do not include that directory in a public bug report.
+Source files are in [`src/native`](../src/native). Installed settings and IR operation receipts belong to the app's `state` directory; do not include that directory in a public bug report.
 
 References: [webOS Homebrew native development](https://www.webosbrew.org/pages/native-development.html) describes native applications and the available graphics libraries; [LG's app/service template guide](https://webostv.developer.lge.com/develop/getting-started/app-template) describes packaging an app with services. Neither reference guarantees the measured permissions on other firmware.

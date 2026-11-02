@@ -1,4 +1,4 @@
-"""Native setup preview. Saving identities does not enable remote control."""
+"""Native setup and explicit infrared programming; no automatic input runtime."""
 import json
 import sys
 import time
@@ -25,6 +25,7 @@ class Setup:
         self.message = 'Use the original LG remote to enter your device identities.'
         self.done = False
         self.boxes = []
+        self.infrared = None
         try:
             self.values.update({key: value for key, value in settings.load(state).items() if key in settings.FIELDS})
             self.message = 'Saved identities loaded. This preview does not start remote control.'
@@ -71,10 +72,18 @@ class Setup:
                 self.message = 'Settings saved. Pairing, infrared and remote control have not been changed.'
             except (OSError, ValueError) as error:
                 self.message = str(error) if isinstance(error, ValueError) else 'Could not save settings.'
+        elif index == 5:
+            from ir_screen import InfraredScreen
+            self.infrared = InfraredScreen(self.state)
         else:
             self.done = True
 
     def handle(self, event, canvas):
+        if self.infrared is not None:
+            self.infrared.handle(event)
+            if self.infrared.done:
+                self.infrared = None
+            return
         kind, value = event
         if kind == 'close':
             self.done = True
@@ -97,7 +106,7 @@ class Setup:
                     canvas.stop_text()
             elif value in ARROWS:
                 if self.editing is None:
-                    self.focus = (self.focus + ARROWS[value]) % 6
+                    self.focus = (self.focus + ARROWS[value]) % 7
                 else:
                     step = ARROWS[value] * (10 if value in (1073741906, 1073741905) else 1)
                     self.key_focus = (self.key_focus + step) % len(self.keys)
@@ -108,9 +117,12 @@ class Setup:
                 self.values[field] = self.values[field][:-1]
 
     def draw(self, canvas):
+        if self.infrared is not None:
+            self.infrared.draw(canvas)
+            return
         canvas.clear()
         canvas.text('Magic Sirimote', 64, 42, 40)
-        canvas.text('Native setup preview', 66, 94, 23, (114, 191, 227))
+        canvas.text('Device setup and infrared assignments', 66, 94, 23, (114, 191, 227))
         self.boxes = []
         if self.editing is not None:
             canvas.text(settings.LABELS[self.editing], 66, 160, 27)
@@ -132,13 +144,13 @@ class Setup:
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
                 canvas.text(self.values[field] or 'Select to enter', 82, y + 44, 25, max_width=1110)
                 self.boxes.append((index, box))
-            for index, title in enumerate(('Check this TV', 'Save settings', 'Close'), 3):
-                box = (64 + (index - 3) * 390, 480, 372, 61)
+            for index, title in enumerate(('Check this TV', 'Save settings', 'Infrared', 'Close'), 3):
+                box = (64 + (index - 3) * 292, 480, 274, 61)
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
                 canvas.text(title, box[0] + 25, box[1] + 17, 25)
                 self.boxes.append((index, box))
             canvas.text(self.message, 66, 568, 22, max_width=1148)
-            canvas.text('Setup only: this preview does not pair, program IR, or start the input runtime.', 66, 630, 21, (155, 170, 190))
+            canvas.text('Infrared changes require Set or Delete. Pairing and input startup are separate.', 66, 630, 21, (155, 170, 190))
             canvas.text('Developer Mode expiry is managed separately using your usual tools.', 66, 663, 20, (155, 170, 190))
         canvas.present()
 
@@ -150,7 +162,7 @@ def main():
     try:
         app.draw(canvas)
         while not app.done:
-            dirty = False
+            dirty = app.infrared.tick() if app.infrared is not None else False
             for event in canvas.events():
                 app.handle(event, canvas)
                 dirty = True

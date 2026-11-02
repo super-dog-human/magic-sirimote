@@ -202,7 +202,7 @@ Links credit research and tooling; they do not imply endorsement or identical co
 
 ## 4. Setup guide
 
-A [native setup preview](docs/NATIVE_APP.md) is available as one generic IPK, with an editable TV-side settings screen and input-access check. It does not yet replace the three-package input runtime described below. The complete single-app version is under development.
+A [native setup preview](docs/NATIVE_APP.md) is available as one generic IPK, with an editable TV-side settings screen, input-access check, and explicit infrared **Set/Delete** controls. The new infrared integration has passed offline tests; on-TV validation is pending. It does not yet replace the three-package input runtime described below. The complete single-app version is under development.
 
 The steps below describe the intended setup sequence. **They are not yet a complete executable installation guide.** “Missing tool” means the reader would currently have to write or adapt code; it does not mean running the next command will fill in the gap.
 
@@ -213,7 +213,7 @@ The steps below describe the intended setup sequence. **They are not yet a compl
 | 3. Target preparation | Required facts and a limited metadata reader | Identity collection, inert app installation to discover runtime UIDs, native access checks |
 | 4. Package build | Runnable, tested builder | Verified target values from stage 3 |
 | 5. Install and launch | Conditional installation/launch commands and runtime code | Installed-file/status verification and usable stop/resume/startup-registration tools |
-| 6. Infrared | Tested command entries and a packet encoder | Backup, write, readback, and restore tool; the encoder does not program the remote |
+| 6. Infrared | Native Set/Delete screen, tested command entries and packet encoder | On-TV validation of the new screen and runtime pause/resume integration; full-table readback is unavailable |
 
 The [setup audit](reviews/setup-audit.md) lists the remaining implementation and validation work. Each TV and remote needs its own pairing, IR configuration, and measured app account IDs, including units of the same model.
 
@@ -240,7 +240,7 @@ The source targets a **32-bit ARM Linux input layout** and uses Python 3.10 or n
 | Everyday operation after setup | No cable; the remote talks directly to the TV |
 | Reusing an already working TV pairing and IR configuration | The input program has no cable dependency; existing settings may be preserved |
 | Diagnostic pairing repair | DCSD access is verified for TV peer selection and stored-peer checks |
-| Reading/restoring IR settings or checking sensor shutdown when Bluetooth is unavailable | Diagnostic-console access is verified for these operations |
+| Restoring known IR codes or checking sensor shutdown when Bluetooth is unavailable | Diagnostic-console access was used in development; complete IR-table readback is not available |
 | Setting up a different, previously unpaired remote from scratch | A cable-free procedure has **not** been validated; this public release does not yet provide a complete first-time pairing/programming tool |
 
 The verified console used **115200 baud, 8 data bits, no parity, 1 stop bit, no flow control**. A serial port appearing on the computer is not enough: the remote must actually answer with its `DIAG>` prompt and correct identity/version. Compatibility of other cables sold as “DCSD” is not established by this project. Buying a cable alone does not complete the missing setup tooling.
@@ -435,7 +435,9 @@ These bytes describe the tested remote's stored configuration. They are **not** 
 
 A Bluetooth Home event and the stored IR Home entry can coexist. This release does not claim hardware-level short/long-press suppression across both routes; holding the TV button may produce Home before Power. A long press is therefore not guaranteed to emit only Power.
 
-If your remote already controls volume and power correctly, preserve those settings. DCSD access is verified for reading and restoring IR settings; Bluetooth access is verified for adjusting the power-hold threshold. This does not establish a complete cable-free setup procedure. If your remote needs programming, read [IR.md](docs/IR.md) before adapting an IR programmer. The repository includes a pure packet encoder for inspection, **not** a universal IR-writing tool:
+If your remote already controls volume and power correctly, you can leave those settings alone. To set or delete an assignment, use the [native app's Infrared screen](docs/IR.md). Its Bluetooth integration still needs on-TV validation. It changes only the selected button and press type, without requiring a diagnostic cable. It requires existing pairing and a stopped input runtime.
+
+For packet inspection only, run:
 
 ```sh
 python3 src/ir_packets.py
@@ -443,7 +445,7 @@ python3 src/ir_packets.py
 
 Confirm IR independently with the TV input program cleanly stopped: point the remote at the TV, press Volume + once and Volume − once, and check that the volume rises and returns. Test power separately. Do not infer IR success from a Bluetooth-delivered key.
 
-Running the encoder above only prints bytes; **it does not save these settings to your remote**. The missing programmer must handle existing entries and enable flags, write the intended entries, read them back, and verify the physical IR result. After IR checks, the missing resume operation from Step 5 must reconcile the clean stop and allow the controller to start again.
+Running the encoder above only prints bytes; **it does not save these settings to your remote**. The native screen sends only after explicit Set/Delete confirmation. There is no verified full-table readback: deleting an entry does not restore an overwritten value, and a sent request must be tested physically. After IR checks, the stop/resume procedure from Step 5 must reconcile the clean stop and allow the controller to start again.
 
 ### Developer Mode expiry
 
@@ -488,7 +490,7 @@ Before changing a working setup, keep:
 - The exact three packages and their `SHA256SUMS`.
 - Your local configuration, stored privately.
 - A private copy of the relevant runtime/startup records, with ownership information.
-- A readback of the remote's IR entries before changing them.
+- Any known IR codes and operation receipts. Full-table readback is unavailable; these records are not a backup of unknown assignments.
 - A short list of physical tests that passed.
 
 ```mermaid
