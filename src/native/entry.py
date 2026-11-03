@@ -171,11 +171,11 @@ class Setup:
             fill = lambda selected: (27, 34, 44) if disabled else (30, 113, 156) if selected else (36, 48, 65)
             ink = (105, 115, 130) if disabled else (226, 234, 243)
             for index, field in enumerate(settings.EDITABLE_FIELDS):
-                y = 140 + index * 91
-                canvas.text(settings.LABELS[index], 66, y, 21, (155, 170, 190))
-                box = (64, y + 31, 1152, 57)
+                y = 150 + index * 76
+                box = (64, y, 1152, 62)
                 canvas.rectangle(box, fill(self.focus == index))
-                canvas.text(self.values[field] or 'Select to enter', 82, y + 44, 25, ink, max_width=1110)
+                canvas.text(settings.LABELS[index], 82, y + 19, 22, ink, max_width=340)
+                canvas.text(self.values[field] or 'Select to enter', 448, y + 17, 25, ink, max_width=742)
                 if not disabled: self.boxes.append((index, box))
             box = (64, 244, 1152, 54)
             canvas.rectangle(box, fill(self.focus == 3))
