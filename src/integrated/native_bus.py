@@ -132,7 +132,7 @@ class NativeBus:
             yield self.queue.popleft()
 
     def request(self, method, params, timeout=8):
-        if method not in ('status', 'configure', 'start', 'stop', 'drain', 'startupPrepare', 'startupBind', 'startupDisable'):
+        if method not in ('status', 'configure', 'start', 'stop', 'drain', 'startupPrepare', 'startupBind', 'startupDisable', 'startupRepair'):
             raise ValueError('Unsupported application request')
         return self._request_uri('luna://' + APP + '.service/' + method, params, timeout)
 

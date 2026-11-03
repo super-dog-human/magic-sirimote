@@ -143,7 +143,7 @@ class ControlTests(unittest.TestCase):
             with patch('native_manager.settings.save'):
                 app.apply(values, True)
             self.assertTrue(app.done)
-            self.assertEqual(bus.calls, ['configure', 'startupPrepare', 'start'])
+            self.assertEqual(bus.calls, ['configure', 'startupPrepare', 'startupRepair', 'start'])
 
     def test_installer_unknown_result_cannot_be_replayed(self):
         with tempfile.TemporaryDirectory() as d:

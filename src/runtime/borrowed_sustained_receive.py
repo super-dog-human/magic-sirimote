@@ -51,6 +51,8 @@ def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=
    def tick(self):
     if should_abort():receiver.stop('receive-aborted')
     else:
+     refresh=getattr(session,'battery_refresh',None)
+     if refresh is not None:refresh.tick()
      receiver.tick()
      if not receiver.closed:progress.maybe(receiver.summary)
    def feed_raw(self,gen,report):
@@ -62,6 +64,8 @@ def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=
   if end_reason is None:end_reason='receive-exception'
   raise
  finally:
+  refresh=getattr(session,'battery_refresh',None)
+  if refresh is not None:refresh.close()
   try:receiver.stop('receive-ended')
   finally:
    # Retain the first failure before session.stop() changes the guard/view.

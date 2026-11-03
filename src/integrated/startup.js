@@ -5,8 +5,14 @@ const APP = 'org.magicsirimote.app', NAME = APP + '.startup';
 const HEX = /^[a-f0-9]{48}$/;
 function disk(directory) {
   try { fs.mkdirSync(directory, {mode: 0o700}); } catch (error) { if (error.code !== 'EEXIST') throw error; }
-  const info = fs.lstatSync(directory);
-  if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid() || (info.mode & 0o777) !== 0o700) throw Error('Startup directory unavailable');
+  // webOS restores developer-app paths to 0775 at cold boot. Only our own
+  // exact directory/file may be tightened again; links/other owners fail closed.
+  const dirfd = fs.openSync(directory, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+  try {
+    const info = fs.fstatSync(dirfd);
+    if (!info.isDirectory() || info.uid !== process.getuid() || ![0o700, 0o775].includes(info.mode & 0o777)) throw Error('Startup directory unavailable');
+    if ((info.mode & 0o777) === 0o775) fs.fchmodSync(dirfd, 0o700);
+  } finally { fs.closeSync(dirfd); }
   return {
     read() {
       let fd;
@@ -14,7 +20,8 @@ function disk(directory) {
       catch (error) { if (error.code === 'ENOENT') return null; throw error; }
       try {
         const s = fs.fstatSync(fd);
-        if (!s.isFile() || s.uid !== process.getuid() || (s.mode & 0o777) !== 0o600 || s.size > 4096) throw Error('Startup state unavailable');
+        if (!s.isFile() || s.uid !== process.getuid() || s.nlink !== 1 || ![0o600, 0o775].includes(s.mode & 0o777) || s.size > 4096) throw Error('Startup state unavailable');
+        if ((s.mode & 0o777) === 0o775) fs.fchmodSync(fd, 0o600);
         const value = JSON.parse(fs.readFileSync(fd, 'utf8'));
         if (value.schema !== 1 || !HEX.test(value.token) || typeof value.enabled !== 'boolean' || !['prepared', 'ready', 'completing', 'attention'].includes(value.phase)) throw Error('Startup state invalid');
         return value;
@@ -32,7 +39,7 @@ function disk(directory) {
 function activityCall(handle, method, params, subscribe = false, timers = globalThis) {
   return new Promise(resolve => {
     let request, ended = false;
-    const timer = timers.setTimeout(() => finish(null), 6000);
+    const timer = timers.setTimeout(() => finish({returnValue: false, errorCode: -9003}), 6000);
     function finish(value) {
       if (ended) return; ended = true; timers.clearTimeout(timer);
       resolve({value, request});
@@ -48,9 +55,9 @@ function activityCall(handle, method, params, subscribe = false, timers = global
           if (!value || typeof value.returnValue !== 'boolean') throw Error();
           if (subscribe && value.returnValue && value.adopted !== true) return;
           finish(value);
-        } catch (_) { finish(null); }
+        } catch (_) { finish({returnValue: false, errorCode: -9002}); }
       }));
-    } catch (_) { finish(null); }
+    } catch (_) { finish({returnValue: false, errorCode: -9001}); }
   });
 }
 function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim(), now = Date.now, token = () => crypto.randomBytes(24).toString('hex')}) {
@@ -115,6 +122,23 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
       return {returnValue: false, status: 'registration-needs-attention'};
     } finally { if (lease) { try { lease.cancel(); } catch (_) {} } }
   }
+  async function repair() {
+    const s = load();
+    if (!s || s.phase !== 'ready') throw Error('Startup is not ready');
+    const read = await activity('getDetails', {activityId: s.activityId, internal: false, current: false});
+    const a = read.value && read.value.activity;
+    if (!read.value || read.value.returnValue !== true || !a) return {returnValue: false, status: 'startup-query-' + (read.value ? String(read.value.errorCode || 'invalid-response') : 'no-response'), errorText: read.value && typeof read.value.errorText === 'string' ? read.value.errorText.slice(0, 160) : undefined};
+    const checks = {id: a.activityId === s.activityId, name: a.name === NAME,
+      creator: !!a.creator && a.creator.serviceId === APP,
+      method: !!a.callback && a.callback.method === 'luna://' + APP + '.service/startupTick',
+      token: !!a.callback && !!a.callback.params && a.callback.params.token === s.token};
+    const mismatch = Object.keys(checks).filter(k => !checks[k]);
+    if (mismatch.length) return {returnValue: false, status: 'startup-mismatch-' + mismatch.join('-')};
+    if (a.state !== 'expired') return {returnValue: true, status: 'registered'};
+    if (!Array.isArray(a.adopters) || a.adopters.length || !Array.isArray(a.subscribers) || a.subscribers.length) throw Error('Startup activity is in use');
+    return tick({senderServiceName: () => 'com.webos.service.activitymanager', applicationID: () => APP},
+      {token: s.token, $activity: {activityId: s.activityId}});
+  }
   async function poll({power, status, start, stop}) {
     let s = load(); if (!s || !s.enabled || s.phase !== 'ready') return;
     const p = await power();
@@ -145,6 +169,6 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     const result = await start();
     s.lastOutcome = result && result.returnValue === true ? result.status : 'start-needs-attention'; store.write(s);
   }
-  return {summary, prepare, bind, disable, manualStart, tick, poll};
+  return {summary, prepare, bind, disable, manualStart, tick, repair, poll};
 }
 module.exports = {APP, NAME, disk, activityCall, createStartup};

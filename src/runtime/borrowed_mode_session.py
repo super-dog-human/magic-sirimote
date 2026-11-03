@@ -30,6 +30,8 @@ class BorrowedModeSession:
    self.state='attention';raise
  def stop(self):
   if self.stop_attempted:raise RuntimeError('stop-already-attempted')
+  refresh=getattr(self,'battery_refresh',None)
+  if refresh is not None:refresh.close()
   self.stop_attempted=True
   out={'status':'attention','disableAttempted':False,'modeZeroVerified':False,'gattDisconnectCalls':0,'clientOwnership':'unproven'}
   try:

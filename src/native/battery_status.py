@@ -34,11 +34,15 @@ def percentage(reply, remote, adapter, client_id):
     return data[0]
 
 
-def save(state, remote, adapter, level, *, now=time.time):
+def save(state, remote, adapter, level, *, now=time.time, request_id=None):
     if level is not None and (type(level) is not int or not 0 <= level <= 100):
         raise ValueError('Invalid battery percentage')
     value = {'schema': 1, 'remote': remote, 'adapter': adapter,
              'percent': level, 'readAt': now()}
+    if request_id is not None:
+        import re
+        if type(request_id) is not str or not re.fullmatch('[a-f0-9]{32}', request_id): raise ValueError('Invalid battery request')
+        value['requestId'] = request_id
     fd, name = tempfile.mkstemp(prefix='.battery-', dir=state)
     try:
         with os.fdopen(fd, 'w') as stream:
@@ -49,8 +53,8 @@ def save(state, remote, adapter, level, *, now=time.time):
         if os.path.exists(name): os.unlink(name)
 
 
-def label(state, remote, adapter, *, now=time.time):
-    unavailable = 'Battery: unavailable (read when the remote connects)'
+def label(state, remote, adapter, *, now=time.time, request_id=None):
+    unavailable = 'Battery: unavailable'
     try:
         fd = os.open(Path(state) / 'battery.json', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(fd, 'rb') as stream:
@@ -64,11 +68,40 @@ def label(state, remote, adapter, *, now=time.time):
                 or type(value.get('percent')) is not int or not 0 <= value['percent'] <= 100
                 or type(value.get('readAt')) not in (int, float)):
             return unavailable
+        if request_id is not None and value.get('requestId') != request_id: return unavailable
         age = now() - value['readAt']
         if not math.isfinite(age) or age < 0: return unavailable
-        age_text = ('less than a minute ago' if age < 60 else
-                    str(int(age // 60)) + ' min ago' if age < 3600 else
-                    str(int(age // 3600)) + ' h ago')
-        return 'Battery: %d%% (last read %s%s)' % (value['percent'], age_text, '; may have changed' if age >= 900 else '')
+        return 'Battery: %d%%' % value['percent']
     except (OSError, ValueError, TypeError):
         return unavailable
+
+
+class ScreenReading:
+    """Only show a response to this opening of the settings screen."""
+    def __init__(self, state, *, clock=time.monotonic):
+        self.state = state; self.clock = clock; self.request_id = None; self.deadline = 0
+        self.finished = True
+
+    def refresh(self, worker):
+        import secrets
+        self.request_id = secrets.token_hex(16)
+        self.value = 'Battery: unavailable'
+        self.finished = True
+        if worker is None or worker.poll() is not None or worker.stdin is None: return
+        try:
+            fd = worker.stdin.fileno(); os.set_blocking(fd, False)
+            raw = (self.request_id + '\n').encode('ascii')
+            if os.write(fd, raw) != len(raw): return
+            self.deadline = self.clock() + 6; self.finished = False
+        except OSError: pass
+
+    def text(self, remote, adapter):
+        if self.request_id is None: return 'Battery: unavailable'
+        value = label(self.state, remote, adapter, request_id=self.request_id)
+        if value != 'Battery: unavailable':
+            if self.clock() <= self.deadline and not self.finished:
+                self.finished = True; self.value = value
+            return getattr(self, 'value', 'Battery: unavailable') if self.finished else 'Battery: unavailable'
+        if self.finished or self.clock() >= self.deadline:
+            self.finished = True; return 'Battery: unavailable'
+        return 'Battery: reading...'

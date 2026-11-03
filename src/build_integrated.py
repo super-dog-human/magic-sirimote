@@ -9,7 +9,7 @@ import build_support
 
 ROOT = Path(__file__).resolve().parent
 APP = build_native.APP
-VERSION = '0.6.2'
+VERSION = '0.6.8'
 ROLES = ('controller', 'receiver')
 
 
@@ -33,12 +33,13 @@ def build(output):
     service['native/ir_packets.py'] = (ROOT / 'ir_packets.py').read_bytes()
     service['runtime/bundle_boot.py'] = (ROOT / 'integrated/bundle_boot.py').read_bytes()
     service['service.js'] = (ROOT / 'integrated/service.js').read_bytes()
+    service['activity-read.py'] = (ROOT / 'integrated/activity_read.py').read_bytes()
     service['startup.js'] = (ROOT / 'integrated/startup.js').read_bytes()
     service['power-read.py'] = (ROOT / 'scheduler/power-read.py').read_bytes()
     service['bundle_inspect.py'] = (ROOT / 'integrated/bundle_inspect.py').read_bytes()
     service['package.json'] = packaging.js({'name': APP + '.service', 'version': VERSION, 'main': 'service_entry.js'})
     service['services.json'] = packaging.js({'id': APP + '.service', 'services': [{'name': APP + '.service'}],
-                                           'requiredACG': ['bluetooth.query', 'application.launcher', 'activity.operation', 'configurator.callbacks']})
+                                           'requiredACG': ['bluetooth.query', 'application.launcher', 'activity.operation', 'activity.query', 'configurator.callbacks']})
     for role in ROLES:
         service['roles/' + role + '/native_probe.py'] = (
             'import sys\nfrom pathlib import Path\nroot=Path(__file__).resolve().parents[2]\n'
@@ -64,7 +65,7 @@ def build(output):
              'appinfo.json': packaging.js({'id': APP, 'version': VERSION, 'type': 'native', 'main': 'entry',
                                            'title': 'Magic Sirimote', 'icon': 'icon.png', 'noWindow': False,
                                            'noSplashOnLaunch': True, 'spinnerOnLaunch': False,
-                                           'requiredACG': ['bluetooth.query', 'application.launcher', 'activity.operation', 'configurator.callbacks']}),
+                                           'requiredACG': ['bluetooth.query', 'application.launcher', 'activity.operation', 'activity.query', 'configurator.callbacks']}),
              'state/README.txt': b'Native settings UI state.\n'}
     for name, source in {**files, **service}.items():
         if name.endswith('.py'):

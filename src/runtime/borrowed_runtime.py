@@ -85,7 +85,8 @@ def prepare(*,watch,lease,paired,external_feature_guard,record,pump=lambda:None,
   ensure_notifications(view.client_id,pump=pump,guard=control,record=record)
   import runtime_bundle as bundle
   if bundle.active():
-   from battery_read import capture
+   from battery_read import capture, ScreenRefresh
+   session.battery_refresh=ScreenRefresh(view.client_id, control)
    capture(view.client_id,pump=pump,guard=control)
   return session
  except BaseException:

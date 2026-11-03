@@ -9,7 +9,12 @@ function createService({Handle = require('palmbus').Handle, timers = globalThis,
   const handle = new Handle(APP + '.service');
   let tail = Promise.resolve(), controller = null;
   const startup = startupFactory({store: startupStore || startupModule.disk(path.join(__dirname, 'state/startup-private')),
-    activity: (method, params, subscribe) => startupModule.activityCall(handle, method, params, subscribe, timers)});
+    activity: (method, params, subscribe) => method === 'getDetails' ? new Promise(resolve => {
+      cp.execFile('/usr/bin/python3', ['-I', '-B', path.join(__dirname, 'activity-read.py')],
+        {timeout: 5000, maxBuffer: 8192}, (error, stdout) => {
+          try { resolve({value: error ? null : JSON.parse(stdout)}); } catch (_) { resolve({value: null}); }
+        });
+    }) : startupModule.activityCall(handle, method, params, subscribe, timers)});
   function trace(stage) {
     try { fs.writeFileSync(path.join(__dirname, 'state', 'control-status.json'),
       JSON.stringify({stage, pid: process.pid, epochMs: Date.now()}), {mode: 0o640}); } catch (_) {}
@@ -75,7 +80,7 @@ function createService({Handle = require('palmbus').Handle, timers = globalThis,
     }, 2000);
   }
   schedulePower();
-  const methods = ['status', 'configure', 'start', 'stop', 'drain', 'startupPrepare', 'startupBind', 'startupDisable', 'startupTick'];
+  const methods = ['status', 'configure', 'start', 'stop', 'drain', 'startupPrepare', 'startupBind', 'startupDisable', 'startupRepair', 'startupTick'];
   for (const method of methods) handle.registerMethod('/', method);
   handle.addListener('request', message => {
     trace('request-received');
@@ -91,6 +96,7 @@ function createService({Handle = require('palmbus').Handle, timers = globalThis,
         if (method === 'startupTick') value = await startup.tick(message, params);
         else if (method === 'startupPrepare' && Object.keys(params).length === 0) value = startup.prepare();
         else if (method === 'startupBind' && Object.keys(params).sort().join(',') === 'activityId,token') value = startup.bind(params);
+        else if (method === 'startupRepair' && Object.keys(params).length === 0) value = await startup.repair();
         else if (method === 'startupDisable' && Object.keys(params).length === 0) value = startup.disable();
         else if (method === 'start' && Object.keys(params).length === 0) { startup.manualStart(); value = await startInput(); }
         else if (method === 'stop' && Object.keys(params).length === 0) { startup.disable(); value = await helper('stop', params); }

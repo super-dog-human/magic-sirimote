@@ -78,11 +78,14 @@ class RuntimeSetup(Setup):
         self.bus = bus
         self.stop_requested = False
         self.worker = None
+        from battery_status import ScreenReading
+        self.battery = ScreenReading(state)
         self.message = 'Start enables automatic startup. Stop pauses it until you choose Start again.'
 
     def enable_startup(self):
         reply = accepted(self.bus.request('startupPrepare', {}))
-        if reply.get('status') == 'registered': return
+        if reply.get('status') == 'registered':
+            accepted(self.bus.request('startupRepair', {})); return
         if reply.get('status') != 'create-required': raise RuntimeError('Automatic startup is unavailable')
         created = accepted(self.bus.create_startup(reply['token']))
         activity_id = created.get('activityId')
@@ -155,8 +158,7 @@ class RuntimeSetup(Setup):
             canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
             canvas.text(title, box[0] + 20, box[1] + 16, 24)
             self.boxes.append((index, box))
-        from battery_status import label
-        canvas.text(label(self.state, self.values['remoteAddress'], self.values['adapterAddress']), 66, 682, 19, (155, 170, 190))
+        canvas.text(self.battery.text(self.values['remoteAddress'], self.values['adapterAddress']), 66, 682, 19, (155, 170, 190))
         canvas.present()
 
 
@@ -186,20 +188,26 @@ def main():
             canvas = Canvas(APP); app.draw(canvas)
             if handoff:
                 worker = subprocess.Popen(['/usr/bin/python3', '-I', '-B', str(SERVICE / 'roles/receiver/native_probe.py')],
-                                          stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 os.set_blocking(worker.stdout.fileno(), False)
                 log = os.open(STATE / ('receiver-output-' + str(os.getpid()) + '.log'), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
                 app.worker = worker; canvas.minimize()
                 write_status('native-status.json', {'status': 'worker-starting', 'pid': os.getpid(), 'workerPid': worker.pid})
+            if not handoff: app.battery.refresh(worker)
+            battery_text = None
             while True:
                 for event, params in bus.events():
                     if event == 'relaunch':
                         canvas.restore()
+                        app.battery.refresh(worker)
                         try: consume_installer(params, app.apply, stop=app.stop_runtime)
                         except (OSError, ValueError, RuntimeError) as error: app.message = str(error)[:160]
                         app.draw(canvas)
                     elif event == 'close':
                         stop_signal[0] = True
+                current_battery = app.battery.text(app.values['remoteAddress'], app.values['adapterAddress'])
+                if current_battery != battery_text:
+                    battery_text = current_battery; app.draw(canvas)
                 programming = app.infrared is not None and app.infrared.busy
                 if stop_signal[0] and not closing and not programming:
                     closing = True
@@ -219,7 +227,7 @@ def main():
                     code = worker.poll()
                     if code is not None:
                         write_status('native-status.json', {'status': 'worker-ended', 'exitCode': code, 'pid': os.getpid(), 'workerPid': worker.pid})
-                        worker.stdout.close(); worker = None; app.worker = None
+                        worker.stdout.close(); worker.stdin.close(); worker = None; app.worker = None
                         if closing or not app.stop_requested:
                             break  # Next connection requires a fresh native jail.
                         app.message = 'Input worker stopped. Wait for the controller to finish before changing settings.'
@@ -242,5 +250,6 @@ def main():
             except subprocess.TimeoutExpired:
                 # Never SIGKILL an uncertain sensor session. Controller retains its journal.
                 pass
+        if worker is not None and worker.stdin is not None: worker.stdin.close()
         if log is not None: os.close(log)
         if canvas is not None: canvas.close()

@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.2_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.8_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -43,14 +43,14 @@ fails or a previous sensor session cannot be safely recovered, it retains the
 records and does not repeatedly launch new input processes. The saved settings
 and recovery records should not be deleted as a troubleshooting shortcut.
 
-The integrated window displays the last battery percentage reported by the remote,
-with the age of the reading. It reads once while preparing an authenticated
-connection, without pairing, reconnecting or changing remote settings. A missing,
-invalid or timed-out reading shows **unavailable** and does not prevent input.
-Older readings are explicitly marked as potentially changed; the value is not a
-live battery monitor or a charging indicator. Opening the settings window does
-not issue another battery read. The next connection setup replaces the reading;
-there is no periodic battery polling while the same connection remains active.
+The integrated window reads the battery level whenever you open or reopen it,
+using the receiver's existing authenticated Bluetooth connection. It shows
+**Battery: reading...**, then the percentage, without an elapsed-time label.
+A missing connection, invalid response or timeout shows **Battery: unavailable**;
+a value from a previous screen opening is never substituted. The read runs
+asynchronously so input continues. There is no periodic polling while the screen
+stays open, and reading the level does not connect or re-pair the remote.
+Connection setup also reads the battery once.
 
 On the tested TV, this build supports swipe navigation, surface clicks, gyro
 pointing, MENU for Back, the TV button for Home, playback controls, and releasing
