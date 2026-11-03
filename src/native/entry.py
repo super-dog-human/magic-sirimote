@@ -165,9 +165,14 @@ class Setup:
                 canvas.text(title, box[0] + 25, box[1] + 17, 25)
                 self.boxes.append((index, box))
             canvas.text(self.message, 66, 568, 22, max_width=1148)
-            canvas.text('IR programs the remote. TV assignments are saved only; input startup is separate.', 66, 630, 21, (155, 170, 190))
-            canvas.text('Developer Mode expiry is managed separately using your usual tools.', 66, 663, 20, (155, 170, 190))
+            self.draw_footer(canvas)
         canvas.present()
+
+    def draw_footer(self, canvas):
+        # Compose the entire frame before presenting it. SDL does not promise
+        # that any backbuffer content survives a presentation.
+        canvas.text('IR programs the remote. TV assignments are saved only; input startup is separate.', 66, 630, 21, (155, 170, 190))
+        canvas.text('Developer Mode expiry is managed separately using your usual tools.', 66, 663, 20, (155, 170, 190))
 
 
 def main(state=None, bus=None):

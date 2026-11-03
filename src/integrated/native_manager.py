@@ -195,14 +195,9 @@ class RuntimeSetup(Setup):
                 self.done = False
                 self.message = str(error)[:160]
 
-    def draw(self, canvas):
-        super().draw(canvas)
-        if self.editing is not None or self.infrared is not None:
-            return
-        canvas.rectangle((64, 605, 1152, 108), (14, 22, 34))
+    def draw_footer(self, canvas):
         canvas.text('Remote control runs automatically. No Start or Stop action is needed.', 66, 630, 21, (155, 170, 190))
         canvas.text(self.battery.text(self.values['remoteAddress'], self.values['adapterAddress']), 66, 682, 19, (155, 170, 190))
-        canvas.present()
 
 
 def pending_worker():
