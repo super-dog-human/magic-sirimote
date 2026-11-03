@@ -1,6 +1,7 @@
 """Validated HID identity, bounded discovery, and the shared input read loop."""
+from runtime_device import identity as device_identity
 import errno,fcntl,os,stat,struct,time
-TARGET='02:00:00:00:00:01';NAME='EXAMPLE_REMOTE_SERIAL';MAX=32
+TARGET=device_identity().remote;NAME=device_identity().name;MAX=32
 READ_BACKOFF_SECONDS=0.01
 READ_SUCCESS_YIELD_SECONDS=0.001
 

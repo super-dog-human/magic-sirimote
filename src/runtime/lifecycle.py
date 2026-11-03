@@ -7,11 +7,12 @@ ok=True. A transport must provide unique generations and monotonically finite
 timestamps. Sensor baseline is read only after one F0/AF init per generation.
 No state is inferred from a new Controller after process restart.
 """
+from runtime_device import identity as device_identity
 from dataclasses import dataclass, field
 import math
 
-REMOTE = "02:00:00:00:00:01"
-ADAPTER = "02:00:00:00:00:02"
+REMOTE = device_identity().remote
+ADAPTER = device_identity().adapter
 
 
 @dataclass(frozen=True)

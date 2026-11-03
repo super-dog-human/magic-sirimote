@@ -3,6 +3,7 @@
 The caller must verify mode zero before permitting an enable. No pairing,
 client disconnect, selector, input, or CCCD operation is offered here.
 """
+from runtime_device import identity as device_identity
 from native_mode_session import ack
 
 class BorrowedModeWriter:
@@ -17,9 +18,9 @@ class BorrowedModeWriter:
   if mode==1:
    if not self.permitted or self.enabled:raise RuntimeError('enable not permitted')
    self.enabled=True;self.activation.enable_allowed=True
-   reply=self.activation('hid/internal/setReport',{'address':'02:00:00:00:00:01','reportType':'feature','reportData':[240,160,1]},timeout=6)
+   reply=self.activation('hid/internal/setReport',{'address':device_identity().remote,'reportType':'feature','reportData':[240,160,1]},timeout=6)
   else:
    if not self.enabled or self.stopped:raise RuntimeError('stop not permitted')
    self.stopped=True
-   reply=self.stop_client('hid/internal/setReport',{'address':'02:00:00:00:00:01','reportType':'feature','reportData':[240,160,0]},timeout=6)
+   reply=self.stop_client('hid/internal/setReport',{'address':device_identity().remote,'reportType':'feature','reportData':[240,160,0]},timeout=6)
   return ack(reply)

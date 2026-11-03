@@ -3,6 +3,7 @@
 GATT 106 is unknown, never a connected/disconnected proof. An uncertain
 durable intent remains until both target profiles are independently confirmed.
 """
+from runtime_device import connect_intent
 import math,os,stat,time,uuid
 from connected_status_watch import ConnectedStatusWatch
 from resident_autoconnect import ConnectClient,NAME
@@ -31,7 +32,7 @@ def reserve_intent(lease):
  fd=os.open('bootstrap-connect-intent.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o640,dir_fd=lease.dirfd)
  try:
   os.fchmod(fd,0o640)
-  payload=b'{"schema":1,"method":"hid/connect","address":"02:00:00:00:00:01","outcome":"reserved-possibly-dispatched"}\n'
+  payload=connect_intent()
   if os.write(fd,payload)!=len(payload):raise OSError('intent write incomplete')
   os.fsync(fd)
  finally:os.close(fd)
@@ -49,7 +50,7 @@ def retire_confirmed_intent(lease,*,group=5000):
  try:fd=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=lease.dirfd)
  except FileNotFoundError:return False
  try:
-  s=os.fstat(fd);expected=b'{"schema":1,"method":"hid/connect","address":"02:00:00:00:00:01","outcome":"reserved-possibly-dispatched"}\n'
+  s=os.fstat(fd);expected=connect_intent()
   if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_uid!=os.getuid() or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (0o640,0o775) or s.st_size!=len(expected):raise RuntimeError('unsafe bootstrap intent')
   if os.read(fd,len(expected)+1)!=expected:raise RuntimeError('bootstrap intent content changed')
   current=os.stat(name,dir_fd=lease.dirfd,follow_symlinks=False)

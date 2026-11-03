@@ -11,14 +11,15 @@ Returned characteristic bytes are discarded after length/hash and a strictly
 shaped mode candidate are derived. All candidates remain unverified; this
 probe never sets wirelessReadVerified=True.
 """
+from runtime_device import identity as device_identity
 from dataclasses import dataclass
 import hashlib
 import math
 import time
 
 
-TARGET = "02:00:00:00:00:01"
-ADAPTER = "02:00:00:00:00:02"
+TARGET = device_identity().remote
+ADAPTER = device_identity().adapter
 BASE = "0000{}-0000-1000-8000-00805f9b34fb"
 GET_SERVICES = "luna://com.webos.service.bluetooth2/gatt/getServices"
 READ_DESCRIPTORS = "luna://com.webos.service.bluetooth2/gatt/readDescriptorValues"

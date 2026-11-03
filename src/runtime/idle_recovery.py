@@ -2,6 +2,7 @@
 
 This module performs no work until explicitly called by the lease owner.
 """
+from runtime_device import connect_intent
 import math,os,stat,time,uuid
 from pathlib import Path
 from connected_status_watch import ConnectedStatusWatch
@@ -9,7 +10,7 @@ from resident_autoconnect import NAME
 from borrowed_gatt_view import TARGET
 
 INTENT='bootstrap-connect-intent.json'
-EXPECTED=b'{"schema":1,"method":"hid/connect","address":"02:00:00:00:00:01","outcome":"reserved-possibly-dispatched"}\n'
+EXPECTED=connect_intent()
 
 def no_connect_process(proc='/proc'):
  count=0

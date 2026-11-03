@@ -5,9 +5,10 @@ It is not a temporary test override. Only flags0 -> flags1 is written;
 already-enabled flags1 is preserved, other values are not overwritten.
 Sensor start/stop remains a separate lifecycle. No link is disconnected.
 """
+from runtime_device import identity as device_identity
 from pumping_luna_client import PumpingLunaClient
-TARGET = '02:00:00:00:00:01'
-ADAPTER = '02:00:00:00:00:02'
+TARGET = device_identity().remote
+ADAPTER = device_identity().adapter
 BASE = '0000{}-0000-1000-8000-00805f9b34fb'
 SERVICE, REPORT, CCCD = (BASE.format(s) for s in ('1812', '2a4d', '2902'))
 

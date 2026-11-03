@@ -1,7 +1,8 @@
 """Read-only prelaunch Bluetooth snapshot for a TV-local coordinator."""
+from runtime_device import identity as device_identity
 import subprocess
 from interactive_status_read import read_status
-TARGET='02:00:00:00:00:01';ADAPTER='02:00:00:00:00:02';NAME='EXAMPLE_REMOTE_SERIAL'
+TARGET=device_identity().remote;ADAPTER=device_identity().adapter;NAME=device_identity().name
 BUS='luna://com.webos.service.bluetooth2/'
 def _call(method,params,invoke):
  if method not in ('device/getStatus','hid/getStatus','gatt/getStatus'):raise ValueError('not read-only')

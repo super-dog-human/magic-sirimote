@@ -4,12 +4,13 @@ Create, call, and close on the same polling thread. No process is spawned and
 no service identity is borrowed. Subscription events remain a separate input
 to the existing connection-generation tracker.
 """
+from runtime_device import identity as device_identity
 import ctypes as C
 import json
 import threading
 import time
 
-TARGET = '02:00:00:00:00:01'
+TARGET = device_identity().remote
 METHODS = ('hid/getStatus', 'gatt/getStatus')
 
 

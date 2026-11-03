@@ -4,12 +4,13 @@ A request never establishes input ownership. The existing independent profile
 pump must observe a fresh connected pair before normal receiver admission.
 No discovery, pairing, disconnect, settings, sensor or input operation exists.
 """
+from runtime_device import identity as device_identity
 import threading,time,subprocess
 from borrowed_gatt_view import TARGET,ADAPTER
 from pumping_luna_client import PumpingLunaClient,LunaCallError
 from controller_connect_identity import verify_self
 
-NAME='EXAMPLE_REMOTE_SERIAL'
+NAME=device_identity().name
 
 class ConnectNotDispatched(LunaCallError):
  """Known stale eligibility rejected before invoking the process boundary."""

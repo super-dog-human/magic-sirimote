@@ -4,8 +4,9 @@ The caller supplies the already-observed reply and live profile guard. This
 object never connects, disconnects, enables sensors, or claims exclusivity.
 It is not yet wired to a receiver or validated on the TV.
 """
-TARGET='02:00:00:00:00:01'
-ADAPTER='02:00:00:00:00:02'
+from runtime_device import identity as device_identity
+TARGET=device_identity().remote
+ADAPTER=device_identity().adapter
 
 def valid_client(value):
  return type(value) is str and value.isascii() and value.isdecimal() and 1<=len(value)<=5 and 1<=int(value)<=65535
