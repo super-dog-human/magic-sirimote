@@ -11,10 +11,8 @@ This is an experimental community project with limited hardware testing. Reconne
 - [Compatibility and requirements](#compatibility-and-requirements)
 - [What you can do](#what-you-can-do)
 - [Set up from a Mac](#set-up-from-a-mac)
-- [Everyday use](#everyday-use)
 - [Troubleshooting](#troubleshooting)
 - [Reset or uninstall](#reset-or-uninstall)
-- [Source code and credits](#source-code-and-credits)
 
 ## Compatibility and requirements
 
@@ -39,6 +37,7 @@ Testing includes removing and recreating the A1513's pairing. An independently c
 
 - A compatible LG webOS TV and its original LG remote. Use the LG remote for setup and saving settings.
 - A charged Siri Remote.
+- [Node.js and npm](https://nodejs.org/en/download) installed on the Mac.
 - A Mac and TV connected to the same local network. Either device can use Wi-Fi or Ethernet, provided they can communicate with each other.
 - Internet access to create an LG Developer account and download the tools and app.
 
@@ -70,13 +69,11 @@ Open the [LG webOS TV Developer website](https://webostv.developer.lge.com/), se
 
 ### 2. Enable Developer Mode on the TV
 
-Using the LG remote:
-
 1. Open the TV's app store and search for **Developer Mode**.
 2. Install and open LG's Developer Mode app.
 3. Sign in with your LG Developer account.
 4. Turn **Dev Mode Status** on and let the TV restart.
-5. Reopen Developer Mode. Note the displayed **IP address** for step 4.
+5. Reopen Developer Mode. Note the displayed **IP address**; you will use it to connect the Mac to the TV.
 
 If Dev Mode Status is already on, leave it on. LG documents this process in its [Developer Mode guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app).
 
@@ -91,8 +88,6 @@ node --version
 npm --version
 ```
 
-If either is unavailable, install Node.js from the [official download page](https://nodejs.org/en/download). Node.js **24 LTS** is a suitable choice: it is the version identified as tested by the [webOS CLI project](https://github.com/webos-tools/cli#installation). The Node.js installer includes npm. Reopen Terminal after installation and try the two checks again.
-
 Install LG's command-line tools and select the TV profile:
 
 ```sh
@@ -104,7 +99,7 @@ ares -V
 ares-config --profile tv
 ```
 
-`ares -V` should print a version number. If installation reports a permissions error, use the guidance linked from [LG's CLI installation page](https://webostv.developer.lge.com/develop/tools/cli-installation) before continuing. If you have an older webOS CLI installed, follow that page's instructions for replacing it rather than mixing CLI installations.
+`ares -V` should print a version number. If installation reports a permissions error, use the guidance linked from [LG's CLI installation page](https://webostv.developer.lge.com/develop/tools/cli-installation) before continuing.
 
 ### 4. Connect the Mac tools to your TV
 
@@ -194,12 +189,12 @@ Keep the LG remote in your hand for this step. The app normally shows **Pair a S
 1. On the TV, choose **Start pairing** with the LG remote.
 2. Wait until the app starts searching. **Start the search before pressing the pairing buttons.**
 3. Hold Siri Remote near the TV. Press and hold **MENU and Volume Up (+) together for about five seconds**, then release both.
-4. Watch the candidate list on the TV. When your remote appears, use the LG remote's **Up/Down** keys to select it. Its displayed name may contain a serial number rather than simply “Siri Remote.”
+4. After the search detects your remote, it appears in the candidate list. Use **Up/Down** to select it. The list is empty until a remote is detected; its name may contain a serial number.
 5. Select **Pair selected remote** and press OK. Use Left/Right to move between the bottom buttons if necessary. **Appearing in the list does not mean pairing is complete.** If the app already knows this remote, it may select and pair it automatically.
 6. Wait while the app verifies the remote and prepares input. On success, it saves the connection information and closes the window to start reception.
 7. Press Siri Remote's touch surface once to wake it. Try swiping to move the TV's selection, then pressing the surface to select an item.
 
-There is no fixed 70-second wait after pairing, although connection and startup still take time. If the app reports an error or no candidate appears, see [Pairing problems](#pairing-problems).
+If the app reports an error or no candidate appears, see [Pairing problems](#pairing-problems).
 
 Pairing alone **does not rewrite the infrared assignments already stored in the remote**. Set up the six buttons next, even if some of them happen to work already.
 
@@ -235,60 +230,20 @@ Here is a useful starting configuration. **It is a suggestion, not a preset appl
 
 Choose every cell you want to use before your first save. The app cannot recover an unknown infrared assignment after you overwrite or delete it.
 
-### 8. Save and check the result
+### 8. Save your settings
 
-1. Press **Back on the LG remote** to return to the first settings screen. Your button edits remain pending.
+1. Press **Back** to return to the first settings screen. Your button edits remain pending.
 2. Leave **Gyro cursor** on if you want pointer control. Set **Cursor sensitivity** to **3 / 5** as a starting point, or choose a lower value for less movement.
-3. Choose **Save and restart** using the LG remote. **Saving begins immediately; there is no additional confirmation.**
-4. The controls dim while the app works. It applies **all twelve displayed assignments**, including unchanged cells and Do nothing cells, then restarts reception. Siri Remote input may pause during this process.
-5. Wait for saving to finish and the window to close. Press Siri Remote's surface once to wake it, then check the functions below.
-
-With the suggested assignments, check these one at a time:
-
-1. Swipe to highlight an app, then press the surface to open it.
-2. Point the remote toward the TV and press Menu briefly to go back.
-3. Press the TV-picture button briefly to return to Home.
-4. Lift your finger off the surface and move the remote deliberately to bring up the pointer. Aim at an item and press the surface to click it.
-5. Point at the TV and press Volume Up once, then Volume Down once.
-6. While a video is playing, press and release Play/Pause to pause it, then press and release again to resume.
-7. Press and release Siri to turn off only the picture. Press and release it again to restore the picture. Audio should continue while the picture is off.
-8. Hold the TV-picture button for a little under a second, then release it to turn the TV off. Wait about ten seconds and repeat to turn it on. Do not hold the button throughout the TV's startup animation.
+3. Choose **Save and restart**. The app applies all twelve displayed assignments and restarts reception.
+4. Wait for the window to close, then use Siri Remote.
 
 If saving fails partway through, some assignments may already have changed. Read the displayed result, wake the remote, and see [Saving problems](#saving-problems) before retrying. Selecting a choice or leaving the editor with Back does not itself save anything. **Close** asks whether to discard unsaved edits.
 
-## Everyday use
-
-You can shut down the Mac. Keep Magic Sirimote installed and Developer Mode enabled on the TV. Reception starts automatically; there is no manual reception switch in the app.
-
-### Swipes, clicks and the pointer
-
-- **Move a selection:** swipe the surface. The pointer disappears and swipes move the highlight. Press the surface to choose the highlighted item.
-- **Move the pointer:** take your finger off the surface, then move the remote deliberately. Small movements can adjust the pointer once it appears. Press the surface to click at its position.
-- **After a swipe:** small hand movements should not immediately bring the pointer back. Use a larger, deliberate movement with your finger off the surface to return to pointer mode.
-- **While touching the surface:** touch navigation takes priority. Continuous gyro pointing with a finger resting on the surface is not supported.
-- **After sleep:** press the surface to wake the remote and allow it to reconnect. After a full TV restart, startup can take about a minute plus connection time; this is not a guaranteed maximum.
-
-### Cursor settings
-
-Open Magic Sirimote to adjust **Cursor sensitivity** from 1 to 5. Lower values reduce travel distance; they do not add a delay. Choose **Save and restart** to apply the change. Turning **Gyro cursor** off leaves touch navigation and assigned buttons available.
-
-If the pointer's directions feel rotated, save or discard pending edits first. Lay the remote flat, touch surface up, with its front end toward the TV. Using the LG remote, choose **Reset cursor orientation**, then confirm **Restart**. Leave Siri Remote still until reception resumes, then pick it up and try again. This orientation reset does not rewrite the IR assignments.
-
-### Battery level
-
-Opening or reopening Magic Sirimote requests a new battery reading. It may briefly show **Battery: reading...**, followed by a percentage. **Battery: unavailable** means it could not obtain a fresh reading; it does not mean the battery is empty. Wake the remote, let it reconnect, and reopen the app. The screen does not continuously refresh the reading while left open.
-
-### Custom infrared codes
-
-For an action not listed by name, select a cell, choose **Custom code (IR)**, enter exactly two hexadecimal digits (`0`–`9`, `A`–`F`), and choose **Done**. Return to the first screen and use Save and restart to apply it.
-
-For example, **09** is the LG mute/unmute command used on the tested TV. Assign it to Siri's Press cell if you prefer mute to screen off/restore. The code uses the app's LG infrared format; it is not a universal code for every manufacturer or every TV command. Test the result on your TV.
+## Troubleshooting
 
 ### Keep Developer Mode active
 
 Periodically open **Developer Mode** on the TV and check **Remain Session**. While time remains and the TV is online, use **EXTEND** to renew it. Magic Sirimote does not renew it for you. If Developer Mode becomes disabled, LG removes the apps installed through it. See [LG's session instructions](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app#extending-developer-mode-time).
-
-## Troubleshooting
 
 ### The Mac cannot connect to the TV
 
@@ -324,7 +279,7 @@ Recovery is not guaranteed for every Bluetooth failure. If the problem keeps ret
 
 ### Swipes work but the pointer does not
 
-Check that Gyro cursor is on and saved. Lift your finger completely off the touch surface and move the remote more deliberately. If movement is misdirected, use Reset cursor orientation as described above. A working swipe does not necessarily mean orientation setup has completed yet.
+Check that Gyro cursor is on and saved. Lift your finger completely off the touch surface and move the remote more deliberately. If movement is misdirected, lay the remote flat with its touch surface up and front end toward the TV. Choose **Reset cursor orientation**, confirm **Restart**, and leave the remote still until reception resumes. A working swipe does not necessarily mean orientation setup has completed yet.
 
 ### Saving problems
 
@@ -357,16 +312,3 @@ ares-install --device my-tv --remove org.magicsirimote.app
 ```
 
 Uninstalling the app alone should not be treated as unpairing the remote or deleting its stored IR settings. Reset clears the active configuration but may retain inactive local recovery records; it is not secure erasure of diagnostic history.
-
-## Source code and credits
-
-Normal users can use the supplied IPK. Contributors can run the host checks from the repository root with `python3 src/check.py`, or build a package with `python3 src/build_integrated.py --out build/integrated`. Building requires Python 3 and Clang; the test runner also uses Node.js. Choose an output directory that does not already exist. Host tests do not establish compatibility with a new TV.
-
-Further thanks to:
-
-- [open-appleremote](https://github.com/a-funk/open-appleremote) and [SiriRemote-Linux](https://github.com/Yanndroid/SiriRemote-Linux) for Siri Remote protocol and input research.
-- [Clean Your TV](https://github.com/Razdva122/clean-your-tv-lg-webos), [Homebrew Channel](https://github.com/webosbrew/webos-homebrew-channel), and [webOS Dev Manager](https://github.com/webosbrew/dev-manager-desktop) for webOS tooling and platform research.
-- LG's [Bluetooth service](https://github.com/webosose/webos.service.bluetooth2), [Bluetooth SIL API](https://github.com/webosose/bluetooth-sil-api), [Luna Service 2](https://github.com/webosose/luna-service2), and [webOS TV documentation](https://webostv.developer.lge.com/) for platform interfaces and guidance.
-- The Linux input, Python, Node.js and LLVM communities.
-
-Project-authored code is available under the [MIT license](LICENSE). Upstream projects retain their own copyrights and licenses. These credits describe research and tooling contributions; they do not imply endorsement or that entire upstream packages are bundled. The download does not include TV firmware, LG native libraries, Python, Node.js, LLVM or captured Bluetooth traffic. This is an independent project, not an Apple or LG product.
