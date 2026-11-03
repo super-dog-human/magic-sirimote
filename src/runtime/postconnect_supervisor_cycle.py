@@ -1,8 +1,8 @@
-"""Offline composition for one TV-local watcher/receiver cycle.
+"""Composition for one TV-local watcher/receiver cycle.
 
-Starts no process on import. Caller owns the status pump and supervisor lease;
-target package, actual ACLs, feature conflict policy and boot start remain
-unverified. Uncertain outcomes retain the launch and handoff evidence.
+Starts no process on import. Caller owns the status pump and supervisor
+lease; the receiver package and live process are checked separately.
+Uncertain outcomes retain the launch and handoff evidence.
 """
 import os,time
 import runtime_bundle as bundle

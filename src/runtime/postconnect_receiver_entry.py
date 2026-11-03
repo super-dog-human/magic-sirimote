@@ -1,9 +1,10 @@
-"""One receiver started after connection; offline composition only.
+"""Receiver setup after a verified connection.
 
 Caller must start its own fresh status watcher after app launch and supply
-verified paired-target and external feature-exclusivity checks. This code has
-no CLI and is not installed. The caller remains responsible for watcher and
-lease lifetime and for recovery from a killed process or ambiguous lookup.
+verified paired-target and external feature-exclusivity checks. The native
+entry point invokes this module. The caller remains responsible for watcher
+and lease lifetime and for recovery from a killed process or ambiguous
+lookup.
 """
 import math,re
 from combined_receiver import CombinedReceiver

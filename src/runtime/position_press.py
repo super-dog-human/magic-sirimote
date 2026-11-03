@@ -1,9 +1,10 @@
-"""Offline candidate: press-time position -> latched direction/center click.
+"""Candidate: press-time position -> latched direction/center click.
 
-No native keys, cursor, device/network operations or IR. `emit(action, down)`
-is an injected semantic sink. A future native adapter must route center only
-to the existing BTN_LEFT path and directions only to the reviewed key path;
-never also run the old all-positions TouchClick output on the same reports.
+No native keys, cursor, device/network operations or IR. `emit(action,
+down)` is an injected semantic sink. A future native adapter must route
+center only to the existing BTN_LEFT path and directions only to the
+reviewed key path; never also run the old all-positions TouchClick output on
+the same reports.
 """
 import math
 import struct

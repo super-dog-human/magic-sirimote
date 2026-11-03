@@ -1,4 +1,4 @@
-"""One-shot controller takeover and receiver recovery; not wired to live startup.
+"""One-shot controller takeover and receiver recovery.
 
 The caller supplies a fresh, connected target watcher and an exclusive
 supervisor lease. Any ambiguous launch or recovery outcome is retained.

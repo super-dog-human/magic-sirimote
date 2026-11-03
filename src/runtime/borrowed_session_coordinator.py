@@ -1,9 +1,9 @@
-"""Offline composition of the borrowed sensor lifecycle.
+"""Composition of the borrowed sensor lifecycle.
 
 The caller must supply a live watcher, paired-target proof, an explicit
 feature-serialization guard and audited API adapters. A cooperative-only
-guard is an unproven assumption about other processes. None has been validated
-end-to-end on the TV; this module never starts on import.
+guard is an unproven assumption about other processes. This module never
+starts on import.
 """
 from borrowed_control_guard import BorrowedControlGuard
 from borrowed_gatt_view import TARGET,ADAPTER

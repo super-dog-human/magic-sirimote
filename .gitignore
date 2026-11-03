@@ -5,7 +5,6 @@ __pycache__/
 node_modules/
 /build/
 /dist/
-/config.local.json
 /local/
 *.ipk
 *.pem
@@ -13,6 +12,5 @@ node_modules/
 *.pcap
 *.pcapng
 
-# Generic, explicitly labelled native setup preview (no device configuration).
-!/releases/native-preview/*.ipk
+# Published integrated package.
 !/releases/integrated-preview/*.ipk

@@ -1,6 +1,6 @@
-"""Offline adapter for direct status-based connection detection.
+"""Adapter for direct status-based connection detection.
 
-No sensor, connection request, pairing or input operations. Never installed.
+Performs status reads only, without pairing, sensor or input operations.
 """
 import subprocess,time
 from connected_status_watch import ConnectedStatusWatch

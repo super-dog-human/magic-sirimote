@@ -1,4 +1,4 @@
-"""Offline-only adapter to the existing verified-output boundary.
+"""Adapter to the existing verified-output boundary.
 
 The caller must separately establish target and sensor authorization. The
 flag is a synthetic-test gate, not proof that real FC21 data is orientation.

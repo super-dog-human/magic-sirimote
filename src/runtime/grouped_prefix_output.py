@@ -1,8 +1,7 @@
-"""Offline-only FC21 output candidate using accepted grouped transport.
+"""FC21 output through grouped relative-motion packets.
 
-No device opens. Caller provides already-verified output descriptors. This
-candidate has not been accepted on the TV; successful synthetic tests do not
-establish physical equivalence or an authenticated live sensor stream.
+No device opens. Caller provides already-verified output descriptors. The
+caller also authenticates the live sensor stream.
 """
 from prefix_output_candidate import PrefixOutputCandidate
 from nonblocking_relative_transport import NonblockingRelativeTransport

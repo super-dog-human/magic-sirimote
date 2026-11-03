@@ -1,8 +1,9 @@
-"""Atomic active-to-completed directory for an offline receiver session.
+"""Atomic active-to-completed directory for an receiver session.
 
 A caller must hold the cooperative lease for the entire lifetime. An active
-folder after a crash blocks a new session and is never removed automatically.
-The parent directory and files are not authenticated against hostile peers.
+folder after a crash blocks a new session and is never removed
+automatically. The parent directory and files are not authenticated against
+hostile peers.
 """
 import os,re,stat
 from pathlib import Path

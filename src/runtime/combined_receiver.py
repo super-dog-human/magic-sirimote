@@ -1,8 +1,9 @@
-"""Offline integration of the existing HID router and verified evdev writers.
+"""Integration of the existing HID router and verified evdev writers.
 
 No devices are opened here. The caller supplies already-verified output FDs.
-This module does not connect Bluetooth or enable sensors. Motion remains gated
-unless a test or a future independently verified device path explicitly opts in.
+This module does not connect Bluetooth or enable sensors. Motion remains
+gated unless a test or a future independently verified device path
+explicitly opts in.
 """
 import time
 from collections import deque

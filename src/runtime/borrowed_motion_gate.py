@@ -1,8 +1,9 @@
-"""Offline bridge from a live borrowed mode session to the input router.
+"""Bridge from a live borrowed mode session to the input router.
 
-This does not acquire a device, install a service, or prove exclusive access.
-The session's live guard and mode readback remain prerequisites. A valid
-motion frame establishes frame shape, not calibration or physical accuracy.
+This does not acquire a device, install a service, or prove exclusive
+access. The session's live guard and mode readback remain prerequisites. A
+valid motion frame establishes frame shape, not calibration or physical
+accuracy.
 """
 from borrowed_mode_session import BorrowedModeSession
 from combined_receiver import CombinedReceiver

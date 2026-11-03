@@ -1,9 +1,7 @@
 """Bounded candidate: physical surface press -> BTN_LEFT press/release.
 
-Pure injected writer, no device/network opens. NOT wired into a live runner.
-The runtime must supply only its verified, newly created mouse FD and call
-tick() during silence; on write uncertainty it must destroy that own device.
-Native left-click equivalence to LG's centre/OK is not yet hardware-tested.
+The caller supplies a verified mouse descriptor and calls tick() during
+silence. Output errors are propagated for session cleanup.
 """
 from collections import deque
 import math

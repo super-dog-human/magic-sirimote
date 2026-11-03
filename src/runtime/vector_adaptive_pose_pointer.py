@@ -1,4 +1,4 @@
-"""Offline comparison candidate using one adaptive alpha for both angle axes.
+"""Comparison candidate using one adaptive alpha for both angle axes.
 
 This preserves the responsive candidate's gains and derivative updates, but
 uses the Euclidean magnitude of the filtered derivative vector to select one

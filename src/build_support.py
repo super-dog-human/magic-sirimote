@@ -194,45 +194,56 @@ def inspect_tgz(raw):
                             'bytes': item.size})
     return records
 
-def node_launcher(out):
-    # execve('/usr/bin/node', ['/usr/bin/node', APP_PATH + '/main.js'],
-    #        ['NODE_PATH=/usr/lib/nodejs:/usr/lib/node_modules'])
-    node='/usr/bin/node'; script=APP_PATH+'/main.js'
-    env='NODE_PATH=/usr/lib/nodejs:/usr/lib/node_modules'
-    text_va=0x10000+52+32
-    ptr_node=text_va+32; ptr_argv=text_va+36; ptr_envp=text_va+40
-    argv=text_va+44; envp=text_va+56; strings=text_va+64
-    addr_node=strings; addr_script=addr_node+len(node.encode())+1; addr_env=addr_script+len(script.encode())+1
-    asm=(
-      ' .syntax unified\n .arm\n .text\n .global _start\n_start:\n'
-      ' ldr r0, pnode\n ldr r1, pargv\n ldr r2, penvp\n'
-      ' mov r7, #11\n svc #0\n mov r7, #1\n mov r0, #127\n svc #0\n'
-      f'pnode: .word {addr_node}\npargv: .word {argv}\npenvp: .word {envp}\n'
-      f' .word {addr_node}\n .word {addr_script}\n .word 0\n'
-      f' .word {addr_env}\n .word 0\n'
-      f' .asciz {json.dumps(node)}\n .asciz {json.dumps(script)}\n .asciz {json.dumps(env)}\n')
-    asm_path=out/'entry.S';obj_path=out/'entry.o';asm_path.write_text(asm)
-    cmd=[os.environ.get('CLANG','clang'),'--target=armv7-linux-gnueabi','-march=armv7-a','-marm','-c',str(asm_path),'-o',str(obj_path)]
-    subprocess.run(cmd,check=True,capture_output=True,text=True)
-    raw_obj=obj_path.read_bytes()
-    if raw_obj[:7]!=b'\x7fELF\x01\x01\x01' or struct.unpack_from('<H',raw_obj,18)[0]!=40:raise ValueError('unexpected ARM object')
-    shoff=struct.unpack_from('<I',raw_obj,32)[0];entsize,nsec,names_idx=struct.unpack_from('<HHH',raw_obj,46)
-    sections=[struct.unpack_from('<10I',raw_obj,shoff+i*entsize) for i in range(nsec)]
-    ns=sections[names_idx];names=raw_obj[ns[4]:ns[4]+ns[5]];text=None
-    for sec in sections:
-        name=names[sec[0]:].split(b'\0',1)[0]
-        if sec[1] in (4,9) and sec[5]:raise ValueError('launcher relocations unexpected')
-        if name==b'.text':text=raw_obj[sec[4]:sec[4]+sec[5]]
-    if text is None:raise ValueError('launcher text missing')
-    # Validate the exact argument/environment vectors and string table.
-    if text[:32]!=struct.pack('<8I',0xe59f0018,0xe59f1018,0xe59f2018,0xe3a0700b,0xef000000,0xe3a07001,0xe3a0007f,0xef000000):raise ValueError('launcher instruction mismatch')
-    if struct.unpack_from('<3I',text,32)!=(addr_node,argv,envp):raise ValueError('launcher pointer mismatch')
-    if struct.unpack_from('<5I',text,44)!=(addr_node,addr_script,0,addr_env,0):raise ValueError('launcher argv/envp mismatch')
-    expected=(node+'\0'+script+'\0'+env+'\0').encode()
-    if text[64:]!=expected:raise ValueError('launcher strings mismatch')
-    ident=b'\x7fELF\x01\x01\x01\x00'+b'\0'*8;elfbase=0x10000;offset=52+32;size=offset+len(text)
-    header=struct.pack('<16sHHIIIIIHHHHHH',ident,2,40,1,text_va,52,0,0x05000000,52,32,1,0,0,0)
-    phdr=struct.pack('<8I',1,0,elfbase,elfbase,size,size,5,0x1000);binary=header+phdr+text
-    if len(binary)!=size:raise ValueError('launcher ELF size mismatch')
-    entry=out/'app/entry';entry.write_bytes(binary);entry.chmod(0o755)
-    return {'entrySha256':hashlib.sha256(binary).hexdigest(),'entryBytes':len(binary),'entryFormat':'ELF32 ARM EABI5 execve /usr/bin/node with explicit NODE_PATH'}
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def js(value):
+    return (json.dumps(value, sort_keys=True, separators=(',', ':'))+'\n').encode()
+
+
+def package(out, app, version, files, service=None, *, description='Experimental TV-local Siri Remote runtime', service_state_dirs=()):
+    root='usr/palm/applications/'+app
+    info_root='usr/palm/packages/'+app
+    info=js({'id':app,'version':version,'app':app,'services':[app+'.service'] if service else []})
+    content={root+'/'+n:v for n,v in files.items()}
+    content[info_root+'/packageinfo.json']=info
+    if service:
+        content.update({'usr/palm/services/'+app+'.service/'+n:v for n,v in service.items()})
+    dirs=set()
+    for name in content:
+        dirs.update(str(p) for p in Path(name).parents if str(p)!='.')
+    modes={p:(0o755 if p==root+'/entry' else 0o666 if p==info_root+'/packageinfo.json' else 0o644) for p in content}
+    modes.update({p:0o755 for p in dirs}); modes[root+'/state']=0o770
+    owners={p:(5999,5000) for p in content}
+    owners[info_root+'/packageinfo.json']=(501,20)
+    owners.update({p:(501,20) for p in dirs}); owners[root]=owners[root+'/state']=(5999,5000)
+    for relative in service_state_dirs:
+        if not service or type(relative) is not str or any(p in ('', '.', '..') for p in relative.split('/')):
+            raise ValueError('Invalid shared service state directory')
+        path = 'usr/palm/services/' + app + '.service/' + relative
+        if path not in dirs:
+            raise ValueError('Shared service state directory is missing')
+        modes[path] = 0o770
+        owners[path] = (5999, 5000)
+    control=(f'Package: {app}\nVersion: {version}\nArchitecture: arm\n'
+             f'Maintainer: magic-sirimote contributors\nDescription: {description}\n').encode()
+    raw=make_ar({'debian-binary':b'2.0\n',
+        'control.tar.gz':tar_gz({'control':control},set(),{'control':0o644},{'control':(0,0)}),
+        'data.tar.gz':tar_gz(content,dirs,modes,owners)})
+    parts=read_ar(raw); inventory=inspect_tgz(parts['data.tar.gz'])
+    if {i['path'] for i in inventory}!=set(content)|dirs: raise ValueError('Package inventory mismatch')
+    name=f'{app}_{version}_arm.ipk'; (out/name).write_bytes(raw)
+    return {'appId':app,'package':name,'packageSha256':digest(raw),
+            'pin':{'appId':app,'files':{k:digest(v) for k,v in files.items()},'packageInfoSha256':digest(info)},
+            'files':{k:digest(v) for k,v in content.items()}}
+
+
+def launcher(out, app):
+    global APP_PATH
+    directory = out / ('launcher-' + app)
+    (directory / 'app').mkdir(parents=True)
+    APP_PATH = '/media/developer/apps/usr/palm/applications/' + app
+    arm_launcher(directory)
+    return (directory / 'app/entry').read_bytes()

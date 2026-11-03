@@ -1,7 +1,8 @@
-"""Offline normalization of observed FC21 prefixes; no output or device access.
+"""Normalization of observed FC21 prefixes; no output or device access.
 
-The orientation candidate is incomplete. Touch and button fields are forwarded
-as complete legacy touch values, without manufacturing absent motion bytes.
+The orientation candidate is incomplete. Touch and button fields are
+forwarded as complete legacy touch values, without manufacturing absent
+motion bytes.
 """
 from decoder import decode
 

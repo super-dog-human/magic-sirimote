@@ -1,4 +1,5 @@
-"""Experimental 21-byte FC prefix parser. Offline only; no input output."""
+"""Pure parser for 21-byte FC report prefixes; no device I/O.
+"""
 import math
 import struct
 

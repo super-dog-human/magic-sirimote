@@ -1,9 +1,9 @@
-"""Offline cleanup-only capability, separate from permission to emit input.
+"""Cleanup-only capability, separate from permission to emit input.
 
-No I/O or automatic adoption. Future transport must supply messages from its
-already authenticated owned monitor channel, never page/HTTP/user JSON. A page
-visibility loss revokes input, NOT monitor identity. Monitor loss/replacement
-revokes this capability too. Not yet wired into the legacy live trial.
+No I/O or automatic adoption. The transport must supply messages from its
+already authenticated owned monitor channel, never page/HTTP/user JSON. A
+page visibility loss revokes input, NOT monitor identity. Monitor
+loss/replacement revokes this capability too.
 """
 from dataclasses import dataclass,asdict
 import math

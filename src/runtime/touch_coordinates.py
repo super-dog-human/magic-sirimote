@@ -1,8 +1,9 @@
 """Candidate gen-1 touch decoder. No device, network, audio or input injection.
 
-Consumes ATT value bytes WITHOUT the hidraw FC report-id prefix. Signed 12-bit
-encoding is reported by open-appleremote on A1962; validate on this A1513 before
-connecting any output to a real cursor. Only known touch shapes are accepted.
+Consumes ATT value bytes WITHOUT the hidraw FC report-id prefix. Signed
+12-bit encoding is reported by open-appleremote on A1962; validate on this
+A1513 before connecting any output to a real cursor. Only known touch shapes
+are accepted.
 """
 
 
@@ -74,7 +75,7 @@ class TouchSummary:
 
 
 class RelativeTouch:
-    """Offline candidate only. No real cursor output; reset across lifts/gaps."""
+    """candidate only. No real cursor output; reset across lifts/gaps."""
     def __init__(self, gain=0.5):
         assert type(gain) in (int, float) and 0 < gain <= 2
         self.gain, self.previous = gain, None

@@ -1,8 +1,8 @@
 """One post-connection receiver launch using the existing TV launcher.
 
-Offline composition only. The caller must provide durable launch evidence,
-matching receiver request/package, cleanup and app-level lifecycle handling.
-A launch acknowledgement is not proof that an app started or saw a device.
+composition only. The caller must provide durable launch evidence, matching
+receiver request/package, cleanup and app-level lifecycle handling. A launch
+acknowledgement is not proof that an app started or saw a device.
 """
 import re
 

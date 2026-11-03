@@ -1,10 +1,10 @@
 """Pure swipe-direction recognizer for the requested swipe-and-click policy.
 
-One validated cardinal swipe emits one of up/down/left/right. This helper does
-not open devices or inject keys. In the requested interaction, a physical
-surface press anywhere is handled separately by TouchClick; the native
-adapter must verify its exact key/click output devices and their permissions.
-This candidate's combined rootless receive-to-output path is not yet verified.
+One validated cardinal swipe emits one of up/down/left/right. This helper
+does not open devices or inject keys. In the requested interaction, a
+physical surface press anywhere is handled separately by TouchClick; the
+native adapter must verify its exact key/click output devices and their
+permissions.
 """
 import math
 import time

@@ -1,7 +1,9 @@
-"""Offline resident supervisor with graceful draining around real one-cycle implementations.
+"""Resident supervisor with graceful draining around real one-cycle
+implementations.
 
 No status pump, app package, autostart registration or device I/O is created
-here. A stop request drains an admitted receiver; uncertain outcomes retain ownership evidence.
+here. A stop request drains an admitted receiver; uncertain outcomes retain
+ownership evidence.
 """
 import time,threading
 from post_connect_rearm import PostConnectRearm

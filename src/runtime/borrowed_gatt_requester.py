@@ -1,8 +1,8 @@
-"""Offline bounded client lookup for an already-observed GATT connection.
+"""Bounded client lookup for an already-observed GATT connection.
 
 An accepted response is explicitly *not* proof of client ownership. Calling
 connect may create resources on implementations unlike the OSE example;
-there is no automatic retry or disconnect. Not yet used on the TV.
+there is no automatic retry or disconnect.
 """
 from pumping_luna_client import PumpingLunaClient,LunaCallError
 from borrowed_gatt_view import BorrowedGattView,TARGET

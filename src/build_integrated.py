@@ -3,13 +3,14 @@
 import argparse
 import json
 from pathlib import Path
-import build as packaging
-import build_native
+import build_support as packaging
 import build_support
 
 ROOT = Path(__file__).resolve().parent
-APP = build_native.APP
-VERSION = '0.6.48'
+APP = 'org.magicsirimote.app'
+NATIVE_SOURCES = ('entry.py', 'settings.py', 'graphics.py', 'ir_screen.py',
+                  'ir_programmer.py', 'native_luna.py', 'tv_assignments.py')
+VERSION = '0.6.49'
 ROLES = ('controller', 'receiver')
 
 
@@ -23,7 +24,7 @@ def build(output):
         raise ValueError('Runtime inventory mismatch')
     service = {'runtime/' + name: (ROOT / 'runtime' / name).read_bytes() for name in names}
     # One copy of the native sources is visible to both native and service UIDs.
-    service.update({'native/' + name: (ROOT / 'native' / name).read_bytes() for name in build_native.SOURCES})
+    service.update({'native/' + name: (ROOT / 'native' / name).read_bytes() for name in NATIVE_SOURCES})
     service['native/battery_status.py'] = (ROOT / 'native/battery_status.py').read_bytes()
     for name in ('native_bus.py', 'native_manager.py', 'pairing_screen.py', 'reset_state.py', 'reset_remote.py', 'reset_screen.py'):
         service['native/' + name] = (ROOT / 'integrated' / name).read_bytes()
@@ -37,7 +38,7 @@ def build(output):
     service['service.js'] = (ROOT / 'integrated/service.js').read_bytes()
     service['activity-read.py'] = (ROOT / 'integrated/activity_read.py').read_bytes()
     service['startup.js'] = (ROOT / 'integrated/startup.js').read_bytes()
-    service['power-read.py'] = (ROOT / 'scheduler/power-read.py').read_bytes()
+    service['power-read.py'] = (ROOT / 'integrated/power-read.py').read_bytes()
     service['bundle_inspect.py'] = (ROOT / 'integrated/bundle_inspect.py').read_bytes()
     service['package.json'] = packaging.js({'name': APP + '.service', 'version': VERSION, 'main': 'service_entry.js'})
     service['services.json'] = packaging.js({'id': APP + '.service', 'services': [{'name': APP + '.service'}],

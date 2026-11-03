@@ -1,8 +1,8 @@
-"""Offline model of subscription-backed HID/GATT continuity.
+"""Model of subscription-backed HID/GATT continuity.
 
-Events and polling must be supplied by a future device adapter. This model
-does not itself subscribe, and cannot prove that the TV delivered every event.
-Any ambiguous update invalidates this generation permanently.
+The device adapter supplies events and polling. This model does not itself
+subscribe, and cannot prove that the TV delivered every event. Any ambiguous
+update invalidates this generation permanently.
 """
 import math,threading
 from borrowed_gatt_view import TARGET,ADAPTER,valid_client

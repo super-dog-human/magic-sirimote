@@ -1,8 +1,8 @@
-"""Offline-only FC hidraw frame demux using the audited pure decoders.
+"""FC hidraw frame demux using the audited pure decoders.
 
 Hidraw includes report ID FC. The downstream touch/compact decoders consume
-the value bytes after that prefix. This module does no I/O, sensor activation,
-Bluetooth/CCCD work, or output injection.
+the value bytes after that prefix. This module does no I/O, sensor
+activation, Bluetooth/CCCD work, or output injection.
 """
 from collections import Counter
 

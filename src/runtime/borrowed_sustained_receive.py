@@ -1,7 +1,7 @@
-"""Offline sustained receive over an active borrowed-mode session.
+"""Sustained receive over an active borrowed-mode session.
 
-The caller supplies an exact verified target fd/output and is responsible for
-sensor stop and all device closes. No device is opened on import.
+The caller supplies an exact verified target fd/output and is responsible
+for sensor stop and all device closes. No device is opened on import.
 """
 import math
 from borrowed_mode_session import BorrowedModeSession

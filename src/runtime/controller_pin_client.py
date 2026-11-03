@@ -1,4 +1,5 @@
-"""Read-only scheduler pin consumer; transport and service are not installed."""
+"""Read-only package-pin client for the controller.
+"""
 import runtime_bundle as bundle
 import json,re
 SERVICE='luna://org.codex.siriremote.v20scheduler20261031a.service/receiverPin'

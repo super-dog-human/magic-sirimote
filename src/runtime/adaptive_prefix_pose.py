@@ -1,8 +1,8 @@
-"""Offline-only FC21 pose experiment using the existing gain-85 filter.
+"""FC21 pose tracking with adaptive filtering and selectable sensitivity.
 
-Initializes from a short continuous pose stream, without waiting for stillness.
-All axes, stillness thresholds and the device's truncated data remain unproven.
-No device, Bluetooth or native input operations are performed here.
+Initializes from a short continuous pose stream, without waiting for
+stillness. Touch-bearing prefixes do not contain a complete orientation. No
+device, Bluetooth or native input operations are performed here.
 """
 import math
 from pose_math import compact_quaternion, conjugate, pointing_angles, shortest_angle

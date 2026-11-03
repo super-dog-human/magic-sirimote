@@ -1,10 +1,11 @@
-"""Offline adaptation of the audited mode reader for an unowned client.
+"""Adaptation of the audited mode reader for an unowned client.
 
 A caller-supplied feature guard is checked on every operation. The inherited
-reader assumes serialized feature commands; the guard itself cannot establish
-system-wide exclusivity unless separately verified. A cooperative-only caller
-therefore accepts that competing TV software could invalidate the mode read.
-This class does not connect or disconnect or grant sensor-write authority.
+reader assumes serialized feature commands; the guard itself cannot
+establish system-wide exclusivity unless separately verified. A cooperative-
+only caller therefore accepts that competing TV software could invalidate
+the mode read. This class does not connect or disconnect or grant sensor-
+write authority.
 """
 from verified_mode_reader import VerifiedModeReader,EVIDENCE_SHA256
 from direct_gatt_read import TARGET,ADAPTER

@@ -1,4 +1,4 @@
-"""Finite borrowed-sensor runner; offline composition, not a TV service.
+"""Finite borrowed-sensor runner; composition, not a TV service.
 
 The caller owns the watcher, lease and durable journal and must stop/inspect
 those resources independently. This runner never reconnects or retries.

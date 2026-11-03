@@ -1,8 +1,9 @@
-"""Offline rearm gate for a completed finite connected-input session.
+"""Rearm gate for a completed finite connected-input session.
 
 One live disconnected poll followed by a new connected poll is required; an
-unknown or stale status is never considered a disconnect. This does not launch,
-pair, connect, stop sensors, or demonstrate durable background execution.
+unknown or stale status is never considered a disconnect. This does not
+launch, pair, connect, stop sensors, or demonstrate durable background
+execution.
 """
 class PostConnectRearm:
  def __init__(self,watch,*,generation,result):

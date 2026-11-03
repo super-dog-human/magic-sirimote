@@ -1,8 +1,8 @@
-"""Offline sensor lifecycle using an unowned GATT view.
+"""Sensor lifecycle using an unowned GATT view.
 
 The injected reader, writer and control guard must independently establish
 exact device identity, current client/generation and exclusive feature
-access. This module alone proves none of them. No device adapter exists yet.
+access. This module alone proves none of them.
 """
 
 class BorrowedModeSession:

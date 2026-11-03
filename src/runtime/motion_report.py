@@ -1,11 +1,12 @@
 """Strict parser for Main 0241 compact CoreMotion FC values.
 
 No-touch 26-byte values validated in a receive-only TV trial on 2026-10-17.
-Combined one-touch 37-byte values validated in a receive-only trial that day;
-two-touch 44-byte shape remains synthetic-test-only. Accepts complete ATT values without FC
-report ID; performs no reassembly or speculative/audio parsing. Does not
-label the six scaled values as gyro or acceleration, infer physical axes,
-or produce input events. Callers must authenticate the target/link/handle.
+Combined one-touch 37-byte values validated in a receive-only trial that
+day; two-touch 44-byte shape remains synthetic-test-only. Accepts complete
+ATT values without FC report ID; performs no reassembly or speculative/audio
+parsing. Does not label the six scaled values as gyro or acceleration, infer
+physical axes, or produce input events. Callers must authenticate the
+target/link/handle.
 """
 import math
 import struct
@@ -46,7 +47,7 @@ def decode_compact_motion(value):
 
 
 def decode_no_touch_orientation_prefix(value):
-    """Offline alternative only: complete 12-byte orientation inside a short value.
+    """alternative only: complete 12-byte orientation inside a short value.
 
     Never call this a complete sensor report or apply it to touch-bearing values:
     with touch data, not all three floats fit in the same 20-byte prefix. No

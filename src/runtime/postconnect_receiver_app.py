@@ -1,8 +1,8 @@
-"""Finite post-connect app orchestration; not installed or auto-started.
+"""Post-connect receiver orchestration.
 
-The caller must provide a truthful feature guard and a valid application state
-folder. A project-local lock alone does not establish system-wide exclusivity.
-No CLI is exposed while crash recovery and the TV launch contract are open.
+The caller must provide a truthful feature guard and a valid application
+state folder. A project-local lock alone does not establish system-wide
+exclusivity. The native entry point owns launch and recovery.
 """
 import os,threading,time
 from hid_input import ordinary

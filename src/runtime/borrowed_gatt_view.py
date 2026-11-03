@@ -1,8 +1,7 @@
-"""Offline read-only view over a possibly pre-existing GATT client.
+"""Read-only view over a possibly pre-existing GATT client.
 
 The caller supplies the already-observed reply and live profile guard. This
 object never connects, disconnects, enables sensors, or claims exclusivity.
-It is not yet wired to a receiver or validated on the TV.
 """
 from runtime_device import identity as device_identity
 TARGET=device_identity().remote

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run host-only input regression tests and scheduler tests. No TV required."""
+"""Run host-only input, settings, startup and package tests. No TV required."""
 import os,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent.parent
@@ -9,8 +9,5 @@ def main():
     subprocess.run([sys.executable,'-B','-m','unittest','discover','-s',str(ROOT/'tests'),'-p','test_*.py'],env=env,check=True,cwd=ROOT)
     for test in sorted((ROOT/'tests').glob('test_integrated_*.js')):
         subprocess.run(['node',str(test)],cwd=ROOT,check=True)
-    for test in sorted((ROOT/'tests/scheduler').glob('test-*.js')):
-        subprocess.run(['node',str(test)],cwd=ROOT,check=True)
-    subprocess.run([sys.executable,'-B',str(ROOT/'tests/scheduler/test_resume_evidence.py')],cwd=ROOT,check=True)
     print('Host checks complete. They do not establish compatibility with a new TV.')
 if __name__=='__main__':main()

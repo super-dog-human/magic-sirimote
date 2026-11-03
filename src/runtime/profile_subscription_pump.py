@@ -1,4 +1,4 @@
-"""Offline subscription/poll adapter; not installed or tested on webOS TV.
+"""Subscription/poll adapter for connection status.
 
 Only status subscriptions and reads are requested. Loss of either stream
 invalidates the generation. The supplied poll must be bounded by its caller.

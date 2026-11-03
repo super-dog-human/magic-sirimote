@@ -1,8 +1,8 @@
-"""Bounded cooperative control evidence for a borrowed client (offline).
+"""Bounded cooperative control evidence for a borrowed client.
 
 The caller supplies live exact-profile snapshots and a generation which must
 change when a link event is observed. This cannot detect an unobserved
-disconnect/reconnect or exclude unrelated software. No device adapter exists.
+disconnect/reconnect or exclude unrelated software.
 """
 import math
 from borrowed_gatt_view import TARGET,ADAPTER,valid_client

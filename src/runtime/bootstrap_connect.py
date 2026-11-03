@@ -1,7 +1,8 @@
-"""Offline bootstrap; no import-time I/O. Not device validated.
+"""Connection bootstrap with no import-time I/O.
 
 GATT 106 is unknown, never a connected/disconnected proof. An uncertain
-durable intent remains until both target profiles are independently confirmed.
+durable intent remains until both target profiles are independently
+confirmed.
 """
 from runtime_device import registered_name_matches
 from runtime_device import connect_intent

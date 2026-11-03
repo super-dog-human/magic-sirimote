@@ -1,4 +1,5 @@
-"""Offline FC21 router. Pointer and semantic events are returned to fake sinks."""
+"""FC21 router with injected pointer and button callbacks.
+"""
 from adaptive_prefix_pose import AdaptivePrefixPose
 from runtime_device import cursor_preferences
 from normalize import normalize

@@ -1,7 +1,7 @@
 """Prepare a separate authenticated recovery-controller record.
 
-Offline candidate. No Bluetooth, input, receiver launch or cleanup is done
-here. The original controller record is preserved for orphan reconciliation.
+candidate. No Bluetooth, input, receiver launch or cleanup is done here. The
+original controller record is preserved for orphan reconciliation.
 """
 import os,re
 from pathlib import Path

@@ -1,7 +1,7 @@
-"""Offline bridge from B-style transient HID values to narrow output callbacks.
+"""Bridge from B-style transient HID values to narrow output callbacks.
 
-This module opens no device and sends nothing itself. A caller must provide an
-exact-target B read FD and separately verified, owned output callbacks.
+This module opens no device and sends nothing itself. A caller must provide
+an exact-target B read FD and separately verified, owned output callbacks.
 """
 from touch_click import TouchClick
 from touch_dpad import TouchDpad

@@ -1,7 +1,8 @@
-"""Finite, offline-only composition with the existing HID receive loop.
+"""Finite, composition with the existing HID receive loop.
 
-The caller owns validated device handles, a live status pump and the borrowed
-session. This does not open or close device handles, install, or auto-start.
+The caller owns validated device handles, a live status pump and the
+borrowed session. This does not open or close device handles, install, or
+auto-start.
 """
 import math
 from borrowed_motion_gate import BorrowedMotionGate

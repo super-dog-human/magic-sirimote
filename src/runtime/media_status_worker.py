@@ -1,4 +1,5 @@
-"""Experimental read-only media polling; not installed or wired into TV app."""
+"""Read-only media polling for play/pause decisions.
+"""
 import json
 import os
 import selectors

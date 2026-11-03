@@ -1,7 +1,8 @@
 """Experimental receiver native entry; no automatic installation or boot setup.
 
 Explicitly assumes only cooperating project code issues Feature commands. It
-cannot exclude other TV software. Not ready for hardware use without recovery.
+cannot exclude other TV software. Not ready for hardware use without
+recovery.
 """
 import runtime_bundle as bundle
 import json,os,signal,stat,threading
@@ -77,8 +78,6 @@ def main():
   print(json.dumps({'stage':'controller-stop-attestation','executableVerified':current['executableVerified']},separators=(',',':')),flush=True)
   return True
  ipc=StopEvent(stop,lambda:read_stop(state,run,record,verify))
- # Explicitly experimental; never deploy until button semantics and duplicate
- # IR behavior have been checked on the target.
  result=run_from_state(state_path=bundle.role_path('receiver',ROOT/APP)/'state',controller_app=str(bundle.role_path('controller',ROOT/CONTROLLER)),controller_package=str(bundle.package_path(PKG/CONTROLLER)),controller_pin=controller_pin(),cooperative_only=True,allow_exe_permission_denied=True,duration=None,stop_event=ipc,system_buttons=True)
  return 0 if result.get('status')=='complete' and ipc.ipc_error is None else 2
 

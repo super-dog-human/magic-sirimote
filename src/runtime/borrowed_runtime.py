@@ -1,8 +1,8 @@
-"""Offline wiring of the borrowed-client sensor preparation path.
+"""Wiring of the borrowed-client sensor preparation path.
 
 Callers must durably record the lookup attempt and implement recovery before
-using on device. An existing GATT client may be returned; none is disconnected
-here. A project lock does not exclude unrelated TV software.
+using on device. An existing GATT client may be returned; none is
+disconnected here. A project lock does not exclude unrelated TV software.
 """
 import hashlib,time
 from borrowed_gatt_requester import BorrowedGattRequester

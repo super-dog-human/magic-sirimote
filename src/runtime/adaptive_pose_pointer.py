@@ -1,4 +1,4 @@
-"""Offline opt-in adaptive jitter-filter variant of DirectPosePointer.
+"""Opt-in adaptive jitter-filter variant of DirectPosePointer.
 
 The filter is a small per-axis 1-Euro-style low-pass. These fixed parameters
 are a comparison candidate, not a validated tuning or the author's full
@@ -89,7 +89,7 @@ class AdaptivePosePointer(DirectPosePointer):
 
 
 class ResponsiveAdaptivePosePointer(AdaptivePosePointer):
-    """Offline comparison variant with a faster derivative estimate.
+    """comparison variant with a faster derivative estimate.
 
     Only the derivative low-pass cutoff differs from AdaptivePosePointer.
     This remains a synthetic comparison candidate, not hardware acceptance.

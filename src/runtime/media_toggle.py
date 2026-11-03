@@ -1,4 +1,4 @@
-"""Experimental, conservative media-state selection; not wired to the TV.
+"""Conservative media-state selection for play/pause.
 
 Only the coarse state and monotonic timestamp are retained. An unavailable,
 ambiguous or old reply cannot justify a play or pause key.

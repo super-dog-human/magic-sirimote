@@ -1,4 +1,5 @@
-"""Bounded offline router for fused-pose motion and explicit touch policies."""
+"""Bounded router for fused-pose motion and explicit touch policies.
+"""
 import math
 import time
 

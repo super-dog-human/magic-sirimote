@@ -1,9 +1,9 @@
-"""Durable, one-run mutation journal for the offline borrowed runtime.
+"""Durable, one-run mutation journal for the borrowed runtime.
 
-Each record is created exclusively and synced before returning. Partial files
-or a pre-existing run require recovery, never automatic reuse. This journal does
-not itself recover a sensor, authenticate other processes, or prove the target
-filesystem survives a power cycle.
+Each record is created exclusively and synced before returning. Partial
+files or a pre-existing run require recovery, never automatic reuse. This
+journal does not itself recover a sensor, authenticate other processes, or
+prove the target filesystem survives a power cycle.
 """
 import json,os,re,stat
 from pathlib import Path

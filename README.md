@@ -25,7 +25,6 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.48** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -151,19 +150,14 @@ The implementation uses a persistent webOS **Activity**, roughly a recurring sys
 src/
   check.py              # Host-only test runner
   build_integrated.py   # Current single-app IPK builder
-  build.py              # Older configured three-package builder
-  build_support.py      # Deterministic IPK archives and tiny ARM launchers
+  build_support.py      # Deterministic IPK packaging and ARM launcher
   runtime-files.json    # Explicit list of source modules allowed in packages
   ir_packets.py         # Pure IR configuration packet encoder; never transmits
   pairing/              # Cable-free pairing and bounded Bluetooth transport
   integrated/           # Native settings, first-run routing and bundled service
   runtime/              # Controller, receiver, decoding, lifecycle
-  scheduler/            # Startup, standby, expiry service
   tv_inventory.py       # Read-only environment metadata on a TV
-config.example.json     # Placeholder device identities and example UIDs
-reviews/                # Public export verification results
 tests/                 # Input, layout, and publication regression tests
-  scheduler/           # Startup service tests and synthetic fixtures
 ```
 
 Developers can run the regression suite with `python3 src/check.py`. It checks input decoding, navigation, lifecycle handling, and package construction using simulated device operations. It is a development check, not an installation step or proof of hardware compatibility.
@@ -179,13 +173,12 @@ Start with these files if you want to understand or adapt the behavior:
 | Truncated report decoding | [`decoder.py`](src/runtime/decoder.py) |
 | Orientation-based pointer | [`adaptive_prefix_pose.py`](src/runtime/adaptive_prefix_pose.py) |
 | Connection supervision | [`resident_controller_entry.py`](src/runtime/resident_controller_entry.py) |
-| Startup registration | [`creator.js`](src/scheduler/creator.js) |
-| Standby resume checks | [`standby-resume.js`](src/scheduler/standby-resume.js) |
-| Developer Mode maintenance | [`expiry.js`](src/scheduler/expiry.js), [`expiry-policy.js`](src/scheduler/expiry-policy.js) |
+| Startup and standby resume | [`startup.js`](src/integrated/startup.js), [`service.js`](src/integrated/service.js) |
+| Pairing and settings | [`native_manager.py`](src/integrated/native_manager.py), [`pairing_screen.py`](src/integrated/pairing_screen.py) |
 
-The runtime separates input decoding, device identity, connection management, process coordination, and verified shutdown. Scheduler tests live under `tests/scheduler`; package hashes are generated during the build. An explicit source inventory and dependency test define which modules belong in the packages.
+The runtime separates input decoding, device identity, connection management, process coordination, and verified shutdown. Startup tests live alongside the other tests under `tests/`; package hashes are generated during the build. An explicit source inventory and dependency test define which modules belong in the packages.
 
-Read [PORTING.md](docs/PORTING.md) for deployment requirements and handling of unsupported state records. Source provenance is recorded in [`docs/source-provenance.json`](docs/source-provenance.json).
+Read [PORTING.md](docs/PORTING.md) for deployment requirements and handling of unsupported state records.
 
 Useful contributions include a verified clean-install workflow, additional TV/remote compatibility reports, better bounded status reporting, and investigation of complete touch-plus-orientation input. Include your model, firmware, steps, expected behavior, and actual behavior. Remove addresses, serials, tokens, private keys, and raw recordings from public reports.
 
@@ -224,7 +217,7 @@ Enter the passphrase shown on the TV when prompted. If you already have a workin
 From the repository root:
 
 ```sh
-ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.48_arm.ipk
+ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.49_arm.ipk
 ares-launch --device my-tv org.magicsirimote.app
 ```
 

@@ -1,9 +1,9 @@
-"""Offline touch-surface swipe and physical-click recognizer.
+"""Touch-surface swipe and physical-click recognizer.
 
-This module performs no device or network I/O. Output is an injected semantic
-callback ``emit(action, down)``. A cardinal swipe is emitted as a nonblocking
-60 ms direction pulse after contact ends; a physical surface press emits
-center down/up.
+This module performs no device or network I/O. Output is an injected
+semantic callback ``emit(action, down)``. A cardinal swipe is emitted as a
+nonblocking 60 ms direction pulse after contact ends; a physical surface
+press emits center down/up.
 """
 import math
 import struct
