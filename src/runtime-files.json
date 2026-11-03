@@ -117,6 +117,7 @@
   "runtime_bundle.py",
   "runtime_device.py",
   "scan_wake_provider.py",
+  "screen_power.py",
   "stop_request.py",
   "supervisor_lease.py",
   "swipe_click.py",

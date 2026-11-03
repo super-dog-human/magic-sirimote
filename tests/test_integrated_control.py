@@ -1,5 +1,7 @@
 """Lifecycle commands refuse conflicts and publish cooperative stop requests."""
 import importlib.util
+import json
+import os
 import tempfile
 import unittest
 import sys
@@ -17,6 +19,44 @@ def found(**changes):
 
 
 class ControlTests(unittest.TestCase):
+    def test_archive_before_input_requires_empty_journal_and_no_receiver(self):
+        import orphan_reconcile as recovery
+        from unittest.mock import Mock
+        for mode in ('empty', 'written', 'receiver'):
+            with tempfile.TemporaryDirectory() as d:
+                cpath=Path(d)/'controller';bpath=Path(d)/'receiver';cpath.mkdir();bpath.mkdir()
+                run='b'*32;owner=os.getuid();group=os.getgid()
+                intent={'run':run,'stage':'receiver-launch-intent','generation':1}
+                def write(path,value,mode):
+                    path.write_text(json.dumps(value));path.chmod(mode)
+                write(cpath/'receiver-launch-intent.json',intent,0o640)
+                write(bpath/'request.json',{'schema':1,'appId':'org.magicsirimote.app','run':run,'expiresEpochMs':1},0o660)
+                write(bpath/'controller-start.json',{'schema':1,'appId':'org.magicsirimote.app','run':run,'process':{'pid':123,'startTicks':456,'status':{'Uid':' '.join([str(owner)]*4)}}},0o660)
+                journal=cpath/('input-'+run+'.jsonl');journal.write_text('input-intent' if mode=='written' else '');journal.chmod(0o640)
+                if mode=='receiver':(bpath/('receiver-start-'+run+'.json')).write_text('{}')
+                c=os.open(cpath,os.O_RDONLY);b=os.open(bpath,os.O_RDONLY)
+                lease=Mock();lease.dirfd=c;lease.held.return_value=True
+                try:
+                    with patch.object(recovery.bundle,'active',return_value=True), patch.object(recovery,'_ended',return_value=True), patch.object(recovery.att,'candidate_pids',return_value=[]), patch.object(recovery.package,'package_matches',return_value=True):
+                        result=recovery.archive_before_input(c=c,b=b,intent=intent,intent_stat=(cpath/'receiver-launch-intent.json').stat(),controller_app='controller',receiver_app='receiver',receiver_package='package',pin={},lease=lease,owner=owner,group=group)
+                    if mode=='empty':
+                        self.assertEqual(result['priorOutcome'],'input-never-started')
+                        self.assertTrue((bpath/('request-before-input-'+run+'.json')).is_file())
+                        self.assertFalse((cpath/'receiver-launch-intent.json').exists())
+                    else:
+                        self.assertIsNone(result)
+                        self.assertTrue((cpath/'receiver-launch-intent.json').exists())
+                finally:os.close(c);os.close(b)
+
+    def test_integrated_handoff_path_fits_linux_socket_limit(self):
+        import prelaunch_handoff_runtime as handoff
+        with patch.object(handoff.bundle, 'active', return_value=True):
+            path = handoff.socket_path(handoff.bundle.ROOT / 'roles/controller/state', 'a' * 32)
+            self.assertLess(len(bytes(path)), 108)
+            self.assertEqual(path.parent, handoff.bundle.ROOT / 'state')
+        with patch.object(handoff.bundle, 'active', return_value=False):
+            self.assertEqual(handoff.socket_path('/legacy/state', 'a' * 32), Path('/legacy/state/h' + 'a' * 16))
+
     def test_installer_cannot_start_input_while_button_settings_are_open(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:

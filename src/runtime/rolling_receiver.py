@@ -19,7 +19,7 @@ class RollingReceiver:
         self.policy=InputSessionPolicy.sustained(seconds);self.history_limit=history_limit
         # Explicit bounded grace; never rewrite a child deadline or freeze time.
         self.child_policy=InputSessionPolicy.sustained(min(7200,self.policy.runtime_seconds))
-        self.physical_neutral=False
+        self.paused=False;self.physical_neutral=False
         self.receiver=None;self.started=None;self.generation=0;self.closed=False;self.rotations=0;self.completed_actions=0;self.last_time=None;self.complete_frames=0
         self.stop_reason=None
         self.decoded_kinds=dict.fromkeys(('no-touch','one-touch','two-touch','rejected'),0)
@@ -45,7 +45,9 @@ class RollingReceiver:
         if not self._live():self.stop('control-lost');return False
         now=self.clock()
         if type(now) not in (int,float) or not math.isfinite(now) or now<self.last_time:self.stop('clock-invalid');return False
-        self.last_time=now;elapsed=now-self.started
+        self.last_time=now
+        if self.paused:return True
+        elapsed=now-self.started
         if elapsed>=self.child_policy.seconds:
             self.stop('drain-deadline-without-neutral');return False
         remaining_actions=self.policy.max_actions-self.receiver.router.press.core.stats['pressAttempts']
@@ -58,9 +60,20 @@ class RollingReceiver:
                 self.closed=True
                 raise
         return True
+    def pause_output(self):
+        if self.closed or self.paused:return
+        # Finish releases and the neutral cursor tail BEFORE screen-off dispatch.
+        self.receiver.stop('screen-paused')
+        self.completed_actions+=self.receiver.semantic_actions
+        self.paused=True;self.physical_neutral=False
+    def resume_output(self):
+        if self.closed or not self.paused:return
+        if not self._live():raise RuntimeError('control-not-ready')
+        self._new();self.paused=False;self.rotations+=1
     def feed_raw(self,generation,report):
         if type(generation) is not int or generation!=1:return False
         if not self._advance():return False
+        if self.paused:return False
         try:
             parsed=decode_prefix(report)
             kind=parsed['kind'] if parsed is not None else 'rejected'
@@ -84,7 +97,9 @@ class RollingReceiver:
             raise
     def tick(self):
         if not self._advance():return False
-        try:self.receiver.tick();return True
+        try:
+            if not self.paused:self.receiver.tick()
+            return True
         except BaseException:
             self.stop('receiver-failed')
             raise

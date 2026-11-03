@@ -10,7 +10,30 @@ def icon_png():
     def chunk(tag, data):
         return (struct.pack('>I', len(data)) + tag + data +
                 struct.pack('>I', zlib.crc32(tag + data) & 0xffffffff))
-    pixels = b''.join(b'\0' + bytes((38, 78, 110, 255)) * 80 for _ in range(80))
+    # Supersampled TV and remote artwork, using only the standard library.
+    def rounded(x, y, left, top, right, bottom, radius):
+        cx = min(max(x, left + radius), right - radius)
+        cy = min(max(y, top + radius), bottom - radius)
+        return (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2
+    def pixel(x, y):
+        if not rounded(x, y, 1, 1, 79, 79, 18): return (0, 0, 0, 0)
+        color = (int(25 + y * .32), int(85 - y * .35), int(150 + y * .6), 255)
+        if rounded(x, y, 11, 18, 65, 53, 6): color = (229, 246, 255, 255)
+        if rounded(x, y, 15, 22, 61, 49, 3): color = (17, 35 + int(y), 88 + int(x), 255)
+        if rounded(x, y, 33, 52, 41, 59, 2) or rounded(x, y, 25, 58, 49, 62, 2): color = (229, 246, 255, 255)
+        if rounded(x, y, 48, 29, 69, 73, 7): color = (137, 175, 200, 255)
+        if rounded(x, y, 50, 31, 67, 71, 5): color = (14, 24, 41, 255)
+        if rounded(x, y, 52, 33, 65, 47, 4): color = (77, 222, 215, 255)
+        if any((x-cx)**2 + (y-cy)**2 <= 2.1**2 for cx,cy in ((55,53),(62,53),(55,61),(62,61))): color = (233, 246, 255, 255)
+        return color
+    rows = []
+    for y in range(80):
+        row = bytearray(b'\0')
+        for x in range(80):
+            samples = [pixel(x + (i + .5) / 4, y + (j + .5) / 4) for i in range(4) for j in range(4)]
+            row.extend(round(sum(sample[c] for sample in samples) / 16) for c in range(4))
+        rows.append(bytes(row))
+    pixels = b''.join(rows)
     return (b'\x89PNG\r\n\x1a\n' +
             chunk(b'IHDR', struct.pack('>IIBBBBB', 80, 80, 8, 6, 0, 0, 0)) +
             chunk(b'IDAT', zlib.compress(pixels)) + chunk(b'IEND', b''))

@@ -1,11 +1,19 @@
 """Native controller/receiver integration; hardware acceptance still pending."""
 import json, os, stat, time
+import runtime_bundle as bundle
 from pathlib import Path
 from input_start_handoff import InputStartHandoff, HandoffServer, HandoffClient
 from borrowed_input_start import BorrowedInputStart
 from receiver_process_observer import observe_live
 from borrowed_gatt_view import BorrowedGattView,TARGET
 from borrowed_gatt_requester import BorrowedGattRequester
+
+
+def socket_path(controller_state, run):
+    # The integrated role directory exceeds sockaddr_un's 107-byte pathname
+    # limit. Both app accounts can access the package's shared state directory.
+    directory = bundle.ROOT / 'state' if bundle.active() else Path(controller_state)
+    return directory / ('h' + run[:16])
 
 
 def write_json_once(path, value):
@@ -30,7 +38,7 @@ class PrelaunchOwner:
         try:
             self.journal_fd=os.open(self.state/('input-'+cycle.run+'.jsonl'),os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o640)
             os.fchmod(self.journal_fd,0o640)
-            self.server=HandoffServer(self.state/('h'+cycle.run[:16]),self.handoff,self.authorize)
+            self.server=HandoffServer(socket_path(self.state,cycle.run),self.handoff,self.authorize)
             metadata={'run':cycle.run,'token':self.handoff.token,'controller':identity,'controllerUid':os.getuid()}
             if lookup_reply is not None:metadata['gattLookupReply']=lookup_reply
             write_json_once(self.state/('input-'+cycle.run+'.json'),metadata)
@@ -135,6 +143,6 @@ def receiver_client(controller_app, record):
     if type(value) is not dict or set(value)!={'run','token','controller','controllerUid','gattLookupReply'} or value['run']!=run or value['controller']!=identity or value['controllerUid']!=uid:raise RuntimeError('input handoff identity mismatch')
     # Validate target and client identity before passing the actual reply on.
     BorrowedGattView(value['gattLookupReply'],generation=1,control_valid=lambda:False,discover=lambda _:None)
-    client=HandoffClient(path=str(state/('h'+run[:16])),run=run,token=value['token'],controller=identity,controller_uid=uid)
+    client=HandoffClient(path=str(socket_path(state,run)),run=run,token=value['token'],controller=identity,controller_uid=uid)
     client.gatt_lookup_reply=value['gattLookupReply']
     return client

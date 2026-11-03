@@ -40,6 +40,11 @@ def status():
 def configure(values):
     found = processes()
     if found['controller'] or found['receiver'] or not clean_state():
+        try:
+            if validate(values) == load(bundle.ROOT / 'state'):
+                return {'returnValue': True, 'status': 'unchanged'}
+        except (OSError, ValueError):
+            pass
         raise RuntimeError('Stop the input runtime before changing settings')
     values = validate(values)
     from bundle_boot import bind_device

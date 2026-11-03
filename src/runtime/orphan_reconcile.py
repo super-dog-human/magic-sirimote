@@ -42,6 +42,50 @@ def _ended(process,app,proc='/proc',ignore_current=False):
  try:return att._start_ticks(Path(proc)/str(process['pid'])/'stat')!=process['startTicks']
  except FileNotFoundError:return True
 
+def archive_before_input(*,c,b,intent,intent_stat,controller_app,receiver_app,receiver_package,pin,lease,owner,group):
+ """Archive a constructor failure before the durable input-start intent.
+
+ An empty journal plus absent handoff metadata proves begin() was not reached.
+ The original controller and every receiver must have ended, and the caller
+ holds the supervisor lease. Preserve every record; never invent sensor stop.
+ """
+ run=intent['run']
+ if not re.fullmatch('[a-f0-9]{32}',run):raise RuntimeError('invalid prior run')
+ journal='input-'+run+'.jsonl'
+ forbidden={'borrowed-active','recovery-request.json','recovery-controller-start.json'}
+ def absent():
+  return (not any(n in forbidden or n.startswith(('receiver-start-','receiver-result-','receiver-ready-','receiver-progress-','receiver-recovery-','borrowed-','recovery-')) for n in os.listdir(b))
+   and 'input-'+run+'.json' not in os.listdir(c))
+ if not absent():return None
+ try:j=os.stat(journal,dir_fd=c,follow_symlinks=False)
+ except FileNotFoundError:return None
+ if not stat.S_ISREG(j.st_mode) or j.st_nlink!=1 or (j.st_uid,j.st_gid,j.st_size,stat.S_IMODE(j.st_mode))!=(owner,group,0,0o640):return None
+ rows=[];values={}
+ for name in ('request.json','controller-start.json'):
+  dest=name[:-5]+'-before-input-'+run+'.json'
+  try:value,info=_read(b,name,owner,group,0o660);source=name
+  except FileNotFoundError:value,info=_read(b,dest,owner,group,0o660);source=dest
+  if value.get('run')!=run or source==name and dest in os.listdir(b):raise RuntimeError('unstarted handoff differs')
+  rows.append((source,dest,info));values[name]=value
+ q=values['request.json'];record=values['controller-start.json'];process=record.get('process')
+ if q.get('schema')!=1 or q.get('appId')!=bundle.app_id(Path(receiver_app).name) or record.get('schema')!=1 or record.get('appId')!=bundle.app_id(Path(controller_app).name):raise RuntimeError('unstarted app identity differs')
+ if type(process) is not dict or process.get('status',{}).get('Uid','').split()!=[str(owner)]*4:raise RuntimeError('unstarted process identity differs')
+ def proof():
+  return (lease.held() is True and (os.fstat(lease.dirfd).st_dev,os.fstat(lease.dirfd).st_ino)==(os.fstat(c).st_dev,os.fstat(c).st_ino)
+   and absent() and _ended(process,controller_app,ignore_current=True) and att.candidate_pids(receiver_app)==[]
+   and package.package_matches(receiver_app,receiver_package,pin) is True
+   and _identity(os.stat(journal,dir_fd=c,follow_symlinks=False))==_identity(j)
+   and _identity(os.stat('receiver-launch-intent.json',dir_fd=c,follow_symlinks=False))==_identity(intent_stat))
+ if not proof():raise RuntimeError('unstarted proof unavailable')
+ dest='receiver-launch-before-input-'+run+'.json'
+ if dest in os.listdir(c):raise RuntimeError('unstarted archive already exists')
+ for source,target,info in rows:
+  if not proof() or _identity(os.stat(source,dir_fd=b,follow_symlinks=False))!=_identity(info):raise RuntimeError('unstarted evidence changed')
+  if source!=target:os.rename(source,target,src_dir_fd=b,dst_dir_fd=b);os.fsync(b)
+ if not proof():raise RuntimeError('unstarted proof changed')
+ os.rename('receiver-launch-intent.json',dest,src_dir_fd=c,dst_dir_fd=c);os.fsync(c)
+ return {'status':'reconciled','run':run,'priorOutcome':'input-never-started','launchIntentArchived':True}
+
 def _archive_unstarted_after_boot(*,c,b,intent,intent_stat,controller_app,receiver_app,receiver_package,pin,lease,owner,group,boot_time=None):
  """Retire an expired pre-boot launch that never reached B's durable start.
 
@@ -71,10 +115,10 @@ def _archive_unstarted_after_boot(*,c,b,intent,intent_stat,controller_app,receiv
   if info.st_mtime>=started or value.get('run')!=run:raise RuntimeError('handoff not from prior boot')
   values[name]=value;rows.append((source,dest,info))
  q=values['request.json'];record=values['controller-start.json'];process=record.get('process')
- if (set(q)!={'schema','appId','run','expiresEpochMs'} or type(q['schema']) is not int or q['schema']!=1 or q['appId']!=Path(receiver_app).name or
+ if (set(q)!={'schema','appId','run','expiresEpochMs'} or type(q['schema']) is not int or q['schema']!=1 or q['appId']!=bundle.app_id(Path(receiver_app).name) or
      type(q['expiresEpochMs']) is not int or not 0<q['expiresEpochMs']<started*1000 or intent_stat.st_mtime>=started):
   raise RuntimeError('unstarted request not expired before boot')
- if (set(record)!={'schema','appId','run','process'} or type(record['schema']) is not int or record['schema']!=1 or record['appId']!=Path(controller_app).name or
+ if (set(record)!={'schema','appId','run','process'} or type(record['schema']) is not int or record['schema']!=1 or record['appId']!=bundle.app_id(Path(controller_app).name) or
      type(process) is not dict or set(process)!={'pid','startTicks','status'} or type(process.get('status')) is not dict or
      process['status'].get('Uid','').split()!=[str(owner)]*4 or process['status'].get('CapEff')!='0000000000000000'):
   raise RuntimeError('unstarted controller identity invalid')
@@ -113,6 +157,9 @@ def reconcile(*,controller_state,receiver_state,controller_app,receiver_app,rece
   try:completed=read_receipt(receiver_state,run,state_uid=state_uid,group=group,historical=True)
   except FileNotFoundError:completed=None
   if completed is None:
+   if bundle.active():
+    unstarted=archive_before_input(c=c,b=b,intent=intent,intent_stat=intent_stat,controller_app=controller_app,receiver_app=receiver_app,receiver_package=receiver_package,pin=pin,lease=lease,owner=owner,group=group)
+    if unstarted is not None:return unstarted
    unstarted=_archive_unstarted_after_boot(c=c,b=b,intent=intent,intent_stat=intent_stat,controller_app=controller_app,receiver_app=receiver_app,receiver_package=receiver_package,pin=pin,lease=lease,owner=owner,group=group)
    if unstarted is not None:return unstarted
   if completed is not None and completed['status']=='complete':
@@ -142,10 +189,10 @@ def reconcile(*,controller_state,receiver_state,controller_app,receiver_app,rece
    try:obj,s=_read(b,name,owner,group,0o660,historical=True);source=name
    except FileNotFoundError:obj,s=_read(b,dest,owner,group,0o660,historical=True);source=dest
    if obj.get('run')!=run:raise RuntimeError('handoff run differs')
-   if name=='request.json' and obj.get('appId')!=Path(receiver_app).name:raise RuntimeError('request app differs')
+   if name=='request.json' and obj.get('appId')!=bundle.app_id(Path(receiver_app).name):raise RuntimeError('request app differs')
    if name=='controller-start.json':
     controller_process=obj.get('process')
-    if (set(obj)!={'schema','appId','run','process'} or type(obj['schema']) is not int or obj['schema']!=1 or obj['appId']!=Path(controller_app).name or
+    if (set(obj)!={'schema','appId','run','process'} or type(obj['schema']) is not int or obj['schema']!=1 or obj['appId']!=bundle.app_id(Path(controller_app).name) or
         type(controller_process) is not dict or set(controller_process)!={'pid','startTicks','status'} or type(controller_process.get('status')) is not dict or
         controller_process['status'].get('Uid','').split()!=[str(owner)]*4 or controller_process['status'].get('CapEff')!='0000000000000000'):
      raise RuntimeError('invalid prior controller identity')
