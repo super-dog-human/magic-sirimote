@@ -1,4 +1,5 @@
 """Resident TV controller: connect, supervise, stop, and recover verified sessions."""
+import runtime_bundle as bundle
 import json,os,signal,stat,threading,time
 from pathlib import Path
 from hid_input import ordinary
@@ -13,11 +14,11 @@ from bootstrap_connect import bootstrap,BootstrapClient,confirm_and_retire
 from passive_connection_wait import wait_connected
 from receiver_result_receipt import _process_identity
 
-APP='org.codex.siriremote.autocoord20261029v'
-B='org.codex.siriremote.hidgattrouterb20261029u'
+APP=bundle.app_id('org.codex.siriremote.autocoord20261029v')
+B=bundle.app_id('org.codex.siriremote.hidgattrouterb20261029u')
 ROOT=Path('/media/developer/apps/usr/palm/applications')
 PKG=Path('/media/developer/apps/usr/palm/packages')
-STATE=ROOT/APP/'state'
+STATE=bundle.role_path('controller',ROOT/APP)/'state'
 
 def load_config():
  from controller_pin_client import read_pin
@@ -34,7 +35,7 @@ def recover_retained_if_connected(*,lease,pin,stop,timeout=90,clock=time.monoton
  run=intent.get('run') if type(intent) is dict else None
  import re
  if type(run) is not str or not re.fullmatch('[a-f0-9]{32}',run):raise RuntimeError('prior intent invalid')
- context={'run':run,'controller_state':STATE,'receiver_state':ROOT/B/'state','controller_app':str(ROOT/APP),'receiver_app':str(ROOT/B),'receiver_package':str(PKG/B),'pin':pin,'lease':lease}
+ context={'run':run,'controller_state':STATE,'receiver_state':bundle.role_path('receiver',ROOT/B)/'state','controller_app':str(bundle.role_path('controller',ROOT/APP)),'receiver_app':str(bundle.role_path('receiver',ROOT/B)),'receiver_package':str(bundle.package_path(PKG/B)),'pin':pin,'lease':lease}
  # A receiver may be finishing after its controller died. Only re-read this
  # specific uncertain process state; do not reconnect or issue a command
  # until the process-exit and journal checks succeed.
@@ -76,12 +77,12 @@ def main():
   import secrets
   instance=secrets.token_hex(16)
   publish_instance(lease.dirfd,pid=process['pid'],start_ticks=process['startTicks'],instance=instance)
-  stop_monitor=StopMonitor(lease.dirfd,stop,pid=process['pid'],start_ticks=process['startTicks'],instance=instance)
+  stop_monitor=StopMonitor(lease.dirfd,stop,pid=process['pid'],start_ticks=process['startTicks'],instance=instance,**({'owner_uid':os.getuid()} if bundle.active() else {}))
   stop_monitor.start()
   trace=BootTrace()
   from orphan_reconcile import reconcile
   try:
-   reconcile(controller_state=STATE,receiver_state=ROOT/B/'state',controller_app=str(ROOT/APP),receiver_app=str(ROOT/B),receiver_package=str(PKG/B),pin=pin,lease=lease)
+   reconcile(controller_state=STATE,receiver_state=bundle.role_path('receiver',ROOT/B)/'state',controller_app=str(bundle.role_path('controller',ROOT/APP)),receiver_app=str(bundle.role_path('receiver',ROOT/B)),receiver_package=str(bundle.package_path(PKG/B)),pin=pin,lease=lease)
   except (OSError,RuntimeError,ValueError):
    try:
     result=recover_retained_if_connected(lease=lease,pin=pin,stop=stop,trace=trace.add)
@@ -105,7 +106,7 @@ def main():
   assist=None;ready_announced=False;reopen_attempts=0
   def cycle():
    import secrets
-   return SupervisorCycle(watch=pump.tracker,lease=lease,controller_state=STATE,receiver_state=ROOT/B/'state',run=secrets.token_hex(16),controller_process=process,receiver_app=str(ROOT/B),receiver_package=str(PKG/B),receiver_pin=pin,allow_exe_permission_denied=True)
+   return SupervisorCycle(watch=pump.tracker,lease=lease,controller_state=STATE,receiver_state=bundle.role_path('receiver',ROOT/B)/'state',run=secrets.token_hex(16),controller_process=process,receiver_app=str(bundle.role_path('receiver',ROOT/B)),receiver_package=str(bundle.package_path(PKG/B)),receiver_pin=pin,allow_exe_permission_denied=True)
   def emit(event):
    nonlocal ready_announced
    if event=='waiting-for-connection' and not ready_announced:

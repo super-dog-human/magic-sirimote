@@ -1,4 +1,5 @@
 """Read-only scheduler pin consumer; transport and service are not installed."""
+import runtime_bundle as bundle
 import json,re
 SERVICE='luna://org.codex.siriremote.v20scheduler20261031a.service/receiverPin'
 RECEIVER='org.codex.siriremote.hidgattrouterb20261029u'
@@ -16,6 +17,7 @@ def validate_response(response):
  return pin
 
 def read_pin(call):
+ if bundle.active():return bundle.read_pin('receiver')
  if not callable(call):raise ValueError('transport required')
  # The transport must identify the exact LS2 service response, bound its time
  # and reject duplicate JSON keys; no default trust decision is implemented.

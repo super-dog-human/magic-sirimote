@@ -3,6 +3,7 @@
 Explicitly assumes only cooperating project code issues Feature commands. It
 cannot exclude other TV software. Not ready for hardware use without recovery.
 """
+import runtime_bundle as bundle
 import json,os,signal,stat,threading
 from pathlib import Path
 from postconnect_receiver_app import run_from_state
@@ -36,6 +37,7 @@ def _read_controller_pin(p,*,owner_uid=5999,group_gid=5000):
  return pin
 
 def controller_pin():
+ if bundle.active():return bundle.read_pin('controller')
  return _read_controller_pin(Path(__file__).resolve().parent/'controller-pin.json')
 
 def controller_stop_proof(record,*,controller_app,controller_package,pin,proc_path='/proc',python_path='/usr/bin/python3',allow_exe_permission_denied=False):
@@ -52,32 +54,32 @@ def controller_stop_proof(record,*,controller_app,controller_package,pin,proc_pa
 
 def main():
  from retired_requests import reject_retired_requests
- reject_retired_requests(ROOT/APP/'state')
+ reject_retired_requests(bundle.role_path('receiver',ROOT/APP)/'state')
  stop=threading.Event()
  for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda _s,_f:stop.set())
  from controller_start_record import read_record
  from receiver_stop_ipc import StopEvent,read_stop
- state=ROOT/APP/'state';pin=controller_pin()
+ state=bundle.role_path('receiver',ROOT/APP)/'state';pin=controller_pin()
  # Recovery authenticates its own live controller and request. Do not first
  # require the original, potentially dead controller to still be running.
  try:os.stat(state/'recovery-request.json',follow_symlinks=False)
  except FileNotFoundError:pass
  else:
   from receiver_recovery_entry import run_recovery
-  result=run_recovery(state=state,controller_app=str(ROOT/CONTROLLER),controller_package=str(PKG/CONTROLLER),pin=pin,stop=stop)
+  result=run_recovery(state=state,controller_app=str(bundle.role_path('controller',ROOT/CONTROLLER)),controller_package=str(bundle.package_path(PKG/CONTROLLER)),pin=pin,stop=stop)
   return 0 if result.get('status')=='recovered' else 2
  record=read_record(state);run=record['run']
- accepted=controller_stop_proof(record,controller_app=str(ROOT/CONTROLLER),controller_package=str(PKG/CONTROLLER),pin=pin,allow_exe_permission_denied=True)
+ accepted=controller_stop_proof(record,controller_app=str(bundle.role_path('controller',ROOT/CONTROLLER)),controller_package=str(bundle.package_path(PKG/CONTROLLER)),pin=pin,allow_exe_permission_denied=True)
  def verify(rec):
   if rec!=record:return False
-  current=controller_stop_proof(rec,controller_app=str(ROOT/CONTROLLER),controller_package=str(PKG/CONTROLLER),pin=pin,allow_exe_permission_denied=True)
+  current=controller_stop_proof(rec,controller_app=str(bundle.role_path('controller',ROOT/CONTROLLER)),controller_package=str(bundle.package_path(PKG/CONTROLLER)),pin=pin,allow_exe_permission_denied=True)
   if current!=accepted:return False
   print(json.dumps({'stage':'controller-stop-attestation','executableVerified':current['executableVerified']},separators=(',',':')),flush=True)
   return True
  ipc=StopEvent(stop,lambda:read_stop(state,run,record,verify))
  # Explicitly experimental; never deploy until button semantics and duplicate
  # IR behavior have been checked on the target.
- result=run_from_state(state_path=ROOT/APP/'state',controller_app=str(ROOT/CONTROLLER),controller_package=str(PKG/CONTROLLER),controller_pin=controller_pin(),cooperative_only=True,allow_exe_permission_denied=True,duration=None,stop_event=ipc,system_buttons=True)
+ result=run_from_state(state_path=bundle.role_path('receiver',ROOT/APP)/'state',controller_app=str(bundle.role_path('controller',ROOT/CONTROLLER)),controller_package=str(bundle.package_path(PKG/CONTROLLER)),controller_pin=controller_pin(),cooperative_only=True,allow_exe_permission_denied=True,duration=None,stop_event=ipc,system_buttons=True)
  return 0 if result.get('status')=='complete' and ipc.ipc_error is None else 2
 
 if __name__=='__main__':raise SystemExit(main())

@@ -3,10 +3,12 @@
 Pinned files and package metadata are verified; extra files are not excluded.
 Nothing here proves a process is running or a package is registered.
 """
+import runtime_bundle as bundle
 import hashlib,json,re
 import local_attestation as att
 
 def package_matches(app_path,pkg_path,record):
+ if type(record) is dict and record.get('schema')=='bundled-role-v1':return bundle.package_matches(app_path,pkg_path,record)
  if type(record) is not dict or type(record.get('files')) is not dict or not 1<=len(record['files'])<=200 or type(record.get('appId')) is not str or type(record.get('packageInfoSha256')) is not str:raise ValueError('invalid receiver package pin')
  att._directory(app_path);att._directory(pkg_path)
  for name,digest in record['files'].items():

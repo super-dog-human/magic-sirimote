@@ -73,7 +73,7 @@ def configured(text, config):
     return re.sub(pattern,lambda m:mapping[m.group()],text).encode()
 
 
-def package(out, app, version, files, service=None, *, description='Experimental TV-local Siri Remote runtime'):
+def package(out, app, version, files, service=None, *, description='Experimental TV-local Siri Remote runtime', service_state_dirs=()):
     root='usr/palm/applications/'+app
     info_root='usr/palm/packages/'+app
     info=js({'id':app,'version':version,'app':app,'services':[app+'.service'] if service else []})
@@ -89,6 +89,14 @@ def package(out, app, version, files, service=None, *, description='Experimental
     owners={p:(5999,5000) for p in content}
     owners[info_root+'/packageinfo.json']=(501,20)
     owners.update({p:(501,20) for p in dirs}); owners[root]=owners[root+'/state']=(5999,5000)
+    for relative in service_state_dirs:
+        if not service or type(relative) is not str or any(p in ('', '.', '..') for p in relative.split('/')):
+            raise ValueError('Invalid shared service state directory')
+        path = 'usr/palm/services/' + app + '.service/' + relative
+        if path not in dirs:
+            raise ValueError('Shared service state directory is missing')
+        modes[path] = 0o770
+        owners[path] = (5999, 5000)
     control=(f'Package: {app}\nVersion: {version}\nArchitecture: arm\n'
              f'Maintainer: magic-sirimote contributors\nDescription: {description}\n').encode()
     raw=pkg.make_ar({'debian-binary':b'2.0\n',

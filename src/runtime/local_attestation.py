@@ -3,6 +3,7 @@
 Inputs are a pinned package record and trusted paths. Inaccessible /proc or
 package metadata is unknown and raises; no process or filesystem mutation.
 """
+import runtime_bundle as bundle
 import hashlib,json,os,re,stat
 from pathlib import Path
 def _directory(path):
@@ -25,6 +26,7 @@ def _read_file(root,relative,limit=524288):
  if len(raw)>limit:raise RuntimeError('oversize-file')
  return raw
 def package_matches(app_path,pkg_path,record):
+ if type(record) is dict and record.get('schema')=='bundled-role-v1':return bundle.package_matches(app_path,pkg_path,record)
  if not isinstance(record,dict) or not isinstance(record.get('files'),dict) or not 1<=len(record['files'])<=64:raise RuntimeError('invalid-pinned-package')
  _directory(app_path);_directory(pkg_path)
  for name,digest in record['files'].items():

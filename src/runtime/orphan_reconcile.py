@@ -4,6 +4,7 @@ No launch, sensor write, or successful input result is invented here. An active
 uncertain sensor journal still requires B's existing real recovery path.
 Call only while holding the exclusive supervisor lease.
 """
+import runtime_bundle as bundle
 import json, os, re, stat
 from pathlib import Path
 import local_attestation as att
@@ -167,7 +168,7 @@ def reconcile(*,controller_state,receiver_state,controller_app,receiver_app,rece
   if obj is not None:
    p=obj.get('process')
    if (set(obj)!={'schema','appId','run','process'} or obj.get('schema')!=1 or
-       obj.get('appId')!='org.codex.siriremote.autocoord20261029v' or obj.get('run')!=run or
+       obj.get('appId')!=bundle.app_id('org.codex.siriremote.autocoord20261029v') or obj.get('run')!=run or
        type(p) is not dict or set(p)!={'pid','startTicks','status'} or type(p.get('pid')) is not int or p['pid']<=0 or
        type(p.get('startTicks')) is not int or p['startTicks']<=0 or type(p.get('status')) is not dict or
        p['status'].get('Uid','').split()!=[str(owner)]*4 or p['status'].get('CapEff')!='0000000000000000'):

@@ -3,10 +3,11 @@
 No raw HID reports are written. A receipt is a self-report, not proof of
 process identity, process exit, storage persistence, or sensor state today.
 """
+import runtime_bundle as bundle
 import json,os,re,stat
 from pathlib import Path
 from receive_diagnostics import valid as valid_receive_diagnostics, diagnostic_result
-APP='org.codex.siriremote.hidgattrouterb20261029u'
+APP=bundle.app_id('org.codex.siriremote.hidgattrouterb20261029u')
 
 def _process_identity():
  from hid_input import ordinary

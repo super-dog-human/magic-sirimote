@@ -1,9 +1,10 @@
 """Verify this process is the pinned, unprivileged TV-native app entrypoint."""
+import runtime_bundle as bundle
 import os,stat
 from pathlib import Path
 
 APP='org.codex.siriremote.hidgattroutera20261029u'
-APP_PATH='/media/developer/apps/usr/palm/applications/'+APP
+APP_PATH=str(bundle.current_path('/media/developer/apps/usr/palm/applications/'+APP))
 
 def verify_self(*,proc='/proc/self',python='/usr/bin/python3',uid=None,gid=None):
  try:

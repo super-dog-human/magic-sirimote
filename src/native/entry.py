@@ -170,8 +170,8 @@ class Setup:
         canvas.present()
 
 
-def main():
-    state = ROOT / 'state'
+def main(state=None):
+    state = ROOT / 'state' if state is None else Path(state)
     app = Setup(state)
     canvas = Canvas(APP_ID)
     try:

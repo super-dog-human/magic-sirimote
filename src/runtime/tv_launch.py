@@ -3,8 +3,9 @@
 Caller must durably record launch intent before calling. This file performs no
 operation on import and does not by itself establish a TV service grant.
 """
+import runtime_bundle as bundle
 import json,re,subprocess
-APPS={'A':'org.codex.siriremote.hidgattroutera20261029u','B':'org.codex.siriremote.hidgattrouterb20261029u'}
+APPS={'A':bundle.app_id('org.codex.siriremote.hidgattroutera20261029u'),'B':bundle.app_id('org.codex.siriremote.hidgattrouterb20261029u')}
 URI='luna://com.webos.applicationManager/launch'
 def _strict(raw):
  if not isinstance(raw,str) or len(raw.encode('utf8'))>8192:raise ValueError('invalid reply')

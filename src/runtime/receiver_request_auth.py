@@ -4,10 +4,11 @@ Requires a separately obtained, run-bound controller process record and pinned
 package. A permission-limited executable fallback is disclosed, not security
 proof against a malicious local process. No device or input changes here.
 """
+import runtime_bundle as bundle
 import local_attestation as att
 import receiver_package_attestation as pkg
 from receiver_request import read_request
-CONTROLLER='org.codex.siriremote.autocoord20261029v'
+CONTROLLER=bundle.app_id('org.codex.siriremote.autocoord20261029v')
 
 def authenticate(*,controller_record,run,controller_app,controller_package,pin,receiver_state,proc_path='/proc',python_path='/usr/bin/python3',read=read_request,allow_exe_permission_denied=False):
  if type(controller_record) is not dict or controller_record.get('appId')!=CONTROLLER or controller_record.get('run')!=run or type(controller_record.get('process')) is not dict or type(pin) is not dict or pin.get('appId')!=CONTROLLER or not callable(read):raise ValueError('invalid controller identity')

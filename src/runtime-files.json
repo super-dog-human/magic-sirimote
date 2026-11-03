@@ -114,6 +114,7 @@
   "resident_supervisor_loop.py",
   "retired_requests.py",
   "rolling_receiver.py",
+  "runtime_bundle.py",
   "runtime_device.py",
   "scan_wake_provider.py",
   "stop_request.py",
