@@ -78,9 +78,12 @@ class RuntimeSetup(Setup):
         self.bus = bus
         self.stop_requested = False
         self.worker = None
+        self.pending_settings = None
+        self.resume_after_settings = False
+        self.next_settings_check = 0
         from battery_status import ScreenReading
         self.battery = ScreenReading(state)
-        self.message = 'Start enables automatic startup. Stop pauses it until you choose Start again.'
+        self.message = 'Remote control starts automatically after device settings are saved.'
 
     def enable_startup(self):
         reply = accepted(self.bus.request('startupPrepare', {}))
@@ -92,24 +95,65 @@ class RuntimeSetup(Setup):
         if type(activity_id) is not int or activity_id <= 0: raise RuntimeError('Automatic startup registration is unconfirmed')
         accepted(self.bus.request('startupBind', {'token': reply['token'], 'activityId': activity_id}))
 
-    def apply(self, values, start=False):
+    def apply(self, values, start=True):
         if self.infrared is not None:
             raise RuntimeError('Close button settings before updating device settings or starting input.')
         accepted(self.bus.request('configure', {'settings': values}))
         settings.save(self.state, values)
         self.values.update({key: values[key] for key in (*settings.FIELDS, 'gyroEnabled')})
-        if start:
-            self.enable_startup()
-            accepted(self.bus.request('start', {}))
-            self.message = 'Starting remote control.'
-            self.done = True  # A fresh post-HID launch must inherit fresh input nodes.
-        else:
-            self.message = 'Settings saved to the input service.'
+        # Both installer configure and the TV Save action activate reception.
+        # Keep the old argument for staged installer requests from earlier builds.
+        self.enable_startup()
+        accepted(self.bus.request('start', {}))
+        self.message = 'Settings saved. Remote control starts automatically.'
+        self.resume_after_settings = False
+        self.done = True  # A fresh post-HID launch must inherit fresh input nodes.
 
     def stop_runtime(self):
+        """Installer maintenance only; never exposed as a settings choice."""
+        self.pending_settings = None
+        self.resume_after_settings = False
         self.stop_requested = True
         reply = accepted(self.bus.request('stop', {}))
         self.message = 'Stopping input; automatic startup disabled.' if reply['status'] == 'stop-requested' else reply['status']
+
+    def prepare_settings(self, action, values=None):
+        if self.pending_settings is not None:
+            return
+        accepted(self.bus.request('drain', {}))
+        self.stop_requested = True  # Keep the window after the worker finishes.
+        self.resume_after_settings = True
+        self.pending_settings = (action, values, time.monotonic() + 20)
+        self.next_settings_check = 0
+        self.message = 'Preparing settings. Use the original LG remote while input pauses.'
+
+    def settings_tick(self, canvas):
+        if self.pending_settings is None or time.monotonic() < self.next_settings_check:
+            return False
+        self.next_settings_check = time.monotonic() + 1
+        action, values, deadline = self.pending_settings
+        try:
+            reply = accepted(self.bus.request('status', {}))
+            if not reply.get('cleanStop') or reply['processes']['legacy']:
+                if time.monotonic() < deadline:
+                    return False
+                raise RuntimeError('Input cleanup is not confirmed. Settings were not changed.')
+            self.pending_settings = None
+            if action == 'save':
+                self.apply(values)
+            else:
+                super().choose(6, canvas)
+                self.infrared.submit = self.program_ir
+        except (OSError, ValueError, RuntimeError) as error:
+            self.pending_settings = None
+            self.message = str(error)[:160]
+        return True
+
+    def resume_settings(self):
+        if self.resume_after_settings:
+            accepted(self.bus.request('resume', {}))
+            self.resume_after_settings = False
+        self.done = True  # Close the stale input namespace before reconnecting.
 
     def program_ir(self, *args):
         from ir_programmer import execute, runtime_idle
@@ -126,16 +170,13 @@ class RuntimeSetup(Setup):
         if self.editing is not None:
             return super().choose(index, canvas)
         try:
-            if index in (5, 8):
-                self.apply(settings.validate({'schema': 1, **self.values}), index == 8)
-            elif index == 9:
-                self.stop_runtime()
+            if index == 5:
+                self.prepare_settings('save', settings.validate({'schema': 1, **self.values}))
             elif index == 6:
-                reply = accepted(self.bus.request('status', {}))
-                if not reply.get('cleanStop') or reply['processes']['legacy']:
-                    raise RuntimeError('Stop the input runtime before programming infrared.')
-                super().choose(index, canvas)
-                self.infrared.submit = self.program_ir
+                self.prepare_settings('buttons')
+            elif index == 3:
+                self.values['gyroEnabled'] = not self.values['gyroEnabled']
+                self.message = 'Choose Save settings to save this preference.'
             else:
                 super().choose(index, canvas)
         except (OSError, ValueError, RuntimeError) as error:
@@ -143,21 +184,23 @@ class RuntimeSetup(Setup):
             self.done = False
 
     def handle(self, event, canvas):
-        if self.editing is None and self.infrared is None and event[0] == 'key' and event[1] in ARROWS:
-            self.focus = (self.focus + ARROWS[event[1]]) % 10
-        else:
-            super().handle(event, canvas)
+        was_infrared = self.infrared is not None
+        if self.pending_settings is not None:
+            return  # Wait for cooperative cleanup; never edit a live session.
+        super().handle(event, canvas)
+        if self.done or (was_infrared and self.infrared is None):
+            try:
+                self.resume_settings()
+            except (OSError, ValueError, RuntimeError) as error:
+                self.done = False
+                self.message = str(error)[:160]
 
     def draw(self, canvas):
         super().draw(canvas)
         if self.editing is not None or self.infrared is not None:
             return
         canvas.rectangle((64, 605, 1152, 108), (14, 22, 34))
-        for index, title in ((8, 'Start remote control'), (9, 'Stop remote control')):
-            box = (64 + (index - 8) * 584, 612, 564, 58)
-            canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
-            canvas.text(title, box[0] + 20, box[1] + 16, 24)
-            self.boxes.append((index, box))
+        canvas.text('Remote control runs automatically. No Start or Stop action is needed.', 66, 630, 21, (155, 170, 190))
         canvas.text(self.battery.text(self.values['remoteAddress'], self.values['adapterAddress']), 66, 682, 19, (155, 170, 190))
         canvas.present()
 
@@ -211,6 +254,11 @@ def main():
                 programming = app.infrared is not None and app.infrared.busy
                 if stop_signal[0] and not closing and not programming:
                     closing = True
+                    # A system close may terminate the native receiver window.
+                    # Permit one replacement after it exits, without undoing an
+                    # installer's maintenance stop or bypassing the power gate.
+                    try: accepted(bus.request('resume', {}))
+                    except (OSError, ValueError, RuntimeError): pass
                     if worker is not None and worker.poll() is None:
                         try: accepted(bus.request('drain', {}))
                         except (OSError, ValueError, RuntimeError): worker.terminate()
@@ -230,8 +278,9 @@ def main():
                         worker.stdout.close(); worker.stdin.close(); worker = None; app.worker = None
                         if closing or not app.stop_requested:
                             break  # Next connection requires a fresh native jail.
-                        app.message = 'Input worker stopped. Wait for the controller to finish before changing settings.'
+                        app.message = 'Finishing input cleanup before opening settings.'
                         app.draw(canvas)
+                if app.settings_tick(canvas): app.draw(canvas)
                 if app.infrared is not None and app.infrared.tick(): app.draw(canvas)
                 for event in canvas.events():
                     app.handle(event, canvas)

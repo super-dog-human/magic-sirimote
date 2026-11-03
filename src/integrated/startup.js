@@ -97,6 +97,14 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     const s = load();
     if (s) { s.enabled = true; s.attempt = key(s, boot()); s.lastOutcome = 'manual-start'; store.write(s); }
   }
+  function resume() {
+    const s = load();
+    // Only the native app can finish a settings pause. Never undo an installer
+    // maintenance stop, and leave uncertain registration outcomes untouched.
+    if (!s || !s.enabled || s.phase !== 'ready') return {returnValue: true, status: 'unchanged'};
+    s.attempt = null; s.lastOutcome = 'waiting-for-window-close'; store.write(s);
+    return {returnValue: true, status: 'resume-pending'};
+  }
   async function tick(message, params) {
     let s = load();
     if (!s || !['prepared', 'ready'].includes(s.phase) || message.senderServiceName() !== 'com.webos.service.activitymanager' || message.applicationID() !== APP
@@ -169,6 +177,6 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     const result = await start();
     s.lastOutcome = result && result.returnValue === true ? result.status : 'start-needs-attention'; store.write(s);
   }
-  return {summary, prepare, bind, disable, manualStart, tick, repair, poll};
+  return {summary, prepare, bind, disable, manualStart, resume, tick, repair, poll};
 }
 module.exports = {APP, NAME, disk, activityCall, createStartup};

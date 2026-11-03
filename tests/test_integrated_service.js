@@ -31,10 +31,11 @@ async function main() {
     assert.equal(helpers, 2);
     assert.equal((await request('start', 'another.app')).returnValue, false);
     assert.equal(helpers, 2, 'Unauthorized start must not invoke Python');
+    assert.equal((await request('resume', 'another.app')).returnValue, false);
     await request('drain', 'org.magicsirimote.app');
     assert.equal(disabled, 0, 'Lifecycle drain must preserve automatic startup');
     await request('stop', 'org.magicsirimote.app');
-    assert.equal(disabled, 1, 'Explicit Stop must disable automatic startup');
+    assert.equal(disabled, 1, 'Installer stop must suspend automatic startup');
     timer();
     assert.equal(handle.unregistered, true);
     assert.equal(exited, true, 'Unregister alone leaves an unresponsive service process');

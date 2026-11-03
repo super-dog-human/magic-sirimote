@@ -31,6 +31,69 @@ class ControlTests(unittest.TestCase):
             self.assertEqual([call.args[0] for call in bus.request.call_args_list], ['configure', 'startupPrepare'])
             self.assertFalse(app.done)
 
+    def test_save_waits_for_clean_stop_then_automatically_starts(self):
+        from unittest.mock import Mock
+        values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); app = RuntimeSetup(Path(d), bus); app.values.update(values)
+            bus.request.return_value = {'returnValue': True, 'status': 'stop-requested'}
+            app.choose(5, Mock())
+            self.assertEqual(bus.request.call_args.args[0], 'drain')
+            bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found(controller=[{'pid': 1}])}
+            with patch.object(app, 'apply') as apply:
+                self.assertFalse(app.settings_tick(Mock()))
+                apply.assert_not_called()
+                app.next_settings_check = 0
+                bus.request.return_value = {'returnValue': True, 'cleanStop': True, 'processes': found()}
+                self.assertTrue(app.settings_tick(Mock()))
+                apply.assert_called_once()
+
+    def test_settings_timeout_never_changes_configuration(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); app = RuntimeSetup(Path(d), bus)
+            app.pending_settings = ('save', {}, 0)
+            bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found()}
+            with patch.object(app, 'apply') as apply:
+                self.assertTrue(app.settings_tick(Mock()))
+                apply.assert_not_called()
+            self.assertIn('not confirmed', app.message)
+
+    def test_buttons_close_resumes_without_exposing_a_start_button(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); bus.request.return_value = {'returnValue': True, 'cleanStop': True, 'processes': found()}
+            app = RuntimeSetup(Path(d), bus)
+            app.choose(6, Mock()); app.settings_tick(Mock())
+            self.assertIsNotNone(app.infrared)
+            app.infrared.done = True
+            app.handle(('key', 27), Mock())
+            self.assertIsNone(app.infrared)
+            self.assertTrue(app.done)
+            self.assertEqual(bus.request.call_args.args[0], 'resume')
+            app = RuntimeSetup(Path(d), bus)
+            app.focus = 7; app.handle(('key', 1073741903), Mock())
+            self.assertEqual(app.focus, 0)
+            canvas = Mock(); app.draw(canvas)
+            self.assertEqual([index for index, box in app.boxes], list(range(8)))
+
+    def test_installer_configuration_always_activates_but_stop_stays_internal(self):
+        from unittest.mock import Mock
+        values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); bus.request.return_value = {'returnValue': True, 'status': 'registered'}
+            app = RuntimeSetup(Path(d), bus)
+            with patch('native_manager.settings.save'):
+                app.apply(values, False)
+            self.assertTrue(app.done)
+            self.assertEqual(bus.request.call_args.args[0], 'start')
+            app.pending_settings = ('buttons', None, 100)
+            app.resume_after_settings = True
+            app.stop_runtime()
+            self.assertFalse(app.resume_after_settings)
+            self.assertIsNone(app.pending_settings)
+            self.assertEqual(bus.request.call_args.args[0], 'stop')
+
     def test_archive_before_input_requires_empty_journal_and_no_receiver(self):
         import orphan_reconcile as recovery
         from unittest.mock import Mock

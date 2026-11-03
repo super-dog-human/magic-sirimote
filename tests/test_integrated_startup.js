@@ -55,6 +55,15 @@ async function main() {
   s.disable(); f.boot(BOOT2); await s.poll(deps); await s.poll(deps); assert.equal(starts, 2, 'Explicit Stop persists across boot');
   s.prepare(); found.processes.ui = [{pid: 9}]; await s.poll(deps); await s.poll(deps); assert.equal(starts, 2);
   found = empty(); await s.poll(deps); assert.equal(starts, 3, 'New boot gets its own automatic attempt');
+  s.resume(); found.processes.ui = [{pid: 9}];
+  await s.poll(deps); assert.equal(starts, 3, 'Resume waits for the settings window to exit');
+  found = empty(); await s.poll(deps); assert.equal(starts, 4);
+  await s.poll(deps); assert.equal(starts, 4, 'Resume allows only one replacement');
+  s.resume(); power = {state: 'Active Standby'};
+  await s.poll(deps); await s.poll(deps); assert.equal(starts, 4, 'Settings resume never powers on input in standby');
+  s.disable(); assert.equal(s.resume().status, 'unchanged');
+  power = {state: 'Active'}; await s.poll(deps); await s.poll(deps);
+  assert.equal(starts, 4, 'Closing a window cannot cancel installer maintenance');
   const g = fixture(), t = g.instance(); bind(t);
   const message = {senderServiceName: () => 'com.webos.service.activitymanager', applicationID: () => APP};
   const payload = {token: g.state().token, $activity: {activityId: 17}};

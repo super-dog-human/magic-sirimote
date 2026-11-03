@@ -9,7 +9,7 @@ import build_support
 
 ROOT = Path(__file__).resolve().parent
 APP = build_native.APP
-VERSION = '0.6.9'
+VERSION = '0.6.10'
 ROLES = ('controller', 'receiver')
 
 
@@ -91,7 +91,7 @@ def main():
     except (OSError, ValueError) as error:
         parser.exit(2, str(error) + '\n')
     print('Built:', args.out / result['package']['package'])
-    print('Choose Start in the installed app to register automatic startup; Stop disables it.')
+    print('Save verified device settings to enable automatic remote reception.')
 
 
 if __name__ == '__main__':

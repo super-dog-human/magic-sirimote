@@ -80,7 +80,7 @@ function createService({Handle = require('palmbus').Handle, timers = globalThis,
     }, 2000);
   }
   schedulePower();
-  const methods = ['status', 'configure', 'start', 'stop', 'drain', 'startupPrepare', 'startupBind', 'startupDisable', 'startupRepair', 'startupTick'];
+  const methods = ['status', 'configure', 'start', 'stop', 'drain', 'resume', 'startupPrepare', 'startupBind', 'startupDisable', 'startupRepair', 'startupTick'];
   for (const method of methods) handle.registerMethod('/', method);
   handle.addListener('request', message => {
     trace('request-received');
@@ -101,6 +101,7 @@ function createService({Handle = require('palmbus').Handle, timers = globalThis,
         else if (method === 'start' && Object.keys(params).length === 0) { startup.manualStart(); value = await startInput(); }
         else if (method === 'stop' && Object.keys(params).length === 0) { startup.disable(); value = await helper('stop', params); }
         else if (method === 'drain' && Object.keys(params).length === 0) value = await helper('stop', params);
+        else if (method === 'resume' && Object.keys(params).length === 0) value = startup.resume();
         else if (['status', 'configure'].includes(method)) value = await helper(method, params);
         else throw Error('Invalid request');
         if (method === 'status') { value.startup = startup.summary(); value.automaticStartupRegistered = value.startup.registered; }

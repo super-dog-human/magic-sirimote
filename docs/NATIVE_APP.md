@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.9_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.10_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -22,12 +22,18 @@ This is not an automated migration from the separate controller, receiver and
 startup apps. Their input processes and startup registration must be stopped
 and verified before starting the integrated runtime.
 
-The settings window provides **Start remote control** and **Stop remote control**.
-Start registers and enables automatic startup, then closes the window while the
-connection is prepared. Opening the app again shows its settings. Stop disables
-automatic startup and stops input; it remains disabled across TV restarts until
-you choose Start again. Stop and wait for cleanup before programming infrared or
-updating the package.
+Remote reception is automatic once the paired remote's verified device settings
+are saved. The window has no Start/Stop control. **Save settings** registers
+automatic startup and starts input, then closes the window so the receiver can
+open with the current input devices. Opening the app again displays its settings
+without stopping the running receiver.
+
+**Buttons** temporarily pauses input and waits for confirmed cleanup before
+opening. Use the original LG remote there. Leaving that screen closes the window
+and allows reception to resume automatically. Saving device settings also pauses
+and resumes input automatically. If cleanup cannot be confirmed, the operation
+shows an error without changing settings. Package updates still use a separate
+installer maintenance stop; closing a window cannot undo that stop.
 
 Automatic startup uses one persistent webOS Activity owned by this same app.
 No separate startup app or running Mac is needed. The bundled service watches the
