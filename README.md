@@ -6,7 +6,7 @@ Thank you to the open-source Siri Remote and LG webOS communities—especially [
 
 The repository contains the TV runtime, package builder, configuration reference, and setup guide.
 
-> **Setup status:** the runtime has been tested on the hardware listed below, but **following this README from top to bottom does not yet reproduce a fresh installation**, even on the same remote and TV models. Pairing, app-account discovery, device-access checks, IR programming, and startup/maintenance operations still need setup tooling. See the [setup audit](reviews/setup-audit.md) for the exact gaps. The published package versions have passed computer-side tests; hardware validation is pending.
+> **Setup status:** **following this README from top to bottom does not yet reproduce a fresh installation**, even on the same remote and TV models. The [single-app runtime preview](docs/NATIVE_APP.md#integrated-runtime-build) has been tested for input and battery display on the configuration below. It requires an already paired remote, uses manual start, and does not yet support automatic startup after a TV restart. Fresh-install tooling and configurable TV button mappings remain unfinished. The architecture and setup guide below describe the separate-package runtime; do not combine the two installations.
 
 - [1. Tested Configuration](#1-tested-configuration)
 - [2. What you can do](#2-what-you-can-do)
@@ -25,8 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| TV input apps | Controller and receiver **0.9.73** |
-| TV startup package | **0.0.66** |
+| Integrated TV app | Magic Sirimote **0.5.7** (manual-start preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 

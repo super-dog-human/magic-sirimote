@@ -1,10 +1,14 @@
 # Native app
 
-The available IPK is a **native webOS settings preview**. It does not include an input receiver or background service, and is not a replacement for the working three-package input runtime. The intended integrated design is described below.
+There are two preview packages: the integrated runtime described first, and a
+settings-only preview described separately below. Both use the same app ID;
+installing one replaces the other.
 
 ## Integrated runtime build
 
-The source also includes a single-package runtime build:
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.5.7_arm.ipk)
+and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
+You can also build the package from source:
 
 ```sh
 python3 src/build_integrated.py --out /tmp/magic-sirimote-integrated
@@ -14,6 +18,9 @@ Choose a new output directory. This build contains the native window, input
 receiver and bundled background service in one IPK. It is separate from the
 downloadable setup preview below. It requires an already paired remote and
 verified device settings; a fresh-install pairing workflow is not yet available.
+This is not an automated migration from the separate controller, receiver and
+startup apps. Their input processes and startup registration must be stopped
+and verified before starting the integrated runtime.
 
 The settings window provides **Start remote control** and **Stop remote control**.
 Start closes the window while the connection is prepared. Opening the app again
