@@ -5,6 +5,7 @@ target package, actual ACLs, feature conflict policy and boot start remain
 unverified. Uncertain outcomes retain the launch and handoff evidence.
 """
 import os,time
+import runtime_bundle as bundle
 from post_connect_receiver_launch import PostConnectReceiverLaunch
 from receiver_launch_intent import ReceiverLaunchIntent
 from receiver_request import write_request
@@ -20,6 +21,11 @@ class SupervisorCycle:
   self.controller_state=controller_state;self.prelaunch=None;self.watch=watch;self.lease=lease;self.receiver_state=receiver_state;self.run=run;self.controller_process=controller_process;self.receiver_app=receiver_app;self.receiver_package=receiver_package;self.pin=receiver_pin;self.allow_fallback=allow_exe_permission_denied;self.write_start=write_start;self.write_request=write_receiver_request;self.clock=clock;self.intent=intent_factory(controller_state,run);self.launcher=launcher_factory(run);self.live=None;self.generation=None;self.finished=False;self.finish_attempted=False;self.recovery_disconnect=None;self.recovery_attempted=False
  def begin(self):
   if self.lease.held() is not True:raise RuntimeError('supervisor lease lost')
+  if bundle.active():
+   from control_processes import processes
+   # A relaunch reuses the existing app's device namespace. Wait until the
+   # prior window exits before starting input for a fresh native launch.
+   if processes()['ui']:return {'status':'not-ready'}
   import receiver_package_attestation as package
   # Check before writing a launch request or creating a launch intent. This
   # does not eliminate a later file-replacement race; the observer also checks.
@@ -107,6 +113,9 @@ class SupervisorCycle:
   if self.recovery_attempted and (time.monotonic()>self.recovery_deadline or current is None):raise RuntimeError('recovery connection or deadline lost')
   if type(current) is not dict or current.get('generation',0)<self.recovery_disconnect:return None
   if not self.recovery_attempted:
+   if bundle.active():
+    from control_processes import processes
+    if processes()['ui']:return None
    if package.package_matches(self.receiver_app,self.receiver_package,self.pin) is not True or observed_process_ended(self.live,app_path=self.receiver_app) is not True:return None
    prior=prior_run(self.receiver_state,self.run,expected_process=self.live['process'])
    self.recovery_prior_outcome=prior['priorOutcome']

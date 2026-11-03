@@ -113,10 +113,22 @@ def main(role):
         from local_attestation import _start_ticks
         if not verify_self():
             raise RuntimeError('Controller process identity unavailable')
+        from control_processes import require_no_other_input, processes
+        import time
+        deadline = time.monotonic() + 15
+        while processes()['ui']:
+            require_no_other_input(allow_self=True)
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Close the setup window before starting input')
+            time.sleep(.05)
+        require_no_other_input(allow_self=True)
         values = load(bundle.ROOT / 'state')
         bind_device(bundle.ROOT / 'state', values)
         _save_session(session_path(os.getpid(), _start_ticks(Path('/proc/self/stat'))), values)
     else:
+        from control_processes import processes
+        if processes()['legacy']:
+            raise RuntimeError('The previous input runtime is still active')
         values = receiver_settings()
     configure(remote=values['remoteAddress'], adapter=values['adapterAddress'], name=values['remoteName'])
     if role == 'controller':

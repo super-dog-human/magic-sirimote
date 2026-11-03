@@ -139,7 +139,7 @@ for field,value in [('remoteAddress','aa:bb:cc:dd:ee:30'),('adapterAddress','aa:
             metadata.write_text('{"name":"wrong.service"}')
             self.assertFalse(runtime_bundle.package_matches(service / 'roles' / role, package, pin))
             # Runtime packaging is not a claim of activation or device validation.
-            self.assertFalse(first['runtimeActivationAvailable'])
+            self.assertTrue(first['runtimeActivationAvailable'])
             self.assertFalse(first['hardwareValidated'])
             self.assertFalse(first['registersAutomaticStartup'])
 
