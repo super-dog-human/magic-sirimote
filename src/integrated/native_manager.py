@@ -491,13 +491,16 @@ def main():
                 handoff = False; app.message = 'Input handoff needs attention. Existing recovery records were retained.'
             if not handoff: app.refresh_pairing()
             window_visible = not handoff
-            canvas = Canvas(APP); app.draw(canvas)
+            # Input handoffs do not need an SDL surface. Create settings only
+            # when the user opens the app, avoiding a foreground flash at boot.
+            if not handoff:
+                canvas = Canvas(APP); app.draw(canvas)
             if handoff:
                 worker = subprocess.Popen(['/usr/bin/python3', '-I', '-B', str(SERVICE / 'roles/receiver/native_probe.py')],
                                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 os.set_blocking(worker.stdout.fileno(), False)
                 log = os.open(STATE / ('receiver-output-' + str(os.getpid()) + '.log'), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
-                app.worker = worker; canvas.minimize()
+                app.worker = worker
                 write_status('native-status.json', {'status': 'worker-starting', 'pid': os.getpid(), 'workerPid': worker.pid})
             if not handoff: app.battery.refresh(worker)
             battery_text = None
@@ -505,7 +508,8 @@ def main():
                 for event, params in bus.events():
                     if event == 'relaunch':
                         window_visible = True
-                        canvas.restore()
+                        if canvas is None: canvas = Canvas(APP)
+                        else: canvas.restore()
                         app.battery.refresh(worker)
                         try:
                             consumed = consume_installer(params, app.start_saved, stop=app.stop_runtime)
@@ -518,9 +522,10 @@ def main():
                         window_visible = False
                     elif event == 'close':
                         stop_signal[0] = True
-                current_battery = app.battery.text(app.values['remoteAddress'], app.values['adapterAddress'])
-                if current_battery != battery_text:
-                    battery_text = current_battery; app.draw(canvas)
+                if canvas is not None:
+                    current_battery = app.battery.text(app.values['remoteAddress'], app.values['adapterAddress'])
+                    if current_battery != battery_text:
+                        battery_text = current_battery; app.draw(canvas)
                 programming = (app.reset is not None and app.reset.busy) or app.saving_assignments or app.infrared is not None and app.infrared.busy
                 if stop_signal[0] and not closing and not programming:
                     closing = True
@@ -534,7 +539,7 @@ def main():
                         except (OSError, ValueError, RuntimeError): worker.terminate()
                     else:
                         break
-                    canvas.minimize()
+                    if canvas is not None: canvas.minimize()
                 if worker is not None:
                     for _ in range(8):
                         try: data = os.read(worker.stdout.fileno(), 8192)
@@ -552,6 +557,9 @@ def main():
                         app.message = ('Finishing input cleanup before opening settings.' if app.stop_requested
                                        else 'Remote connection ended. Use the LG remote; Close resumes reception.')
                         app.draw(canvas)
+                if canvas is None:
+                    time.sleep(.02)
+                    continue
                 if app.reset is not None and app.reset.tick(): app.draw(canvas)
                 if app.reset is None and app.pairing is not None and app.pairing.tick(): app.draw(canvas)
                 if app.assignments_tick(): app.draw(canvas)

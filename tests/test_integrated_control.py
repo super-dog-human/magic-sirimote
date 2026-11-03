@@ -241,6 +241,17 @@ class ControlTests(unittest.TestCase):
             self.assertEqual(launcher.launch('B', 'a' * 32), 'rejected')
         invoke.assert_not_called()
 
+    def test_automatic_receiver_launch_requests_background_execution(self):
+        import tv_launch
+        from unittest.mock import Mock
+        invoke = Mock(return_value=Mock(returncode=0, stdout='{"returnValue":true}'))
+        launcher = tv_launch.Launcher('a' * 32, invoke=invoke)
+        with patch.object(tv_launch.bundle, 'active', return_value=True), patch('control_processes.processes', return_value=found()):
+            self.assertEqual(launcher.launch('B', 'a' * 32), 'accepted')
+        payload = json.loads(invoke.call_args.args[0][-1])
+        self.assertIs(payload['launchHidden'], True)
+        self.assertEqual(payload['params'], {})
+
     def test_start_refuses_previous_runtime_before_loading_device_settings(self):
         with patch.object(control, 'processes', return_value=found(legacy=[{'pid': 5}])), patch.object(control, 'load') as load:
             with self.assertRaisesRegex(RuntimeError, 'previous input'):

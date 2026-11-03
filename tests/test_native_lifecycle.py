@@ -3,7 +3,7 @@ import ctypes as C
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src/integrated'), str(ROOT / 'src/native')]
@@ -30,6 +30,59 @@ class NativeLifecycleTests(unittest.TestCase):
         window.bind = lambda lib, name, result, args: lambda handle: calls.append((name, handle))
         window.minimize(); window.restore()
         self.assertEqual(calls, [(name, 123) for name in ('SDL_MinimizeWindow', 'SDL_RestoreWindow', 'SDL_ShowWindow', 'SDL_RaiseWindow')])
+
+    def run_background(self, reopen):
+        import native_manager as manager
+        from contextlib import ExitStack
+        app = MagicMock()
+        app.reset = app.pairing = app.infrared = None
+        app.saving_assignments = app.stop_requested = app.done = False
+        app.values = {'remoteAddress': '', 'adapterAddress': ''}
+        worker = MagicMock()
+        iteration = [0]
+        worker.poll.side_effect = lambda: 0 if iteration[0] >= 3 else None
+        bus = MagicMock()
+        bus.__enter__.return_value = bus
+        def events():
+            iteration[0] += 1
+            if iteration[0] == 2 and reopen: return [('relaunch', {})]
+            return []
+        bus.events.side_effect = events
+        # A finished hidden receiver must exit to allow a fresh input-device jail.
+        # A manually opened settings window instead survives until the user closes it.
+        app.handle.side_effect = lambda *_: setattr(app, 'done', True)
+        canvas = MagicMock()
+        canvas.events.side_effect = lambda: [('close', None)] if iteration[0] >= 3 else []
+        with ExitStack() as stack:
+            for name, value in [('NativeBus', bus), ('RuntimeSetup', app), ('pending_worker', True),
+                                ('Canvas', canvas), ('subprocess.Popen', worker)]:
+                stack.enter_context(patch.object(manager, name, return_value=value) if '.' not in name
+                                    else patch('native_manager.' + name, return_value=value))
+            stack.enter_context(patch.object(manager, 'write_status'))
+            stack.enter_context(patch('native_manager.signal.signal'))
+            stack.enter_context(patch('native_manager.time.sleep'))
+            stack.enter_context(patch('native_manager.os.set_blocking'))
+            stack.enter_context(patch('native_manager.os.open', return_value=123))
+            stack.enter_context(patch('native_manager.os.close'))
+            stack.enter_context(patch('native_manager.os.read', side_effect=BlockingIOError))
+            factory = manager.Canvas
+            manager.main()
+            self.assertEqual(factory.call_count, 1 if reopen else 0)
+        if reopen:
+            self.assertTrue(app.draw.called)
+            self.assertTrue(all(call.args == (canvas,) for call in app.draw.call_args_list))
+            app.battery.refresh.assert_called_once_with(worker)
+        else:
+            app.draw.assert_not_called()
+            app.battery.refresh.assert_not_called()
+            app.battery.text.assert_not_called()
+        worker.terminate.assert_not_called()
+
+    def test_background_receiver_never_creates_settings_window(self):
+        self.run_background(False)
+
+    def test_user_relaunch_opens_settings_during_background_reception(self):
+        self.run_background(True)
 
     def bus(self):
         bus = NativeBus()

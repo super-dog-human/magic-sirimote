@@ -26,11 +26,14 @@ class Launcher:
   if run!=self.run or role not in APPS:raise ValueError('invalid target')
   if role in self.attempted:raise RuntimeError('launch already attempted')
   self.attempted.add(role)
-  if bundle.active():
+  integrated=bundle.active()
+  if integrated:
    from control_processes import processes
    # Do not treat reopening an old window as a fresh input worker launch.
    if processes()['ui']:return 'rejected'
-  args=['/usr/bin/luna-send-pub','-n','1','-f',URI,json.dumps({'id':APPS[role],'params':{}},separators=(',',':'))]
+  payload={'id':APPS[role],'params':{}}
+  if integrated:payload['launchHidden']=True
+  args=['/usr/bin/luna-send-pub','-n','1','-f',URI,json.dumps(payload,separators=(',',':'))]
   try:
    result=self.invoke(args,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=15,check=False)
    if result.returncode!=0 or not result.stdout:return 'unknown'
