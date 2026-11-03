@@ -44,7 +44,7 @@ Testing includes removing and recreating the A1513's pairing. An independently c
 
 The guide uses LG's Developer Mode installation method. Root access is not required. The app relies on Python 3.10+, Node.js, SDL2 and SDL_ttf already present on the tested TV; these TV components are not included in the download. Other TV firmware may lack the components or permissions it needs.
 
-**Do not pair Siri Remote with the Mac as part of this guide.** The Mac installs the app; the TV app pairs directly with Siri Remote. You will enter the TV's network IP address on the Mac, but no Bluetooth addresses need to be entered anywhere.
+**Do not pair Siri Remote with the Mac as part of this guide.** The Mac installs the app; the TV app pairs directly with Siri Remote. You will enter the TV's network IP address on the Mac.
 
 ## What you can do
 
