@@ -25,7 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.42** (integrated preview) |
+| Integrated TV app | Magic Sirimote **0.6.43** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -224,7 +224,7 @@ Enter the passphrase shown on the TV when prompted. If you already have a workin
 From the repository root:
 
 ```sh
-ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.42_arm.ipk
+ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.43_arm.ipk
 ares-launch --device my-tv org.magicsirimote.app
 ```
 

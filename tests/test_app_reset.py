@@ -81,6 +81,26 @@ class RemoteTests(unittest.TestCase):
         self.value=reset.load(self.state);self.events=[]
         self.assertTrue(self.run_reset()['unpaired'])
         self.assertFalse(any(e[0] in ('delete','adapter/unpair') for e in self.events))
+    def test_webos_clears_row_adapter_after_unpair_and_retry_does_not_repeat(self):
+        def call(method,params,timeout):
+            reply=self.call(method,params,timeout)
+            if method=='device/getStatus':
+                reply['adapterAddress']=VALUES['adapterAddress']
+                reply['devices'][0]['adapterAddress']=VALUES['adapterAddress'] if self.paired else ''
+            return reply
+        result=self.run_reset(call=call)
+        self.assertEqual(result['phase'],'clear');self.assertTrue(result['unpaired'])
+        self.value['unpaired']=False;self.events=[]
+        result=self.run_reset(call=call)
+        self.assertTrue(result['unpaired'])
+        self.assertFalse(any(e[0] in ('delete','adapter/unpair') for e in self.events))
+    def test_blank_adapter_not_accepted_for_a_paired_device(self):
+        def call(method,params,timeout):
+            reply=self.call(method,params,timeout)
+            if method=='device/getStatus':reply['devices'][0]['adapterAddress']=''
+            return reply
+        self.assertEqual(self.run_reset(call=call)['phase'],'failed')
+        self.assertFalse(any(e[0]=='adapter/unpair' for e in self.events))
     def test_unpair_ack_is_not_enough(self):
         def call(method,params,timeout):
             if method=='adapter/unpair':return {'returnValue':True}

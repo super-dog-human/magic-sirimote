@@ -68,8 +68,13 @@ def run(state, value, program, call, idle, progress=lambda message: None):
             found = [d for d in rows if str(d.get('address', '')).lower() == remote]
             if len(found) > 1 or found and (type(found[0].get('paired')) is not bool or found[0].get('pairing') is True):
                 raise RuntimeError('Pairing status is ambiguous')
-            if found and found[0].get('adapterAddress', adapter).lower() != adapter:
-                raise RuntimeError('Pairing belongs to a different TV adapter')
+            if found:
+                row_adapter = found[0].get('adapterAddress', adapter)
+                # webOS clears the device row's adapter after successful unpair.
+                # The enclosing reply and current TV adapter are checked above.
+                if not (found[0]['paired'] is False and row_adapter == ''):
+                    if type(row_adapter) is not str or row_adapter.lower() != adapter:
+                        raise RuntimeError('Pairing belongs to a different TV adapter')
             return bool(found and found[0]['paired'])
         if paired():
             request('adapter/unpair', {'address': remote})
