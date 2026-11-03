@@ -16,6 +16,9 @@ CUSTOM = len(CHOICES)
 
 def label(action):
     if action == 'home': return 'Home (legacy TV)'
+    # Saved TV actions still need readable labels after removal from the picker.
+    if action == 'back': return 'Back'
+    if action == 'settings': return 'Settings'
     return next((name for name, value in CHOICES if value == action),
                 'Code ' + action[3:] + ' (IR)' if action.startswith('ir:') else action)
 
