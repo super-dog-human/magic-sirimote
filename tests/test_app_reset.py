@@ -194,6 +194,29 @@ class ScreenTests(unittest.TestCase):
         self.assertIsInstance(self.app.reset,ResetScreen)
         self.assertIsNone(self.app.pairing)
         with self.assertRaises(RuntimeError):self.app.start_saved()
+    def test_finish_uses_real_native_request_route_before_retiring_local_settings(self):
+        from native_bus import NativeBus, APP
+        service=self.state/'service'
+        for rel in ('state/sessions','roles/controller/state','roles/receiver/state'):
+            (service/rel).mkdir(parents=True)
+        settings.save(service/'state',VALUES)
+        reset_state.write(service/'state/device-binding.json',VALUES)
+        self.app.bus=NativeBus()
+        def transport(uri,params,timeout):
+            self.assertEqual(uri,'luna://'+APP+'.service/reset')
+            self.assertTrue((self.state/'settings.json').exists())
+            return reset_state.reset_service(service,params,lambda:None)
+        self.app.bus._request_uri=Mock(side_effect=transport)
+        self.app.choose(9,Mock());screen=self.app.reset;screen.value=reset.create(self.state)
+        screen.value['completed']=['%02X:%02X'%s for s in reset.SLOTS];screen.value['unpaired']=True
+        with patch.object(self.app,'refresh_pairing') as refresh:
+            screen.finish();refresh.assert_called_once()
+        self.app.bus._request_uri.assert_called_once()
+        self.assertFalse((self.state/'settings.json').exists())
+        self.assertFalse((service/'state/settings.json').exists())
+        self.assertFalse((service/'state/device-binding.json').exists())
+        self.assertIsNone(self.app.reset)
+
     def test_finish_requires_service_ack_before_local_clear(self):
         self.app.choose(9,Mock());screen=self.app.reset;screen.value=reset.create(self.state)
         screen.value['completed']=['%02X:%02X'%s for s in reset.SLOTS];screen.value['unpaired']=True
