@@ -18,6 +18,24 @@ function fixture(saved = null) {
 function bind(s) { const prep = s.prepare(); s.bind({token: prep.token, activityId: 17}); }
 const empty = () => ({returnValue: true, processes: {controller: [], receiver: [], ui: [], legacy: []}});
 async function main() {
+  // A persistent Activity completion may reply after the original six-second
+  // cutoff during boot. It must remain pending until the completion deadline.
+  const {activityCall} = require('../src/integrated/startup');
+  const {EventEmitter} = require('events');
+  const pending = new Map(); let timerId = 0;
+  const timers = {setTimeout(fn, ms) { const id = ++timerId; pending.set(id, {fn, ms}); return id; }, clearTimeout(id) { pending.delete(id); }};
+  const reply = new EventEmitter(); let settled = false;
+  const completion = activityCall({call: () => reply}, 'complete', {activityId: 17}, false, timers).then(v => { settled = true; return v; });
+  assert.equal([...pending.values()][0].ms, 30000);
+  for (const timer of [...pending.values()]) if (timer.ms <= 6500) timer.fn();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(settled, false, 'A delayed boot response must not be failed at six seconds');
+  reply.emit('response', {payload: () => JSON.stringify({returnValue: true})});
+  assert.equal((await completion).value.returnValue, true);
+  assert.equal(pending.size, 0);
+  const absent = activityCall({call: () => new EventEmitter()}, 'complete', {activityId: 17}, false, timers);
+  [...pending.values()][0].fn();
+  assert.equal((await absent).value.errorCode, -9003, 'An absent reply must still have a bounded deadline');
   const fs = require('fs'), os = require('os'), path = require('path');
   const {disk} = require('../src/integrated/startup');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sirimote-boot-'));
@@ -77,6 +95,10 @@ async function main() {
   g.fail(); const current = {token: g.state().token, $activity: {activityId: 17}};
   assert.equal((await t.tick(message, current)).returnValue, false);
   assert.equal(g.state().phase, 'attention');
+  assert.equal(t.summary().lastFailure.stage, 'complete');
+  assert.equal(t.summary().lastFailure.errorCode, null);
+  assert.equal(t.summary().lastFailure.epochMs, 100000);
+  assert.equal(JSON.stringify(t.summary()).includes(g.state().token), false);
   assert.equal(t.prepare().status, 'repair-required');
   const n = g.calls.length; await t.tick(message, current); assert.equal(g.calls.length, n, 'Never repeat uncertain completion');
   const repairFixture = fixture(), repaired = repairFixture.instance(); bind(repaired);

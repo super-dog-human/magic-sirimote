@@ -38,16 +38,19 @@ function disk(directory) {
 }
 function activityCall(handle, method, params, subscribe = false, timers = globalThis) {
   return new Promise(resolve => {
-    let request, ended = false;
-    const timer = timers.setTimeout(() => finish({returnValue: false, errorCode: -9003}), 6000);
+    let request, ended = false, receivedAfterMs = null;
+    const began = Date.now();
+    const timer = timers.setTimeout(() => finish({returnValue: false, errorCode: -9003}), method === 'complete' ? 30000 : 6000);
     function finish(value) {
       if (ended) return; ended = true; timers.clearTimeout(timer);
-      resolve({value, request});
+      resolve({value, request, receivedAfterMs, elapsedMs: Date.now() - began});
     }
     try {
       request = (subscribe ? handle.subscribe : handle.call).call(handle,
         'luna://com.webos.service.activitymanager/' + method, JSON.stringify(params));
-      request.addListener('response', message => setImmediate(() => {
+      request.addListener('response', message => {
+        receivedAfterMs = Date.now() - began;
+        setImmediate(() => {
         if (ended) return;
         try {
           const raw = message.payload(); if (typeof raw !== 'string' || Buffer.byteLength(raw) > 8192) throw Error();
@@ -56,7 +59,8 @@ function activityCall(handle, method, params, subscribe = false, timers = global
           if (subscribe && value.returnValue && value.adopted !== true) return;
           finish(value);
         } catch (_) { finish({returnValue: false, errorCode: -9002}); }
-      }));
+        });
+      });
     } catch (_) { finish({returnValue: false, errorCode: -9001}); }
   });
 }
@@ -65,7 +69,7 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
   const load = () => store.read();
   function summary() {
     const s = load();
-    return {enabled: !!(s && s.enabled), registered: !!(s && s.phase === 'ready'), phase: s ? s.phase : 'not-registered', lastOutcome: s ? s.lastOutcome || null : null};
+    return {enabled: !!(s && s.enabled), registered: !!(s && s.phase === 'ready'), phase: s ? s.phase : 'not-registered', lastOutcome: s ? s.lastOutcome || null : null, lastFailure: s ? s.lastFailure || null : null, lastTick: s ? s.lastTick || null : null};
   }
   function prepare() {
     let s = load();
@@ -122,22 +126,31 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     // A genuine callback can finish binding a create whose acknowledgement was lost.
     s.activityId = params.$activity.activityId;
     const next = token(); s.phase = 'completing'; s.nextToken = next; store.write(s);
-    let lease, failedStage = 'adopt', errorCode = null;
+    let lease, failedStage = 'adopt', errorCode = null, lastCall;
+    const startedAt = now();
     try {
       const adopted = await activity('adopt', {activityId: s.activityId, subscribe: true, wait: false}, true);
-      lease = adopted.request;
+      lease = adopted.request; lastCall = adopted;
       errorCode = adopted.value && adopted.value.errorCode;
       if (!adopted.value || adopted.value.returnValue !== true || adopted.value.adopted !== true) throw Error('Adoption unconfirmed');
       failedStage = 'complete'; errorCode = null;
       const schedule = {start: new Date(now() + 60000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, 'Z')};
       const complete = await activity('complete', {activityId: s.activityId, restart: true, schedule,
         callback: {method: 'luna://' + APP + '.service/startupTick', params: {token: next}}});
+      lastCall = complete;
       errorCode = complete.value && complete.value.errorCode;
       if (!complete.value || complete.value.returnValue !== true) throw Error('Completion unconfirmed');
-      s.token = next; delete s.nextToken; s.phase = 'ready'; store.write(s);
+      s.token = next; delete s.nextToken; s.phase = 'ready';
+      s.lastTick = {epochMs: now(), elapsedMs: now() - startedAt,
+        receivedAfterMs: Number.isFinite(lastCall.receivedAfterMs) ? lastCall.receivedAfterMs : null};
+      store.write(s);
       return {returnValue: true, status: 'scheduled'};
     } catch (_) {
-      s.phase = 'attention'; store.write(s);
+      s.phase = 'attention';
+      s.lastFailure = {stage: failedStage, errorCode: Number.isSafeInteger(errorCode) ? errorCode : null,
+        receivedAfterMs: lastCall && Number.isFinite(lastCall.receivedAfterMs) ? lastCall.receivedAfterMs : null,
+        epochMs: now(), elapsedMs: now() - startedAt, uptimeSeconds: Math.floor(process.uptime())};
+      store.write(s);
       return {returnValue: false, status: 'registration-needs-attention-' + failedStage,
         errorText: failedStage + ' unconfirmed (' + (Number.isSafeInteger(errorCode) ? errorCode : 'no reply') + ')'};
     } finally { if (lease) { try { lease.cancel(); } catch (_) {} } }

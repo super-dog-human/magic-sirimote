@@ -141,7 +141,7 @@ ares-device --system-info --device my-tv
 
 ### 5. Download and install Magic Sirimote
 
-An **IPK** is the app's installation file. The current package is **0.6.50**.
+An **IPK** is the app's installation file. The current package is **0.6.52**.
 
 The following commands create a folder under Downloads and download the package and its checksum. Copy each command into Terminal and wait for it to finish before continuing:
 
@@ -151,8 +151,8 @@ cd "$HOME/Downloads/magic-sirimote"
 ```
 
 ```sh
-curl --fail --location --output org.magicsirimote.app_0.6.50_arm.ipk \
-  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/integrated-preview/org.magicsirimote.app_0.6.50_arm.ipk
+curl --fail --location --output org.magicsirimote.app_0.6.52_arm.ipk \
+  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/integrated-preview/org.magicsirimote.app_0.6.52_arm.ipk
 ```
 
 ```sh
@@ -166,12 +166,12 @@ Check the download:
 shasum -a 256 -c SHA256SUMS
 ```
 
-The result should end with `org.magicsirimote.app_0.6.50_arm.ipk: OK`. If it does not, download both files again before installing.
+The result should end with `org.magicsirimote.app_0.6.52_arm.ipk: OK`. If it does not, download both files again before installing.
 
 Keep the TV on, then install and open the app:
 
 ```sh
-ares-install --device my-tv org.magicsirimote.app_0.6.50_arm.ipk
+ares-install --device my-tv org.magicsirimote.app_0.6.52_arm.ipk
 ```
 
 ```sh
