@@ -15,6 +15,8 @@ BACK = (27, 461, 1073742094)
 
 
 class Setup:
+    save_label = 'Save'
+
     def __init__(self, state):
         self.state = state
         self.values = {**dict.fromkeys(settings.FIELDS, ''), 'gyroEnabled': True, 'gyroSensitivity': 3}
@@ -196,7 +198,7 @@ class Setup:
             canvas.text('Reset cursor orientation', 842, 337, 23, ink, max_width=358)
             if not disabled: self.boxes.append((8, box))
             for index, title, box in ((6, 'Button Assignments', (64, 418, 1152, 61)),
-                                      (5, 'Save', (454, 500, 372, 61)),
+                                      (5, self.save_label, (454, 500, 372, 61)),
                                       (7, 'Close', (844, 500, 372, 61))):
                 canvas.rectangle(box, fill(self.focus == index))
                 canvas.text(title, box[0] + 25, box[1] + 17, 25, ink, max_width=322)
@@ -204,7 +206,7 @@ class Setup:
             if self.message:
                 canvas.text(self.message, 66, 590, 22, max_width=1148)
             if self.button_drafts and not disabled:
-                canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose Save to apply.', 66, 628, 21, (114, 191, 227))
+                canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose ' + self.save_label + ' to apply.', 66, 628, 21, (114, 191, 227))
             self.draw_footer(canvas)
         canvas.present()
 

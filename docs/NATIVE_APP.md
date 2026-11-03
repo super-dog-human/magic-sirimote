@@ -24,7 +24,7 @@ and verified before starting the integrated runtime.
 
 Remote reception is automatic once the paired remote's verified device settings
 are saved. Opening the app displays settings without stopping reception. The
-main screen places **Button Assignments** above **Save** and **Close**, with Save to the left of Close. There is no Start/Stop or device-access test button.
+main screen places **Button Assignments** above **Save and restart** and **Close**, with Save and restart to the left of Close. There is no Start/Stop or device-access test button.
 
 **Button Assignments** shows six rows: **Menu**, **TV / Control Center**,
 **Siri**, **Play/Pause**, **Volume Up**, and **Volume Down**, using
@@ -36,15 +36,14 @@ Surface clicking and swipes are separate from this editor.
 
 Changes stay pending in the current app session. **Back** on either remote
 returns from a button settings page to the first screen and keeps those edits.
-There is no per-cell Save button. On the first screen, choose **Save**,
-then confirm **Save and restart**. The confirmation explains that reception will
-pause and the app window will close while the input process restarts. Cancel
-leaves the edits pending and does not stop input or write to the remote.
-After confirmation, controls are dimmed and disabled until restart. If saving
-fails, the controls become available again and the error stays visible.
+There is no per-cell Save button. On the first screen, choose **Save and restart**.
+Saving begins immediately, without a confirmation dialog. Controls are dimmed
+and disabled while reception pauses and the input process restarts. The app
+window closes during restart. If saving fails, the controls become available
+again and the error stays visible.
 Closing with unsaved edits asks whether to discard them.
 
-After confirmation, the app waits for input cleanup, saves the verified device
+After you choose Save and restart, the app waits for input cleanup, saves the verified device
 settings, and sends all concrete displayed assignments sequentially. Each local mapping is
 saved only after acknowledged IR delivery and a saved operation receipt. An uncertain
 or failed write stops the batch: completed changes remain saved, remaining
@@ -115,7 +114,7 @@ not an absolute screen calibration and cannot remove every sensor limitation.
 
 Save sends every concrete displayed button assignment, not just edited cells.
 Unknown IR slots remain unchanged and are not counted. Home is offered only as
-**Home (IR)**. Stored legacy TV Home choices migrate when Save is confirmed.
+**Home (IR)**. Stored legacy TV Home choices migrate when Save and restart is chosen.
 The confirmation displays the assignment count before reception is paused.
 
 Cold-boot readiness includes webOS service startup, Bluetooth and native input

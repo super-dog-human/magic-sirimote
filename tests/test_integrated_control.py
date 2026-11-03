@@ -37,7 +37,7 @@ class ControlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'; app = RuntimeSetup(Path(d), bus); app.values.update(values)
             bus.request.return_value = {'returnValue': True, 'status': 'stop-requested'}
-            app.choose(5, Mock()); app.confirm_restart()
+            app.choose(5, Mock())
             self.assertEqual(bus.request.call_args.args[0], 'drain')
             bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found(controller=[{'pid': 1}])}
             with patch.object(app, 'start_assignment_batch') as apply, patch.object(app, 'persist_device'):
@@ -59,7 +59,7 @@ class ControlTests(unittest.TestCase):
                 apply.assert_not_called()
             self.assertIn('not confirmed', app.message)
 
-    def test_button_drafts_wait_for_global_confirmation_and_clean_stop(self):
+    def test_button_drafts_wait_for_global_save_and_clean_stop(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:
             bus=Mock();bus.tv_address.return_value='aa:bb:cc:dd:ee:20';bus.remote_name.return_value='Remote'
@@ -68,10 +68,11 @@ class ControlTests(unittest.TestCase):
             execute(d,'assign',32,2,'none')
             app=RuntimeSetup(Path(d),bus);app.values['remoteAddress']='aa:bb:cc:dd:ee:10';canvas=Mock()
             app.choose(6,canvas);app.infrared.choose(0);app.infrared.choose(0)
-            app.handle(('key',461),canvas);app.choose(5,canvas)
+            app.handle(('key',461),canvas)
             bus.request.assert_not_called();self.assertEqual(app.button_drafts,{'20:00':'none'})
-            app.handle(('key',461),canvas);bus.request.assert_not_called()
-            app.choose(5,canvas);app.confirm_restart()
+            app.choose(5,canvas)
+            self.assertIsNone(app.confirm_action)
+            self.assertTrue(app.controls_disabled)
             self.assertEqual(bus.request.call_args.args[0],'drain')
             with patch.object(app,'start_assignment_batch') as submit, patch.object(app,'persist_device') as persist:
                 app.settings_tick(canvas);submit.assert_not_called();persist.assert_not_called()

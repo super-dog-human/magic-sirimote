@@ -27,7 +27,7 @@ class SettingsRenderTests(unittest.TestCase):
                 app.battery.text = Mock(return_value=level)
                 before = len(canvas.frames); app.draw(canvas)
                 self.assertEqual(len(canvas.frames) - before, 1)
-                for title in ('Magic Sirimote', 'Save', 'Button Assignments', level):
+                for title in ('Magic Sirimote', 'Save and restart', 'Button Assignments', level):
                     self.assertIn(title, canvas.frames[-1])
                 self.assertFalse(any('automatically' in text for text in canvas.frames[-1]))
                 self.assertNotIn('', canvas.frames[-1])  # Native SDL rejects zero-width text.

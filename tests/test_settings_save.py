@@ -42,7 +42,7 @@ class SaveTests(unittest.TestCase):
 
     def test_save_disables_and_draws_before_waiting_for_tv(self):
         with tempfile.TemporaryDirectory() as d:
-            app=RuntimeSetup(Path(d),Mock());canvas=Mock();app.confirm_action='save'
+            app=RuntimeSetup(Path(d),Mock());canvas=Mock()
             def detect(values):
                 self.assertTrue(app.controls_disabled)
                 canvas.present.assert_called_once()
@@ -54,14 +54,14 @@ class SaveTests(unittest.TestCase):
                 self.assertIsNone(app.confirm_action);self.assertIsNone(app.infrared)
                 return values
             with patch.object(app,'detect_tv',side_effect=detect), patch.object(app,'prepare_settings'):
-                app.confirm_restart(canvas)
+                app.choose(5,canvas)
             self.assertTrue(app.controls_disabled)
 
     def test_failed_save_reenables_controls_and_preserves_error(self):
         with tempfile.TemporaryDirectory() as d:
-            app=RuntimeSetup(Path(d),Mock());app.confirm_action='save'
+            app=RuntimeSetup(Path(d),Mock())
             with patch.object(app,'detect_tv',side_effect=RuntimeError('TV unavailable')):
-                app.confirm_restart(Mock())
+                app.choose(5,Mock())
             self.assertFalse(app.controls_disabled)
             self.assertEqual(app.message,'TV unavailable')
             app.choose(6,Mock());self.assertIsNotNone(app.infrared)
@@ -89,11 +89,10 @@ class SaveTests(unittest.TestCase):
                 app.assignments_tick();activate.assert_called_once()
             self.assertFalse(app.button_drafts);app.program_ir.assert_called_once()
 
-    def test_save_cancel_and_discard_have_no_device_side_effect(self):
+    def test_discard_cancel_and_confirm_have_no_device_side_effect(self):
         with tempfile.TemporaryDirectory() as d:
             bus=Mock();app=RuntimeSetup(Path(d),bus);canvas=Mock()
             app.button_drafts={'20:00':'none'}
-            app.choose(5,canvas);app.handle(('key',461),canvas)
             self.assertEqual(app.button_drafts,{'20:00':'none'})
             app.choose(7,canvas);self.assertEqual(app.confirm_action,'discard')
             app.handle(('key',461),canvas);self.assertFalse(app.done)
