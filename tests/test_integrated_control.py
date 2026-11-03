@@ -135,7 +135,7 @@ class ControlTests(unittest.TestCase):
     def test_archive_before_input_requires_empty_journal_and_no_receiver(self):
         import orphan_reconcile as recovery
         from unittest.mock import Mock
-        for mode in ('empty', 'written', 'receiver'):
+        for mode in ('empty', 'absent', 'history', 'written', 'receiver', 'metadata', 'active', 'recovery'):
             with tempfile.TemporaryDirectory() as d:
                 cpath=Path(d)/'controller';bpath=Path(d)/'receiver';cpath.mkdir();bpath.mkdir()
                 run='b'*32;owner=os.getuid();group=os.getgid()
@@ -146,13 +146,20 @@ class ControlTests(unittest.TestCase):
                 write(bpath/'request.json',{'schema':1,'appId':'org.magicsirimote.app','run':run,'expiresEpochMs':1},0o660)
                 write(bpath/'controller-start.json',{'schema':1,'appId':'org.magicsirimote.app','run':run,'process':{'pid':123,'startTicks':456,'status':{'Uid':' '.join([str(owner)]*4)}}},0o660)
                 journal=cpath/('input-'+run+'.jsonl');journal.write_text('input-intent' if mode=='written' else '');journal.chmod(0o640)
+                if mode in ('absent', 'history'):journal.unlink()
+                if mode=='history':
+                    (bpath/('receiver-result-'+'a'*32+'.json')).write_text('{}')
+                    (bpath/('borrowed-recovered-'+'a'*32)).mkdir()
                 if mode=='receiver':(bpath/('receiver-start-'+run+'.json')).write_text('{}')
+                if mode=='metadata':(cpath/('input-'+run+'.json')).write_text('{}')
+                if mode=='active':(bpath/'borrowed-active').mkdir()
+                if mode=='recovery':(bpath/'recovery-request.json').write_text('{}')
                 c=os.open(cpath,os.O_RDONLY);b=os.open(bpath,os.O_RDONLY)
                 lease=Mock();lease.dirfd=c;lease.held.return_value=True
                 try:
                     with patch.object(recovery.bundle,'active',return_value=True), patch.object(recovery,'_ended',return_value=True), patch.object(recovery.att,'candidate_pids',return_value=[]), patch.object(recovery.package,'package_matches',return_value=True):
                         result=recovery.archive_before_input(c=c,b=b,intent=intent,intent_stat=(cpath/'receiver-launch-intent.json').stat(),controller_app='controller',receiver_app='receiver',receiver_package='package',pin={},lease=lease,owner=owner,group=group)
-                    if mode=='empty':
+                    if mode in ('empty', 'absent', 'history'):
                         self.assertEqual(result['priorOutcome'],'input-never-started')
                         self.assertTrue((bpath/('request-before-input-'+run+'.json')).is_file())
                         self.assertFalse((cpath/'receiver-launch-intent.json').exists())

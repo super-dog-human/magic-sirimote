@@ -43,9 +43,10 @@ def _ended(process,app,proc='/proc',ignore_current=False):
  except FileNotFoundError:return True
 
 def archive_before_input(*,c,b,intent,intent_stat,controller_app,receiver_app,receiver_package,pin,lease,owner,group):
- """Archive a constructor failure before the durable input-start intent.
+ """Archive a lookup or constructor failure before input could start.
 
- An empty journal plus absent handoff metadata proves begin() was not reached.
+ An absent or empty journal plus absent handoff metadata proves begin()
+ was not reached. Completed records from older runs remain archived.
  The original controller and every receiver must have ended, and the caller
  holds the supervisor lease. Preserve every record; never invent sensor stop.
  """
@@ -53,13 +54,20 @@ def archive_before_input(*,c,b,intent,intent_stat,controller_app,receiver_app,re
  if not re.fullmatch('[a-f0-9]{32}',run):raise RuntimeError('invalid prior run')
  journal='input-'+run+'.jsonl'
  forbidden={'borrowed-active','recovery-request.json','recovery-controller-start.json'}
+ current_names={'receiver-'+kind+'-'+run+'.json' for kind in ('start','result','ready','progress')}
+ current_names.update('receiver-recovery-'+kind+'-'+run+'.json' for kind in ('start','result'))
+ current_names.update(('borrowed-complete-'+run,'borrowed-recovered-'+run))
  def absent():
-  return (not any(n in forbidden or n.startswith(('receiver-start-','receiver-result-','receiver-ready-','receiver-progress-','receiver-recovery-','borrowed-','recovery-')) for n in os.listdir(b))
+  return (not any(n in forbidden or n in current_names or n.startswith('recovery-'+run+'-') for n in os.listdir(b))
    and 'input-'+run+'.json' not in os.listdir(c))
  if not absent():return None
  try:j=os.stat(journal,dir_fd=c,follow_symlinks=False)
- except FileNotFoundError:return None
- if not stat.S_ISREG(j.st_mode) or j.st_nlink!=1 or (j.st_uid,j.st_gid,j.st_size,stat.S_IMODE(j.st_mode))!=(owner,group,0,0o640):return None
+ except FileNotFoundError:j=None  # Lookup failed before PrelaunchOwner constructed the journal.
+ if j is not None and (not stat.S_ISREG(j.st_mode) or j.st_nlink!=1 or (j.st_uid,j.st_gid,j.st_size,stat.S_IMODE(j.st_mode))!=(owner,group,0,0o640)):return None
+ def journal_unchanged():
+  try:now=os.stat(journal,dir_fd=c,follow_symlinks=False)
+  except FileNotFoundError:return j is None
+  return j is not None and _identity(now)==_identity(j)
  rows=[];values={}
  for name in ('request.json','controller-start.json'):
   dest=name[:-5]+'-before-input-'+run+'.json'
@@ -74,7 +82,7 @@ def archive_before_input(*,c,b,intent,intent_stat,controller_app,receiver_app,re
   return (lease.held() is True and (os.fstat(lease.dirfd).st_dev,os.fstat(lease.dirfd).st_ino)==(os.fstat(c).st_dev,os.fstat(c).st_ino)
    and absent() and _ended(process,controller_app,ignore_current=True) and att.candidate_pids(receiver_app)==[]
    and package.package_matches(receiver_app,receiver_package,pin) is True
-   and _identity(os.stat(journal,dir_fd=c,follow_symlinks=False))==_identity(j)
+   and journal_unchanged()
    and _identity(os.stat('receiver-launch-intent.json',dir_fd=c,follow_symlinks=False))==_identity(intent_stat))
  if not proof():raise RuntimeError('unstarted proof unavailable')
  dest='receiver-launch-before-input-'+run+'.json'

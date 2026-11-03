@@ -2,7 +2,7 @@
 
 ## Integrated runtime build
 
-[Download Magic Sirimote 0.6.47](../releases/integrated-preview/org.magicsirimote.app_0.6.47_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
+[Download Magic Sirimote 0.6.48](../releases/integrated-preview/org.magicsirimote.app_0.6.48_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 
 One IPK contains the native settings window, input receiver, connection controller and startup service. No computer stays in the input path after installation. The app uses the TV's existing Python 3.10+, SDL2 and SDL_ttf libraries and a TV-provided font; these dependencies are not bundled. The tested configuration is the A1513 Siri Remote and LG G3 listed in the [README](../README.md#1-tested-configuration). Other models and factory-fresh installations remain unverified.
 
@@ -21,7 +21,7 @@ One IPK contains the native settings window, input receiver, connection controll
 5. From this repository, install and open the integrated package:
 
    ```sh
-   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.47_arm.ipk
+   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.48_arm.ipk
    ares-launch --device my-tv org.magicsirimote.app
    ```
 

@@ -66,4 +66,19 @@ class VisibleWindowTests(unittest.TestCase):
             self.assertIn('Remote connection ended',app.message)
             worker.terminate.assert_not_called()
 
+    def test_background_window_exits_after_receiver_failure(self):
+        with tempfile.TemporaryDirectory() as d:
+            bus=Mock();bus.request.return_value={'returnValue':True}
+            bus.events.side_effect=[[('relaunch',{})],[('pause',{})]]
+            canvas=Mock();canvas.events.return_value=[]
+            worker=Mock();worker.pid=123;worker.poll.side_effect=[None,1]
+            app=manager.RuntimeSetup(Path(d),bus);app.battery.refresh=Mock()
+            with patch.object(manager,'STATE',Path(d)),patch.object(manager,'NativeBus') as context,patch.object(manager,'RuntimeSetup',return_value=app),patch.object(manager,'pending_worker',return_value=True),patch.object(manager,'Canvas',return_value=canvas),patch.object(manager.subprocess,'Popen',return_value=worker),patch.object(manager.os,'set_blocking'),patch.object(manager.os,'read',return_value=b''),patch.object(manager.signal,'signal'),patch.object(manager.time,'sleep'),patch.object(app,'refresh_pairing'):
+                context.return_value.__enter__.return_value=bus
+                manager.main()
+            self.assertEqual(bus.events.call_count,2)
+            self.assertFalse(app.resume_after_settings)
+            worker.terminate.assert_not_called()
+            canvas.close.assert_called_once()
+
 if __name__=='__main__':unittest.main()

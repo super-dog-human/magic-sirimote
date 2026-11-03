@@ -512,6 +512,10 @@ def main():
                             if not consumed: app.refresh_pairing()
                         except (OSError, ValueError, RuntimeError) as error: app.message = str(error)[:160]
                         app.draw(canvas)
+                    elif event == 'pause':
+                        # Home or another app hides this window. A later receiver
+                        # failure must release its jail so recovery can replace it.
+                        window_visible = False
                     elif event == 'close':
                         stop_signal[0] = True
                 current_battery = app.battery.text(app.values['remoteAddress'], app.values['adapterAddress'])
