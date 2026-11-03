@@ -40,21 +40,18 @@ class TVAssignmentsTest(unittest.TestCase):
             self.assertTrue(file.is_symlink())
             self.assertEqual(target.read_text(), 'unchanged')
 
-    def test_screen_choice_removes_competing_ir_only_after_confirmation(self):
+    def test_screen_choice_is_staged_before_explicit_assignment(self):
         calls=[]
         with tempfile.TemporaryDirectory() as folder:
             def program(*args):
                 calls.append(args)
                 return {'status':'submitted','clientReleased':True,'receiptSaved':True}
-            app=InfraredScreen(Path(folder),submit=lambda *a:tv.assign(*a,program=program))
-            app.choose(4);app.choose(5)  # Mic / press -> screen off / restore.
-            self.assertEqual(calls,[]);app.choose(0);self.assertEqual(calls,[])
-            app.choose(4);app.choose(5);app.choose(1)
-            result=app.results.get(timeout=2);app.results.put(result);app.tick()
+            app=InfraredScreen(Path(folder));app.choose(4);app.choose(5)
+            self.assertEqual(calls,[]);self.assertEqual(app.drafts,{'10:00':'screen-toggle'})
+            self.assertFalse((Path(folder)/tv.FILE).exists())
+            self.assertEqual(tv.assign(Path(folder),'assign',16,0,app.drafts['10:00'],program=program)['status'],'saved')
             self.assertEqual(calls,[(Path(folder),'delete',16,0,'')])
             self.assertEqual(tv.load(folder)['bindings'],{'10:00':'screen-toggle'})
-            self.assertEqual(tv.load(folder)['schema'],2)
-
 
     def test_invalid_selector_fails_before_storage(self):
         for button, delay in ((64, 0), (16, 1), (True, 0), (16, False)):

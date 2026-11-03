@@ -22,10 +22,11 @@ class Setup:
         self.editing = None
         self.key_focus = 0
         self.keys = []
-        self.message = 'Use the original LG remote to enter your device identities.'
+        self.message = 'Enter the paired Siri Remote Bluetooth address. Other identities are detected.'
         self.done = False
         self.boxes = []
         self.infrared = None
+        self.button_drafts = {}
         try:
             self.values.update({key: value for key, value in settings.load(state).items() if key in (*settings.FIELDS, 'gyroEnabled')})
             self.message = 'Saved identities loaded. This preview does not start remote control.'
@@ -39,7 +40,12 @@ class Setup:
         saved = values.get('adapterAddress')
         if saved and (type(saved) is not str or saved.strip().lower() != adapter):
             raise ValueError('The saved TV identity does not match this TV. Settings were not changed.')
-        return settings.validate({**values, 'adapterAddress': adapter})
+        remote = values.get('remoteAddress', '')
+        if type(remote) is not str:
+            raise ValueError('Enter the remote Bluetooth address first.')
+        remote = remote.strip().lower()
+        name = settings.read_remote_name(remote, adapter)
+        return settings.validate({**values, 'remoteAddress': remote, 'adapterAddress': adapter, 'remoteName': name})
 
     def choose(self, index, canvas):
         if self.editing is not None:
@@ -57,28 +63,23 @@ class Setup:
             elif len(self.values[field]) < settings.LIMITS[self.editing]:
                 self.values[field] += key
             return
-        if index in (0, 1):
+        if index == 0:
             self.editing = index
             alphabet = '0123456789abcdef:' if index != 1 else 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'
             self.keys = list(alphabet) + (['Case'] if index == 1 else []) + ['Delete', 'Clear', 'Done']
             self.key_focus = 0
             canvas.start_text()
-        elif index == 2:
-            return  # TV adapter identity is detected, never edited.
+        elif index in (1, 2):
+            return  # Device identifiers are detected, never edited.
         elif index == 3:
             self.values['gyroEnabled'] = not self.values['gyroEnabled']
             self.message = 'Gyro preference changed. Choose Save settings; runtime integration is pending.'
         elif index == 4:
-            from device_check import inspect
-            try:
-                result = inspect()
-                self.message = ('Native input access is available. Pairing and runtime still need verification.'
-                                if result['compatibleInputAccess'] else 'Required native input access is unavailable on this TV.')
-                # Only process/device capability flags; no identities or input reports.
-                (self.state / 'capabilities.json').write_text(json.dumps(result) + '\n')
-            except (OSError, ValueError):
-                self.message = 'The compatibility check could not finish.'
+            return
         elif index == 5:
+            if self.button_drafts:
+                self.message = 'Use the integrated app to save button assignments.'
+                return
             try:
                 values = self.detect_tv({'schema': 1, **self.values})
                 settings.save(self.state, values)
@@ -88,7 +89,7 @@ class Setup:
                 self.message = str(error) if isinstance(error, (ValueError, RuntimeError)) else 'Could not save settings.'
         elif index == 6:
             from ir_screen import InfraredScreen
-            self.infrared = InfraredScreen(self.state)
+            self.infrared = InfraredScreen(self.state, drafts=self.button_drafts)
         else:
             self.done = True
 
@@ -166,23 +167,25 @@ class Setup:
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
                 canvas.text(self.values[field] or 'Select to enter', 82, y + 44, 25, max_width=1110)
                 self.boxes.append((index, box))
-            box = (64, 335, 1152, 54)
+            box = (64, 244, 1152, 54)
             canvas.rectangle(box, (30, 113, 156) if self.focus == 3 else (36, 48, 65))
-            canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 349, 25)
+            canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 258, 25)
             self.boxes.append((3, box))
-            for index, title in enumerate(('Check this TV', 'Save settings', 'Buttons', 'Close'), 4):
-                box = (64 + (index - 4) * 292, 421, 274, 61)
+            for column, (index, title) in enumerate(((6, 'Button Assignments'), (5, 'Save'), (7, 'Close'))):
+                box = (64 + column * 390, 330, 372, 61)
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
-                canvas.text(title, box[0] + 25, box[1] + 17, 25)
+                canvas.text(title, box[0] + 25, box[1] + 17, 25, max_width=322)
                 self.boxes.append((index, box))
-            canvas.text(self.message, 66, 516, 22, max_width=1148)
+            canvas.text(self.message, 66, 425, 22, max_width=1148)
+            if self.button_drafts:
+                canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose Save to apply.', 66, 476, 23, (114, 191, 227))
             self.draw_footer(canvas)
         canvas.present()
 
     def draw_footer(self, canvas):
         # Compose the entire frame before presenting it. SDL does not promise
         # that any backbuffer content survives a presentation.
-        canvas.text('IR programs the remote. TV assignments are saved only; input startup is separate.', 66, 630, 21, (155, 170, 190))
+        canvas.text('Use the integrated app to save button assignments; input startup is separate.', 66, 630, 21, (155, 170, 190))
         canvas.text('Developer Mode expiry is managed separately using your usual tools.', 66, 663, 20, (155, 170, 190))
 
 

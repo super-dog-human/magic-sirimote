@@ -14,17 +14,15 @@ from native_bus import NativeBus
 from test_settings_render import DiscardingCanvas
 
 class AssignmentMatrixTests(unittest.TestCase):
-    def test_all_twelve_cells_map_to_exact_button_and_press_without_touching_surface(self):
+    def test_all_twelve_cells_stage_exact_button_and_press_without_writing(self):
         with tempfile.TemporaryDirectory() as d:
+            drafts={}
             for row,mask in enumerate((32,1,16,8,2,4)):
                 for column,delay in enumerate((0,2)):
-                    calls=[]
-                    def submit(*args):calls.append(args);return {'status':'saved'}
-                    app=InfraredScreen(Path(d),submit=submit);app.choose(row*2+column)
-                    app.choose(0);self.assertEqual(calls,[]);app.choose(1)
-                    result=app.results.get(timeout=2)
-                    self.assertEqual(calls,[(Path(d),'assign',mask,delay,'none')])
-                    self.assertEqual(result['status'],'saved')
+                    app=InfraredScreen(Path(d),drafts=drafts);app.choose(row*2+column);app.choose(0)
+                    self.assertEqual(drafts[table.slot(mask,delay)],'none')
+            self.assertEqual(len(drafts),12)
+            self.assertEqual(list(Path(d).iterdir()),[])
 
     def test_none_deletes_ir_and_disables_tv_but_retains_other_slots(self):
         with tempfile.TemporaryDirectory() as d:
@@ -99,12 +97,12 @@ class AssignmentMatrixTests(unittest.TestCase):
             self.assertNotIn('TV Bluetooth address',canvas.frames[-1]);self.assertNotIn(2,[n for n,_ in app.boxes])
             app.choose(2,canvas);self.assertIsNone(app.editing)
             app.values.update(remoteAddress='aa:bb:cc:dd:ee:10',remoteName='Remote')
-            bus.tv_address.return_value='aa:bb:cc:dd:ee:20'
+            bus.tv_address.return_value='aa:bb:cc:dd:ee:20';bus.remote_name.return_value='Remote'
             values=app.detect_tv({'schema':1,**app.values})
             self.assertEqual(values['adapterAddress'],'aa:bb:cc:dd:ee:20')
-            app.values['adapterAddress']='aa:bb:cc:dd:ee:22';app.choose(5,Mock())
+            app.values['adapterAddress']='aa:bb:cc:dd:ee:22';app.choose(5,Mock());app.confirm_restart()
             bus.request.assert_not_called();self.assertIn('does not match',app.message)
-            bus.tv_address.side_effect=RuntimeError('adapter unavailable');app.choose(5,Mock())
+            bus.tv_address.side_effect=RuntimeError('adapter unavailable');app.choose(5,Mock());app.confirm_restart()
             bus.request.assert_not_called()
 
     def test_adapter_query_accepts_one_valid_adapter_and_rejects_ambiguity(self):

@@ -25,7 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.17** (integrated preview) |
+| Integrated TV app | Magic Sirimote **0.6.20** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -201,7 +201,7 @@ Links credit research and tooling; they do not imply endorsement or identical co
 
 ## 4. Setup guide
 
-The [integrated native app](docs/NATIVE_APP.md) combines settings, input reception and automatic startup in one IPK. Its **Buttons** screen shows six rows with separate **Press** and **Hold** actions, including **Do nothing** and custom LG infrared codes. The TV detects its own Bluetooth address; there is no field to enter it. The app requires an already paired remote and verified setup; the legacy source-build procedure below still uses explicit device identities. The assignment editor has offline coverage; each IR change must still be tested with the physical remote.
+The [integrated native app](docs/NATIVE_APP.md) combines settings, input reception and automatic startup in one IPK. Its **Button Assignments** screen shows six rows with separate **Press** and **Hold** actions, including **Do nothing** and custom LG infrared codes. Changes are saved together with **Save** on the first screen, after a restart confirmation. The TV detects its own Bluetooth address and the paired remote identifier internally; only the remote address is entered manually. The app requires an already paired remote and verified setup; the legacy source-build procedure below still uses explicit device identities. The assignment editor has offline coverage; each IR change must still be tested with the physical remote.
 
 The steps below describe the intended setup sequence. **They are not yet a complete executable installation guide.** “Missing tool” means the reader would currently have to write or adapt code; it does not mean running the next command will fill in the gap.
 
@@ -444,7 +444,7 @@ python3 src/ir_packets.py
 
 Confirm IR independently with the TV input program cleanly stopped: point the remote at the TV, press Volume + once and Volume − once, and check that the volume rises and returns. Test power separately. Do not infer IR success from a Bluetooth-delivered key.
 
-Running the encoder above only prints bytes; **it does not save these settings to your remote**. The native screen sends only after explicit Set/Delete confirmation. There is no verified full-table readback: deleting an entry does not restore an overwritten value, and a sent request must be tested physically. After IR checks, the stop/resume procedure from Step 5 must reconcile the clean stop and allow the controller to start again.
+Running the encoder above only prints bytes; **it does not save these settings to your remote**. The integrated app sends pending assignments only after **Save → Save and restart**. There is no verified full-table readback: deleting an entry does not restore an overwritten value, and a sent request must be tested physically. After IR checks, the stop/resume procedure from Step 5 must reconcile the clean stop and allow the controller to start again.
 
 ### Developer Mode expiry
 

@@ -33,9 +33,12 @@ class Canvas:
     WIDTH, HEIGHT = 1280, 720
 
     def __init__(self, app_id):
+        # Receive LG Back instead of letting the compositor show its exit dialog.
+        # webosbrew/SDL-webOS: SDL_waylandwebos.c access-policy hint.
         os.environ.update(APPID=app_id, XDG_RUNTIME_DIR='/tmp/xdg',
                           SDL_VIDEODRIVER='wayland', SDL_VIDEO_WAYLAND_WMCLASS=app_id,
-                          SDL_VIDEO_X11_WMCLASS=app_id)
+                          SDL_VIDEO_X11_WMCLASS=app_id,
+                          SDL_WEBOS_ACCESS_POLICY_KEYS_BACK='true')
         self.sdl = C.CDLL('libSDL2-2.0.so.0')
         self.ttf = C.CDLL('libSDL2_ttf-2.0.so.0')
         self.window = self.renderer = None
@@ -134,6 +137,10 @@ class Canvas:
             elif kind == 0x300:
                 keyboard = KeyboardEvent.from_buffer_copy(raw)
                 key = keyboard.keysym.sym
+                # LG system SDL reports WEBOS_BACK with an unmapped keysym (0).
+                # https://github.com/webosbrew/SDL-webOS/blob/webOS-2.30.x/include/SDL_scancode.h
+                if keyboard.keysym.scancode == 482:
+                    key = 461
                 # A held OK/Back must not activate controls repeatedly.
                 if not keyboard.repeat or key in (1073741906, 1073741905, 1073741904, 1073741903):
                     yield ('key', key)

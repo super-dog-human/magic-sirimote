@@ -13,7 +13,7 @@ from ir_programmer import BUTTONS
 
 ACTION = 'screen-toggle'
 ACTIONS = ('none', 'back', 'home', 'settings', 'playpause', 'play', 'pause', ACTION)
-ROWS = (('MENU', 32), ('TV', 1), ('Mic', 16), ('Play / Pause', 8), ('Plus', 2), ('Minus', 4))
+ROWS = (('Menu', 32), ('TV / Control Center', 1), ('Siri', 16), ('Play/Pause', 8), ('Volume Up', 2), ('Volume Down', 4))
 DEFAULTS = {'20:00': 'back', '01:00': 'home', '10:00': ACTION, '08:00': 'playpause'}
 
 

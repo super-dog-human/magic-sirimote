@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.17_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.20_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -23,36 +23,49 @@ startup apps. Their input processes and startup registration must be stopped
 and verified before starting the integrated runtime.
 
 Remote reception is automatic once the paired remote's verified device settings
-are saved. The window has no Start/Stop control. **Save settings** registers
-automatic startup and starts input, then closes the window so the receiver can
-open with the current input devices. Opening the app again displays its settings
-without stopping the running receiver.
+are saved. Opening the app displays settings without stopping reception. The
+main screen contains **Button Assignments**, **Save**, and **Close**, in
+that order. There is no Start/Stop or device-access test button.
 
-**Buttons** shows six rows: MENU, TV, Mic, Play / Pause, Plus and Minus. Each
-row has **Press** and **Hold (~0.7 s)** cells. Select a cell, choose an action,
-and confirm **Save**. Choices without `(IR)` run on the TV; `(IR)` choices
-program the remote. **Do nothing** removes the chosen IR entry and disables
-its TV-side action. Surface clicking and swipes are not changed by this editor.
+**Button Assignments** shows six rows: **Menu**, **TV / Control Center**,
+**Siri**, **Play/Pause**, **Volume Up**, and **Volume Down**, using
+[Apple's button names](https://support.apple.com/en-us/102337). Each row has
+**Press** and **Hold (~0.7 s)** cells. Select a cell and choose an action.
+Choices without `(IR)` run on the TV; `(IR)` choices program the remote.
+**Do nothing** removes that slot's IR entry and disables its TV-side action.
+Surface clicking and swipes are separate from this editor.
+
+Changes stay pending in the current app session. **Back** on either remote
+returns from a button settings page to the first screen and keeps those edits.
+There is no per-cell Save button. On the first screen, choose **Save**,
+then confirm **Save and restart**. The confirmation explains that reception will
+pause and the app window will close while the input process restarts. Cancel
+leaves the edits pending and does not stop input or write to the remote.
+Closing with unsaved edits asks whether to discard them.
+
+After confirmation, the app waits for input cleanup, saves the verified device
+settings, and applies changed assignments sequentially. Each local mapping is
+saved only after acknowledged IR delivery and connection cleanup. An uncertain
+or failed write stops the batch: completed changes remain saved, remaining
+changes stay pending, and no request is automatically repeated. Reception remains
+paused after an incomplete batch; use the LG remote to inspect the result and
+close the app to resume. Successful saves resume reception automatically.
 See [button assignment details](IR.md) for timing and readback limitations.
 
-Either remote can navigate while browsing. Confirming an assignment pauses
-input and waits for verified cleanup before setting or deleting that slot's IR
-entry. The local runtime mapping is saved only after acknowledged IR delivery
-and connection cleanup. If either part is uncertain, the app reports it and
-does not repeat the operation. Use the LG remote while reception is paused.
-**Back** from any button settings page returns to the first settings screen;
-choose **Close** there to resume input with the new mapping. Back while browsing
-without a save keeps input running. Saving device settings also pauses and
-resumes input automatically. A package installer's maintenance stop remains
-separate and is not undone by closing a window.
+The device form asks only for the remote's Bluetooth address. Saving reads the
+TV's adapter address and the paired remote's identifier internally; neither is
+an editable or displayed field. Missing, ambiguous, unpaired or mismatched
+identities prevent changes before reception is paused. This does not create a
+pairing. Existing installer data containing an adapter address is accepted only
+when it matches this TV; a supplied device name is replaced by the verified
+paired-device identifier.
 
-The device form asks only for the remote's Bluetooth address and exact device
-name / serial. When saving, it reads the TV's own Bluetooth adapter address.
-The detected address remains an internal identity check, including comparison
-with any previously saved value. Missing, ambiguous or mismatched adapter
-information prevents configuration changes; it never silently selects another
-TV. Existing installer data containing the adapter address is still accepted
-when it matches the detected TV. New installer data can omit it.
+Native SDL windows opt in to receiving the LG Back key using
+`SDL_WEBOS_ACCESS_POLICY_KEYS_BACK`. Without that native-window policy, webOS
+shows its app-exit confirmation before the app can navigate back. The policy is
+set before window creation. The webOS-specific Back scancode is also normalized
+when system SDL leaves its keysym undefined. Home and other system exit actions
+remain unchanged.
 
 Automatic startup uses one persistent webOS Activity owned by this same app.
 No separate startup app or running Mac is needed. The bundled service watches the
@@ -121,6 +134,10 @@ Skip this section if your Mac already connects to the TV with the LG CLI.
    Continue when system information is returned successfully. See
    [LG's connection guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app).
 
+The downloadable 0.2.7 package below is an older, separate preview. Current
+`build_native.py` produces a layout preview without assignment writes; use
+`build_integrated.py` for the current settings and button-saving workflow.
+
 ### Install and open the preview
 
 Run from the repository root. Replace `my-tv` with the registered device name.
@@ -180,7 +197,7 @@ The install, launch, list and remove commands are described in the
 
 ## Package contents
 
-The preview contains 15 payload files: ten Python modules, one small ARM launcher,
+The downloadable 0.2.7 preview contains 15 payload files: ten Python modules, one small ARM launcher,
 an icon, app metadata, package metadata, and `state/README.txt`. All Python modules
 are reachable from the launcher's entry point. `native_probe.py` is the active
 startup wrapper despite its historical name; it is not an unused diagnostic.
@@ -199,7 +216,7 @@ is why the IPK is small. A small package does not imply compatibility with every
 This describes the IPK itself. It is not an inventory or cleanup of files already
 on a TV from earlier installations.
 
-## Settings
+## Settings in the older settings-only preview
 
 Only these device identities are entered manually in the preview:
 
@@ -222,7 +239,7 @@ reports this after saving. The value is stored as the boolean `gyroEnabled` in
 
 Entering these values **does not create a pairing**. A pairing/setup workflow still has to be integrated. The app's account identifiers and input-device paths are implementation details to discover on the TV, not information users should have to guess. The setup preview does not accept LG account credentials or Developer Mode tokens.
 
-The intended complete app will also provide Start/Stop controls and automatic-startup provisioning. Those controls are not included in this preview. IR Set/Delete is implemented; a full-table readback or factory-default restoration is not provided.
+The integrated app above provides automatic reception; this older preview does not. IR Set/Delete is implemented; a full-table readback or factory-default restoration is not provided.
 
 ## Intended single-package design
 

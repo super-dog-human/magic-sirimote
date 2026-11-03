@@ -22,7 +22,7 @@ class ControlTests(unittest.TestCase):
     def test_start_does_not_run_after_unknown_activity_creation(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'
+            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'
             bus.request.side_effect = [{'returnValue': True}, {'returnValue': True, 'status': 'create-required', 'token': 'a' * 48}]
             bus.create_startup.side_effect = RuntimeError('unknown create outcome')
             app = RuntimeSetup(Path(d), bus)
@@ -35,9 +35,9 @@ class ControlTests(unittest.TestCase):
         from unittest.mock import Mock
         values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; app = RuntimeSetup(Path(d), bus); app.values.update(values)
+            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'; app = RuntimeSetup(Path(d), bus); app.values.update(values)
             bus.request.return_value = {'returnValue': True, 'status': 'stop-requested'}
-            app.choose(5, Mock())
+            app.choose(5, Mock()); app.confirm_restart()
             self.assertEqual(bus.request.call_args.args[0], 'drain')
             bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found(controller=[{'pid': 1}])}
             with patch.object(app, 'apply') as apply:
@@ -51,7 +51,7 @@ class ControlTests(unittest.TestCase):
     def test_settings_timeout_never_changes_configuration(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; app = RuntimeSetup(Path(d), bus)
+            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'; app = RuntimeSetup(Path(d), bus)
             app.pending_settings = ('save', {}, 0)
             bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found()}
             with patch.object(app, 'apply') as apply:
@@ -59,64 +59,51 @@ class ControlTests(unittest.TestCase):
                 apply.assert_not_called()
             self.assertIn('not confirmed', app.message)
 
-    def test_buttons_browsing_keeps_input_and_ir_confirmation_waits_for_cleanup(self):
+    def test_button_drafts_wait_for_global_confirmation_and_clean_stop(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found(controller=[{'pid': 1}])}
-            app = RuntimeSetup(Path(d), bus); canvas = Mock()
-            app.choose(6, canvas)
-            bus.request.assert_not_called()
-            app.infrared.choose(0); app.infrared.choose(0)  # Review delete, without writing.
-            bus.request.assert_not_called()
-            app.infrared.choose(0)  # Cancel review.
-            app.handle(('key', 27), canvas)
-            self.assertIsNone(app.infrared)
-            self.assertFalse(app.done)
-            bus.request.assert_not_called()
-            app.choose(6, canvas); app.infrared.choose(0); app.infrared.choose(0); app.infrared.choose(1)
-            self.assertEqual(bus.request.call_args.args[0], 'drain')
-            self.assertTrue(app.infrared.busy)
-            with patch.object(app.infrared, 'start_submission') as submit:
-                app.settings_tick(canvas); submit.assert_not_called()
-                app.next_settings_check = 0
-                bus.request.return_value = {'returnValue': True, 'cleanStop': True, 'processes': found()}
-                app.settings_tick(canvas); submit.assert_called_once()
-            app.infrared.busy = False; app.infrared.review = None
-            app.handle(('key', 27), canvas)
-            self.assertFalse(app.done)
-            app.choose(7, canvas); app.handle(('key',27), canvas)
-            self.assertEqual(bus.request.call_args.args[0], 'resume')
-            app = RuntimeSetup(Path(d), bus)
-            app.focus = 7; app.handle(('key', 1073741903), canvas)
-            self.assertEqual(app.focus, 0)
-            app.draw(canvas)
-            self.assertEqual([index for index, box in app.boxes], [0,1,3,4,5,6,7])
+            bus=Mock();bus.tv_address.return_value='aa:bb:cc:dd:ee:20';bus.remote_name.return_value='Remote'
+            bus.request.return_value={'returnValue':True,'cleanStop':False,'processes':found()}
+            app=RuntimeSetup(Path(d),bus);app.values['remoteAddress']='aa:bb:cc:dd:ee:10';canvas=Mock()
+            app.choose(6,canvas);app.infrared.choose(0);app.infrared.choose(0)
+            app.handle(('key',461),canvas);app.choose(5,canvas)
+            bus.request.assert_not_called();self.assertEqual(app.button_drafts,{'20:00':'none'})
+            app.handle(('key',461),canvas);bus.request.assert_not_called()
+            app.choose(5,canvas);app.confirm_restart()
+            self.assertEqual(bus.request.call_args.args[0],'drain')
+            with patch.object(app,'start_assignment_batch') as submit, patch.object(app,'persist_device') as persist:
+                app.settings_tick(canvas);submit.assert_not_called();persist.assert_not_called()
+                app.next_settings_check=0
+                bus.request.return_value={'returnValue':True,'cleanStop':True,'processes':found()}
+                order=[];persist.side_effect=lambda *_:order.append('identity');submit.side_effect=lambda *_:order.append('assignments')
+                app.settings_tick(canvas);self.assertEqual(order,['identity','assignments'])
+                submit.assert_called_once_with({'20:00':'none'})
 
     def test_installer_cannot_interrupt_an_infrared_write(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; app = RuntimeSetup(Path(d), bus); app.choose(6, Mock())
+            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'; app = RuntimeSetup(Path(d), bus); app.choose(6, Mock())
             app.infrared.busy = True
             with self.assertRaisesRegex(RuntimeError, 'finish before updating'):
                 app.stop_runtime()
             bus.request.assert_not_called()
 
-    def test_ir_cleanup_failure_does_not_write_and_returns_to_editable_screen(self):
+    def test_global_save_cleanup_failure_keeps_drafts_and_does_not_write(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found()}
-            app = RuntimeSetup(Path(d), bus); app.choose(6, Mock())
-            app.infrared.busy = True; app.pending_settings = ('ir', (), 0)
-            with patch.object(app.infrared, 'start_submission') as submit:
-                self.assertTrue(app.settings_tick(Mock())); submit.assert_not_called()
-            self.assertFalse(app.infrared.busy)
-            self.assertIn('not confirmed', app.infrared.message)
+            bus=Mock();bus.request.return_value={'returnValue':True,'cleanStop':False,'processes':found()}
+            app=RuntimeSetup(Path(d),bus);app.button_drafts={'20:00':'none'}
+            app.pending_assignments=dict(app.button_drafts);app.pending_settings=('save',{},0)
+            with patch.object(app,'start_assignment_batch') as submit, patch.object(app,'persist_device') as persist:
+                self.assertTrue(app.settings_tick(Mock()));submit.assert_not_called();persist.assert_not_called()
+            self.assertIsNone(app.pending_settings);self.assertEqual(app.button_drafts,{'20:00':'none'})
+            self.assertIn('not confirmed',app.message)
 
     def test_installer_configuration_always_activates_but_stop_stays_internal(self):
         from unittest.mock import Mock
         values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.request.return_value = {'returnValue': True, 'status': 'registered'}
+            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'; bus.request.return_value = {'returnValue': True, 'status': 'registered'}
             app = RuntimeSetup(Path(d), bus)
             with patch('native_manager.settings.save'):
                 app.apply(values, False)
@@ -132,7 +119,7 @@ class ControlTests(unittest.TestCase):
     def test_configuration_repairs_verified_startup_state_before_enabling(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.request.side_effect = [
+            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'; bus.request.side_effect = [
                 {'returnValue': True, 'status': 'repair-required'},
                 {'returnValue': True, 'status': 'scheduled'},
                 {'returnValue': True, 'status': 'registered'}]
@@ -180,7 +167,7 @@ class ControlTests(unittest.TestCase):
     def test_installer_cannot_start_input_while_button_settings_are_open(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; app = RuntimeSetup(Path(d), bus)
+            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'; app = RuntimeSetup(Path(d), bus)
             app.infrared = Mock()
             with self.assertRaisesRegex(RuntimeError, 'Close button settings'):
                 app.apply({}, True)
@@ -245,6 +232,7 @@ class ControlTests(unittest.TestCase):
         class Bus:
             def __init__(self): self.calls = []
             def tv_address(self): return 'aa:bb:cc:dd:ee:20'
+            def remote_name(self, remote, adapter): return 'Remote'
             def request(self, method, params): self.calls.append(method); return {'returnValue': True, 'status': 'registered'}
         with tempfile.TemporaryDirectory() as d:
             bus = Bus(); app = RuntimeSetup(Path(d), bus)

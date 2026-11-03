@@ -1,25 +1,31 @@
 # Button assignments and infrared commands
 
-Open **Buttons** in the [integrated native app](NATIVE_APP.md). The screen has
-six rows: **MENU**, **TV**, **Mic**, **Play / Pause**, **Plus**, and **Minus**.
+Open **Button Assignments** in the [integrated native app](NATIVE_APP.md). The screen has
+six rows: **Menu**, **TV / Control Center**, **Siri**, **Play/Pause**, **Volume Up**, and **Volume Down**.
 Each row has a **Press** cell and a **Hold (~0.7 s)** cell. Surface clicking,
 swipe navigation and gyro movement are separate from these six buttons.
 
 ## Change an assignment
 
 1. Keep the paired Siri Remote awake and have the LG remote nearby.
-2. Open **Buttons** and select the desired row and column. Use arrows or
+2. Open **Button Assignments** and select the desired row and column. Use arrows or
    Siri Remote swipes and a click to select a cell.
 3. Choose an action. Choices ending in **(IR)** send infrared from the remote.
    The other choices run on the TV. **Custom code (IR)** accepts exactly two
    hexadecimal digits, such as `08`, using the on-screen or USB keyboard.
-4. Review the button, press type and action, then confirm **Save**. Browsing,
-   choosing an action, or cancelling does not write anything.
-5. Wait for the result. Reception pauses during programming, so use the LG
-   remote to press **Back**, returning to the first settings screen. Choose
-   **Close** to resume reception with the new mapping.
-6. Test the button. Delivery acknowledgement is not a readback of the remote's
-   stored IR entry. Unknown or partial outcomes are reported without retrying.
+4. Use **Back** to return to the first screen. Edits remain pending, including
+   when you reopen Button Assignments. Selecting a value does not write it yet.
+5. Choose **Save**, then **Save and restart** in the confirmation.
+   Reception pauses during programming; use the LG remote until it restarts.
+   On success, the window closes and reception resumes automatically.
+6. Test each changed button. Delivery acknowledgement is not a readback of the
+   remote's stored IR entry. If a batch fails partway through, completed slots
+   stay saved and remaining edits stay pending. Unknown or partial outcomes stop
+   the batch without automatic retry. Inspect the result before retrying.
+
+Cancel in the restart confirmation changes nothing. Closing with pending edits
+asks whether to discard them. Edits are held in memory, so an app termination
+or TV restart before saving loses them.
 
 **Do nothing** deletes the selected IR entry and disables its TV-side action.
 It leaves other buttons and the other press type unchanged. For a button to
@@ -48,7 +54,7 @@ For unchanged buttons, the integrated runtime retains its normal TV actions:
 MENU is Back, TV is Home, Mic is Screen off / restore, and Play / Pause toggles
 playback. Unassigned holds retain the corresponding TV press behavior, except
 TV hold is reserved for the remote's existing IR power action. Existing IR
-settings remain untouched until a cell is explicitly saved.
+settings remain untouched until its pending change is saved from the first screen.
 
 ## What the displayed values mean
 

@@ -27,11 +27,11 @@ class SettingsRenderTests(unittest.TestCase):
                 app.battery.text = Mock(return_value=level)
                 before = len(canvas.frames); app.draw(canvas)
                 self.assertEqual(len(canvas.frames) - before, 1)
-                for title in ('Magic Sirimote', 'Save settings', 'Buttons', level):
+                for title in ('Magic Sirimote', 'Save', 'Button Assignments', level):
                     self.assertIn(title, canvas.frames[-1])
                 self.assertTrue(any('runs automatically' in text for text in canvas.frames[-1]))
                 self.assertFalse(any('input startup is separate' in text for text in canvas.frames[-1]))
-                self.assertEqual([i for i, _ in app.boxes], [0,1,3,4,5,6,7])
+                self.assertEqual([i for i, _ in app.boxes], [0,3,6,5,7])
 
     def test_keyboard_and_button_editor_still_present_one_complete_frame(self):
         with tempfile.TemporaryDirectory() as d:
@@ -49,7 +49,7 @@ class SettingsRenderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             app = Setup(Path(d)); canvas = DiscardingCanvas(); app.draw(canvas)
             self.assertEqual(len(canvas.frames), 1)
-            self.assertIn('Buttons', canvas.frames[0])
+            self.assertIn('Button Assignments', canvas.frames[0])
             self.assertTrue(any('input startup is separate' in text for text in canvas.frames[0]))
 
 if __name__ == '__main__': unittest.main()

@@ -13,8 +13,8 @@ from pathlib import Path
 FIELDS = ('remoteAddress', 'remoteName', 'adapterAddress')
 LABELS = ('Remote Bluetooth address', 'Remote device name / serial', 'TV Bluetooth address')
 LIMITS = (17, 64, 17)
-EDITABLE_FIELDS = FIELDS[:2]
-MAIN_FOCUS = (0, 1, 3, 4, 5, 6, 7)
+EDITABLE_FIELDS = FIELDS[:1]
+MAIN_FOCUS = (0, 3, 6, 5, 7)
 ADDRESS = re.compile(r'(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\Z')
 NAME = re.compile(r'[A-Za-z0-9_-]{1,64}\Z')
 
@@ -120,3 +120,32 @@ def read_tv_address():
     from native_luna import Luna
     with Luna() as call:
         return tv_address_from_reply(call('adapter/getStatus', {'subscribe': False}, 5))
+
+
+def remote_name_from_reply(reply, remote, adapter):
+    if (type(remote) is not str or not ADDRESS.fullmatch(remote.lower()) or
+            type(adapter) is not str or not ADDRESS.fullmatch(adapter.lower())):
+        raise ValueError('Enter the remote Bluetooth address first.')
+    if type(reply) is not dict or reply.get('returnValue') is not True or type(reply.get('devices')) is not list:
+        raise RuntimeError('The paired remote could not be identified.')
+    matches = [row for row in reply['devices'] if type(row) is dict and
+               type(row.get('address')) is str and row['address'].lower() == remote.lower()]
+    if len(matches) != 1:
+        raise RuntimeError('The remote is not registered on this TV. Pair it before saving settings.')
+    row = matches[0]
+    if row.get('paired') is not True or row.get('pairing') is True or row.get('blocked') is True:
+        raise RuntimeError('Complete pairing with this TV before saving settings.')
+    if 'adapterAddress' in row and (type(row['adapterAddress']) is not str or row['adapterAddress'].lower() != adapter.lower()):
+        raise RuntimeError('The remote registration belongs to a different TV adapter.')
+    name = row.get('name')
+    if type(name) is not str or not NAME.fullmatch(name):
+        raise RuntimeError('The paired remote has no supported device identifier.')
+    return name
+
+
+def read_remote_name(remote, adapter):
+    if type(remote) is not str or not ADDRESS.fullmatch(remote.lower()):
+        raise ValueError('Enter the remote Bluetooth address first.')
+    from native_luna import Luna
+    with Luna() as call:
+        return remote_name_from_reply(call('device/getStatus', {'subscribe': False}, 5), remote, adapter)

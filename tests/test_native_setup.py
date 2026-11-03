@@ -75,6 +75,8 @@ class NativeSettingsTest(unittest.TestCase):
         from unittest.mock import patch
         mock = patch.object(settings, 'read_tv_address', return_value=self.good()['adapterAddress'].lower())
         mock.start(); self.addCleanup(mock.stop)
+        name = patch.object(settings, 'read_remote_name', return_value=self.good()['remoteName'])
+        name.start(); self.addCleanup(name.stop)
         with tempfile.TemporaryDirectory() as path:
             settings.save(path, self.good())
             app = Setup(Path(path)); canvas = CanvasStub()
@@ -101,11 +103,9 @@ class NativeSettingsTest(unittest.TestCase):
     def test_remote_keyboard_edit_and_back_do_not_save_implicitly(self):
         with tempfile.TemporaryDirectory() as path:
             app = Setup(Path(path));canvas = CanvasStub()
-            app.choose(1, canvas)
-            app.choose(app.keys.index('A'), canvas)
-            app.choose(app.keys.index('Case'), canvas)
-            app.choose(app.keys.index('b'), canvas)
-            self.assertEqual(app.values['remoteName'], 'Ab')
+            app.choose(0, canvas)
+            app.handle(('text','AA:BB'), canvas)
+            self.assertEqual(app.values['remoteAddress'], 'AA:BB')
             app.handle(('key', 27), canvas)
             self.assertIsNone(app.editing)
             self.assertFalse((Path(path) / 'settings.json').exists())

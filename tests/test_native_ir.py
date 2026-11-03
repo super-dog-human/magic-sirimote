@@ -108,23 +108,23 @@ class InfraredTest(unittest.TestCase):
         self.assertEqual(result['status'], 'not-sent')
         self.assertEqual(tv.writes(), [])
 
-    def test_confirmation_cancel_and_delete_without_a_code(self):
-        calls=[];app=InfraredScreen(Path('/unused'),submit=lambda *a:calls.append(a))
-        app.choose(0);app.choose(0)
-        self.assertEqual(app.code,'none');self.assertEqual(app.review,'assign')
-        app.handle(('key',27))
-        self.assertTrue(app.done);self.assertIsNone(app.review);self.assertEqual(calls,[])
+    def test_none_is_staged_and_back_preserves_it_without_saving(self):
+        with tempfile.TemporaryDirectory() as d:
+            drafts={};app=InfraredScreen(Path(d),drafts=drafts)
+            app.choose(0);app.choose(0);app.handle(('key',27))
+            self.assertTrue(app.done);self.assertEqual(drafts,{'20:00':'none'})
+            self.assertEqual(list(Path(d).iterdir()),[])
+            self.assertIn('(edited)',InfraredScreen(Path(d),drafts=drafts).cell_label(32,0))
 
-
-    def test_preset_and_custom_selection_do_not_send_until_confirmed(self):
-        calls=[];app=InfraredScreen(Path('/unused'),submit=lambda *a:calls.append(a))
-        app.choose(0);app.choose(next(i for i,(_,v) in enumerate(CHOICES) if v=='ir:28'))
-        self.assertEqual(app.code,'ir:28');app.choose(0)
-        app.choose(0);app.choose(CUSTOM);app.handle(('text','g4'));app.choose(17)
-        self.assertTrue(app.editing);app.handle(('text','d'));app.choose(17)
-        self.assertEqual(app.code,'ir:4D');self.assertEqual(app.review,'assign')
-        app.choose(0);self.assertEqual(calls,[])
-
+    def test_preset_and_custom_choices_only_update_the_draft(self):
+        with tempfile.TemporaryDirectory() as d:
+            app=InfraredScreen(Path(d))
+            app.choose(0);app.choose(next(i for i,(_,v) in enumerate(CHOICES) if v=='ir:28'))
+            self.assertEqual(app.drafts,{'20:00':'ir:28'})
+            app.choose(0);app.choose(CUSTOM);app.handle(('text','g4'));app.choose(17)
+            self.assertTrue(app.editing);app.handle(('text','d'));app.choose(17)
+            self.assertEqual(app.drafts,{'20:00':'ir:4D'})
+            self.assertEqual(list(Path(d).iterdir()),[])
 
     def test_cancel_custom_code_preserves_previous_selection(self):
         app=InfraredScreen(Path('/unused'))
@@ -152,24 +152,15 @@ class InfraredTest(unittest.TestCase):
         self.assertTrue(app.picking);app.handle(('key',27));self.assertTrue(app.done)
 
 
-    def test_confirm_runs_once_and_busy_ignores_repeated_input(self):
-        import threading
-        entered = threading.Event(); release = threading.Event(); calls = []
-        def submit(*args):
-            calls.append(args); entered.set(); release.wait(2)
-            return {'status': 'saved'}
-        app = InfraredScreen(Path('/unused'), submit=submit)
-        app.choose(0); app.choose(0); app.choose(1)
-        self.assertTrue(entered.wait(1))
-        app.choose(1); app.handle(('key', 27))
-        self.assertFalse(app.done)
-        self.assertEqual(len(calls), 1)
-        release.set()
-        # Wait for the worker result without issuing any second transaction.
-        result = app.results.get(timeout=2); app.results.put(result)
-        self.assertTrue(app.tick())
-        self.assertFalse(app.busy)
-        self.assertIn('cannot read back', app.detail)
+    def test_reselecting_saved_choice_clears_pending_edit(self):
+        import tv_assignments
+        with tempfile.TemporaryDirectory() as d:
+            tv_assignments.execute(d,'assign',32,0,'back')
+            app=InfraredScreen(Path(d));app.choose(0);app.choose(0)
+            self.assertTrue(app.drafts)
+            app.choose(0);app.choose(1)
+            self.assertFalse(app.drafts)
+            self.assertEqual(tv_assignments.load(d)['bindings'],{'20:00':'back'})
 
 
 if __name__ == '__main__':

@@ -26,13 +26,13 @@ class NativePackageTest(unittest.TestCase):
                 self.assertFalse(result['controlsRemote'])
                 self.assertFalse(result['deviceIdentitiesEmbedded'])
                 self.assertFalse(result['registersAutomaticStartup'])
-                self.assertTrue(result['programsInfrared'])
+                self.assertFalse(result['programsInfrared'])
                 self.assertFalse(result['automaticInfraredWrites'])
                 self.assertFalse(result['hardwareValidated'])
             members = build_support.read_ar((outputs[0] / name).read_bytes())
             with tarfile.open(fileobj=io.BytesIO(members['control.tar.gz']), mode='r:gz') as control:
                 self.assertEqual(control.getnames(), ['control'])
-                self.assertIn(b'Description: Magic Sirimote native settings and IR programming preview',
+                self.assertIn(b'Description: Magic Sirimote native settings layout preview',
                               control.extractfile('control').read())
             with tarfile.open(fileobj=io.BytesIO(members['data.tar.gz']), mode='r:gz') as archive:
                 files = {entry.name: archive.extractfile(entry).read() for entry in archive if entry.isfile()}
@@ -46,7 +46,7 @@ class NativePackageTest(unittest.TestCase):
                 self.assertEqual(info['requiredACG'], [])
                 self.assertFalse(any('/services/' in name or name.endswith('/settings.json') for name in files))
                 prefix = 'usr/palm/applications/org.magicsirimote.app/'
-                expected = {'appinfo.json', 'device_check.py', 'entry', 'entry.py',
+                expected = {'appinfo.json', 'entry', 'entry.py',
                             'graphics.py', 'icon.png', 'ir_packets.py', 'ir_programmer.py',
                             'ir_screen.py', 'native_luna.py', 'native_probe.py', 'settings.py',
                             'tv_assignments.py', 'state/README.txt'}

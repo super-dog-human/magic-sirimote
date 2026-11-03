@@ -8,8 +8,8 @@ import build_support
 
 ROOT = Path(__file__).resolve().parent
 APP = 'org.magicsirimote.app'
-VERSION = '0.2.7'
-SOURCES = ('entry.py', 'settings.py', 'graphics.py', 'device_check.py',
+VERSION = '0.2.8'
+SOURCES = ('entry.py', 'settings.py', 'graphics.py',
            'ir_screen.py', 'ir_programmer.py', 'native_luna.py', 'tv_assignments.py')
 
 
@@ -42,10 +42,10 @@ def build(output):
         'state/README.txt': b'Private settings and IR operation receipts. Not a backup of remote memory.\n',
     })
     record = packaging.package(output, APP, VERSION, files,
-                               description='Magic Sirimote native settings and IR programming preview')
-    manifest = {'schema': 1, 'purpose': 'native-setup-infrared',
-                'controlsRemote': False, 'pairsRemote': False, 'programsInfrared': True,
-                'savesTVAssignments': True, 'activatesTVAssignments': False,
+                               description='Magic Sirimote native settings layout preview')
+    manifest = {'schema': 1, 'purpose': 'native-layout-preview',
+                'controlsRemote': False, 'pairsRemote': False, 'programsInfrared': False,
+                'savesTVAssignments': False, 'activatesTVAssignments': False,
                 'savesGyroPreference': True, 'appliesGyroPreference': False,
                 'automaticInfraredWrites': False, 'hardwareValidated': False,
                 'registersAutomaticStartup': False, 'deviceIdentitiesEmbedded': False,
@@ -64,7 +64,7 @@ def main():
     except (OSError, ValueError) as error:
         parser.exit(2, str(error) + '\n')
     print('Built:', args.out / result['package']['package'])
-    print('Setup and explicit IR programming. Hardware validation pending. No pairing or input runtime.')
+    print('Layout preview only. Use the integrated build to save button assignments.')
 
 
 if __name__ == '__main__':

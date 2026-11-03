@@ -114,16 +114,16 @@ class ReviewTests(unittest.TestCase):
             app = Setup(Path(folder))
             class Events(Screen):
                 def events(self):
-                    # The first click enters the name editor. For the next click,
-                    # its old setup hitbox maps to F, while the visible key is 6.
-                    yield ('click', (80, 280))
-                    yield ('click', (400, 520))
+                    # The first click opens the address editor; the next click must
+                    # use its new character grid rather than the old setup hitboxes.
+                    yield ('click', (80, 190))
+                    yield ('click', (400, 315))
                     yield ('close', None)
                 def close(self): pass
             canvas = Events()
             with patch.object(entry, 'Setup', return_value=app), patch.object(entry, 'Canvas', return_value=canvas):
                 entry.main()
-            self.assertEqual(app.values['remoteName'], '6')
+            self.assertEqual(app.values['remoteAddress'], '2')
 
 
 if __name__ == '__main__': unittest.main()

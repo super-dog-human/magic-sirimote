@@ -1,5 +1,7 @@
 """Native settings window and an independently attested input worker."""
 import json
+import queue
+import threading
 import os
 import re
 import signal
@@ -7,7 +9,7 @@ import stat
 import subprocess
 import time
 from pathlib import Path
-from entry import Setup, ARROWS
+from entry import Setup, ARROWS, BACK
 from graphics import Canvas
 from native_bus import APP, NativeBus
 import settings
@@ -83,6 +85,13 @@ class RuntimeSetup(Setup):
         self.pending_settings = None
         self.resume_after_settings = False
         self.next_settings_check = 0
+        self.saving_assignments = False
+        self.assignment_results = queue.Queue()
+        self.pending_assignments = {}
+        self.saved_values = dict(self.values)
+        self.confirm_action = None
+        self.confirm_focus = 0
+        self.confirm_boxes = []
         from battery_status import ScreenReading
         self.battery = ScreenReading(state)
         self.message = 'Remote control starts automatically after device settings are saved.'
@@ -117,15 +126,28 @@ class RuntimeSetup(Setup):
         saved = values.get('adapterAddress')
         if saved and (type(saved) is not str or saved.strip().lower() != adapter):
             raise ValueError('The saved TV identity does not match this TV. Settings were not changed.')
-        return settings.validate({**values, 'adapterAddress': adapter})
+        remote = values.get('remoteAddress', '')
+        if type(remote) is not str:
+            raise ValueError('Enter the remote Bluetooth address first.')
+        remote = remote.strip().lower()
+        name = self.bus.remote_name(remote, adapter)
+        return settings.validate({**values, 'remoteAddress': remote, 'adapterAddress': adapter, 'remoteName': name})
 
     def apply(self, values, start=True):
+        if self.saving_assignments or self.pending_settings is not None:
+            raise RuntimeError("Wait for settings to finish before updating.")
         if self.infrared is not None:
             raise RuntimeError('Close button settings before updating device settings or starting input.')
         values = self.detect_tv(values)
+        self.persist_device(values)
+        self.activate_settings()
+
+    def persist_device(self, values):
         accepted(self.bus.request('configure', {'settings': values}))
         settings.save(self.state, values)
         self.values.update({key: values[key] for key in (*settings.FIELDS, 'gyroEnabled')})
+        self.saved_values = dict(self.values)
+    def activate_settings(self):
         # Both installer configure and the TV Save action activate reception.
         # Keep the old argument for staged installer requests from earlier builds.
         self.enable_startup()
@@ -136,7 +158,7 @@ class RuntimeSetup(Setup):
 
     def stop_runtime(self):
         """Installer maintenance only; never exposed as a settings choice."""
-        if self.infrared is not None and self.infrared.busy:
+        if self.saving_assignments or self.infrared is not None and self.infrared.busy:
             raise RuntimeError('Wait for the infrared operation to finish before updating.')
         self.pending_settings = None
         self.resume_after_settings = False
@@ -166,28 +188,50 @@ class RuntimeSetup(Setup):
                     return False
                 raise RuntimeError('Input cleanup is not confirmed. Settings were not changed.')
             self.pending_settings = None
-            if action == 'save':
+            if action == 'save' and self.pending_assignments:
+                self.persist_device(values)
+                self.start_assignment_batch(dict(self.pending_assignments))
+            elif action == 'save':
                 self.apply(values)
             else:
-                self.infrared.start_submission(values)
+                raise RuntimeError('Unknown settings operation.')
         except (OSError, ValueError, RuntimeError) as error:
             self.pending_settings = None
             self.message = str(error)[:160]
-            if action == 'ir' and self.infrared is not None:
-                self.infrared.busy = False; self.infrared.review = None
-                self.infrared.message = self.message
-                self.infrared.detail = 'No infrared request was sent. Leave this screen to resume input.'
         return True
 
-    def prepare_ir(self, args):
-        try:
-            self.prepare_settings('ir', args)
-            self.infrared.busy = True
-            self.infrared.message = 'Pausing input before writing this infrared assignment.'
-            self.infrared.detail = 'Wait for completion, then use the LG remote to leave and resume input.'
-        except (OSError, ValueError, RuntimeError) as error:
-            self.infrared.message = str(error)[:160]
-            self.infrared.detail = 'No infrared request was sent.'
+    def start_assignment_batch(self, changes):
+        self.saving_assignments = True
+        self.message = 'Saving button assignments. Use the LG remote; input is paused.'
+        def work():
+            completed = []
+            result = {'status': 'saved'}
+            for key, action in sorted(changes.items()):
+                button, delay = (int(part, 16) for part in key.split(':'))
+                try:
+                    result = self.program_ir(self.state, 'assign', button, delay, action)
+                except Exception:
+                    result = {'status': 'uncertain'}
+                if result.get('status') != 'saved': break
+                completed.append(key)
+            self.assignment_results.put((changes, completed, result))
+        threading.Thread(target=work, name='save-button-assignments', daemon=False).start()
+
+    def assignments_tick(self):
+        try: changes, completed, result = self.assignment_results.get_nowait()
+        except queue.Empty: return False
+        self.saving_assignments = False
+        for key in completed:
+            if self.button_drafts.get(key) == changes[key]: self.button_drafts.pop(key)
+        self.pending_assignments = {}
+        if len(completed) == len(changes):
+            try: self.activate_settings()
+            except (OSError, ValueError, RuntimeError) as error: self.message = str(error)[:160]
+        else:
+            self.message = '%d of %d assignments saved; the remaining changes were not confirmed.' % (len(completed), len(changes))
+            if result.get('status') in ('uncertain', 'partial'):
+                self.message += ' Check the remote before retrying.'
+        return True
 
     def resume_settings(self):
         if self.resume_after_settings:
@@ -207,33 +251,107 @@ class RuntimeSetup(Setup):
         from tv_assignments import assign
         return assign(*args, program=lambda *request: execute(*request, idle=idle))
 
+    def has_unsaved(self):
+        return bool(self.button_drafts) or self.values != self.saved_values
+
+    def close_settings(self):
+        if self.has_unsaved():
+            self.confirm_action = "discard"
+        elif self.resume_after_settings:
+            self.confirm_action = "resume"
+        else:
+            self.done = True
+        self.confirm_focus = 0
+
     def choose(self, index, canvas):
         if self.editing is not None:
             return super().choose(index, canvas)
         try:
             if index == 5:
-                self.prepare_settings('save', self.detect_tv({'schema': 1, **self.values}))
+                self.confirm_action = 'save'
+                self.confirm_focus = 0
+            elif index == 7:
+                self.close_settings()
             elif index == 6:
                 super().choose(index, canvas)
-                self.infrared.submit = self.program_ir
-                self.infrared.before_submit = self.prepare_ir
-                self.infrared.detail = 'Browse with either remote. Input pauses only when you confirm an IR write.'
+                self.infrared.detail = 'Both remotes can browse. No change is sent until Save.'
             elif index == 3:
                 self.values['gyroEnabled'] = not self.values['gyroEnabled']
-                self.message = 'Choose Save settings to save this preference.'
+                self.message = 'Choose Save to save this preference.'
             else:
                 super().choose(index, canvas)
         except (OSError, ValueError, RuntimeError) as error:
             self.message = str(error)[:160]
             self.done = False
 
+    def confirm_restart(self):
+        action = self.confirm_action
+        self.confirm_action = None
+        try:
+            if action == 'save':
+                values = self.detect_tv({'schema': 1, **self.values})
+                from tv_assignments import validate
+                self.pending_assignments = dict(self.button_drafts)
+                validate({'schema': 2, 'bindings': self.pending_assignments})
+                self.prepare_settings('save', values)
+            elif action == 'resume':
+                self.resume_settings()
+            elif action == 'discard':
+                self.button_drafts.clear()
+                self.values = dict(self.saved_values)
+                self.resume_settings()
+        except (OSError, ValueError, RuntimeError) as error:
+            self.done = False
+            self.message = str(error)[:160]
+
+    def draw(self, canvas):
+        if self.confirm_action is None:
+            return super().draw(canvas)
+        canvas.clear()
+        discard = self.confirm_action == 'discard'
+        canvas.text('Discard unsaved changes?' if discard else 'Save settings and restart?' if self.confirm_action == 'save' else 'Restart remote control?', 64, 90, 36)
+        canvas.text('Unsaved edits will be discarded when you close this screen.' if discard else 'Remote control will pause briefly while the app restarts.', 66, 205, 26)
+        canvas.text('This screen will close. The TV may briefly show Home or reopen the app.', 66, 258, 24)
+        canvas.text('Use the LG remote until Siri Remote reception resumes.', 66, 311, 24)
+        if self.button_drafts and not discard:
+            canvas.text(str(len(self.button_drafts)) + ' button changes will be applied in order.', 66, 363, 24)
+        self.confirm_boxes = [(64, 425, 552, 70), (640, 425, 552, 70)]
+        for index, title in enumerate(('Cancel', 'Discard and close' if discard else 'Save and restart' if self.confirm_action == 'save' else 'Restart')):
+            box = self.confirm_boxes[index]
+            canvas.rectangle(box, (30, 113, 156) if index == self.confirm_focus else (36, 48, 65))
+            canvas.text(title, box[0]+24, box[1]+21, 27)
+        canvas.text('Cancel or Back keeps this screen open without restarting.', 66, 565, 23, (155, 170, 190))
+        canvas.present()
+
     def handle(self, event, canvas):
+        if self.saving_assignments or self.pending_settings is not None:
+            return
+        if self.confirm_action is not None:
+            kind, value = event
+            if kind == 'close' or kind == 'key' and value in BACK:
+                self.confirm_action = None
+            elif kind == 'key' and value in ARROWS:
+                self.confirm_focus = 1 - self.confirm_focus
+            elif kind == 'key' and value in (13, 1073741912):
+                if self.confirm_focus == 1: self.confirm_restart()
+                else: self.confirm_action = None
+            elif kind == 'click':
+                for index, (x,y,w,h) in enumerate(self.confirm_boxes):
+                    if x <= value[0] < x+w and y <= value[1] < y+h:
+                        if index == 1: self.confirm_restart()
+                        else: self.confirm_action = None
+                        break
+            return
+        if (self.infrared is None and self.editing is None
+                and event[0] == 'key' and event[1] in BACK):
+            self.close_settings()
+            return
         was_infrared = self.infrared is not None
         if self.pending_settings is not None:
             return  # Wait for cooperative cleanup; never edit a live session.
         super().handle(event, canvas)
         if was_infrared and self.infrared is None and self.resume_after_settings:
-            self.message = 'Assignment saved. Choose Close to resume Siri Remote; use the LG remote here.'
+            self.message = 'Reception is paused. Choose Close to restart it; use the LG remote here.'
         if self.done:
             try:
                 self.resume_settings()
@@ -292,7 +410,7 @@ def main():
                 current_battery = app.battery.text(app.values['remoteAddress'], app.values['adapterAddress'])
                 if current_battery != battery_text:
                     battery_text = current_battery; app.draw(canvas)
-                programming = app.infrared is not None and app.infrared.busy
+                programming = app.saving_assignments or app.infrared is not None and app.infrared.busy
                 if stop_signal[0] and not closing and not programming:
                     closing = True
                     # A system close may terminate the native receiver window.
@@ -321,6 +439,7 @@ def main():
                             break  # Next connection requires a fresh native jail.
                         app.message = 'Finishing input cleanup before opening settings.'
                         app.draw(canvas)
+                if app.assignments_tick(): app.draw(canvas)
                 if app.settings_tick(canvas): app.draw(canvas)
                 if app.infrared is not None and app.infrared.tick(): app.draw(canvas)
                 for event in canvas.events():
