@@ -7,6 +7,12 @@ LEGACY = ('org.codex.siriremote.autocoord20261029v', 'org.codex.siriremote.hidga
 APP_ROOT = Path('/media/developer/apps/usr/palm/applications')
 
 
+def clean_state():
+    a = bundle.ROOT / 'roles/controller/state'
+    b = bundle.ROOT / 'roles/receiver/state'
+    return not any(p.exists() or p.is_symlink() for p in (a / 'receiver-launch-intent.json', b / 'borrowed-active', b / 'request.json', b / 'recovery-request.json'))
+
+
 def processes(proc='/proc'):
     paths = {str(bundle.ROOT / 'roles' / role / 'native_probe.py'): role for role in ('controller', 'receiver')}
     paths.update({str(APP_ROOT / app / 'native_probe.py'): 'legacy' for app in LEGACY})

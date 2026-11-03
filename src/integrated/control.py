@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path[:0] = [str(ROOT / 'runtime'), str(ROOT / 'native')]
 import runtime_bundle as bundle
-from control_processes import processes, require_no_other_input
+from control_processes import processes, require_no_other_input, clean_state
 from settings import load, save, validate, _unique
 
 
@@ -24,12 +24,6 @@ def safe_json(path, owner, limit=4096):
         return json.loads(raw, object_pairs_hook=_unique)
     finally:
         os.close(fd)
-
-
-def clean_state():
-    a = bundle.ROOT / 'roles/controller/state'
-    b = bundle.ROOT / 'roles/receiver/state'
-    return not any(p.exists() or p.is_symlink() for p in (a / 'receiver-launch-intent.json', b / 'borrowed-active', b / 'request.json', b / 'recovery-request.json'))
 
 
 def status():

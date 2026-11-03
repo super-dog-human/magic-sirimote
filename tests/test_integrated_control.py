@@ -17,6 +17,36 @@ def found(**changes):
 
 
 class ControlTests(unittest.TestCase):
+    def test_installer_cannot_start_input_while_button_settings_are_open(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); app = RuntimeSetup(Path(d), bus)
+            app.infrared = Mock()
+            with self.assertRaisesRegex(RuntimeError, 'Close button settings'):
+                app.apply({}, True)
+            bus.request.assert_not_called()
+
+    def test_ir_programming_refuses_retained_sensor_state(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            app = RuntimeSetup(Path(d), Mock())
+            with patch('control_processes.require_no_other_input'), patch('control_processes.clean_state', return_value=False), patch('ir_programmer.execute') as execute:
+                with self.assertRaisesRegex(RuntimeError, 'cleanup'):
+                    app.program_ir(Path(d), 'delete', 1, 2, '')
+                execute.assert_not_called()
+
+    def test_ir_idle_exception_does_not_ignore_a_controller_or_other_service(self):
+        import ir_programmer as ir
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d); process = root / '2147483000'; process.mkdir()
+            command = process / 'cmdline'
+            command.write_bytes(b'org.magicsirimote.app.service\0')
+            with self.assertRaises(RuntimeError): ir.runtime_idle(root)
+            ir.runtime_idle(root, allow_idle_service=True)
+            for args in (b'/usr/bin/python3\0-I\0-B\0/media/developer/apps/usr/palm/services/org.magicsirimote.app.service/roles/controller/native_probe.py\0', b'org.magicsirimote.other.service\0'):
+                command.write_bytes(args)
+                with self.assertRaises(RuntimeError): ir.runtime_idle(root, allow_idle_service=True)
+
     def test_old_native_window_blocks_input_before_launch_intent(self):
         import postconnect_supervisor_cycle as cycle
         from unittest.mock import Mock

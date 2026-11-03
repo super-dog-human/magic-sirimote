@@ -41,7 +41,7 @@ def packet(action, button, delay, code=''):
     return encode_entry(button, delay, bytes((0x20, 0xdf, command, command ^ 0xff)))
 
 
-def runtime_idle(proc=Path('/proc')):
+def runtime_idle(proc=Path('/proc'), *, allow_idle_service=False):
     """Conservative legacy-runtime coexistence check, not a global OS lock."""
     for path in proc.iterdir():
         if not path.name.isdecimal() or int(path.name) == os.getpid():
@@ -55,6 +55,8 @@ def runtime_idle(proc=Path('/proc')):
             if path.stat().st_uid >= 5000:
                 raise RuntimeError('Cannot check whether another input app is running.')
             continue
+        if allow_idle_service and command.rstrip(b'\0').split(b'\0') == [(APP + '.service').encode()]:
+            continue  # The caller separately checks workers and unfinished state.
         if b'org.codex.siriremote.' in command or b'org.magicsirimote.' in command:
             raise RuntimeError('Stop the other Magic Sirimote apps before changing infrared settings.')
 
@@ -162,7 +164,7 @@ def program(values, action, button, delay, code, call, record, idle=runtime_idle
     return result
 
 
-def execute(state, action, button, delay, code):
+def execute(state, action, button, delay, code, *, idle=runtime_idle):
     """TV entry point; uses saved identities and retains one private receipt."""
     from native_luna import Luna
     state = Path(state)
@@ -197,7 +199,7 @@ def execute(state, action, button, delay, code):
             os.close(parent)
 
         with Luna() as call:
-            return program(values, action, button, delay, code, call, record)
+            return program(values, action, button, delay, code, call, record, idle=idle)
     finally:
         if receipt is not None:
             os.close(receipt)

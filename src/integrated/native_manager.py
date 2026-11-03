@@ -77,6 +77,8 @@ class RuntimeSetup(Setup):
         self.message = 'Save device settings, then choose Start. Stop before programming infrared.'
 
     def apply(self, values, start=False):
+        if self.infrared is not None:
+            raise RuntimeError('Close button settings before updating device settings or starting input.')
         accepted(self.bus.request('configure', {'settings': values}))
         settings.save(self.state, values)
         self.values.update({key: values[key] for key in (*settings.FIELDS, 'gyroEnabled')})
@@ -86,6 +88,17 @@ class RuntimeSetup(Setup):
             self.done = True  # A fresh post-HID launch must inherit fresh input nodes.
         else:
             self.message = 'Settings saved to the input service.'
+
+    def program_ir(self, *args):
+        from ir_programmer import execute, runtime_idle
+        from control_processes import require_no_other_input, clean_state
+        def idle():
+            require_no_other_input()
+            if not clean_state():
+                raise RuntimeError('Input cleanup must finish before programming infrared.')
+            runtime_idle(allow_idle_service=True)
+        idle()
+        return execute(*args, idle=idle)
 
     def choose(self, index, canvas):
         if self.editing is not None:
@@ -102,6 +115,7 @@ class RuntimeSetup(Setup):
                 if not reply.get('cleanStop') or reply['processes']['legacy']:
                     raise RuntimeError('Stop the input runtime before programming infrared.')
                 super().choose(index, canvas)
+                self.infrared.submit = self.program_ir
             else:
                 super().choose(index, canvas)
         except (OSError, ValueError, RuntimeError) as error:
@@ -168,7 +182,8 @@ def main():
                         app.draw(canvas)
                     elif event == 'close':
                         stop_signal[0] = True
-                if stop_signal[0] and not closing:
+                programming = app.infrared is not None and app.infrared.busy
+                if stop_signal[0] and not closing and not programming:
                     closing = True
                     if worker is not None and worker.poll() is None:
                         try: accepted(bus.request('stop', {}))
