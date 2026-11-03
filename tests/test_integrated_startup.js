@@ -6,14 +6,14 @@ function fixture(saved = null) {
   let state = saved, bootId = BOOT1, count = 0;
   const calls = [];
   const store = {read: () => state && JSON.parse(JSON.stringify(state)), write: value => { state = JSON.parse(JSON.stringify(value)); }};
-  let failComplete = false, wrongCreator = false, detailsState = 'expired', committed = false, inUse = false;
+  let failComplete = false, wrongCreator = false, detailsState = 'expired', committed = false, inUse = false, activityType = {immediate: true, priority: 'highest'};
   const activity = async (method, params) => {
     calls.push([method, params]);
-    if (method === 'getDetails') return {value: {returnValue: true, activity: {activityId: state.activityId, name: APP + '.startup', creator: {serviceId: wrongCreator ? 'other.app' : APP}, callback: {method: 'luna://' + APP + '.service/startupTick', params: {token: committed ? state.nextToken : state.token}}, state: detailsState, adopters: inUse ? [{}] : [], subscribers: []}}};
+    if (method === 'getDetails') return {value: {returnValue: true, activity: {activityId: state.activityId, type: activityType, name: APP + '.startup', creator: {serviceId: wrongCreator ? 'other.app' : APP}, callback: {method: 'luna://' + APP + '.service/startupTick', params: {token: committed ? state.nextToken : state.token}}, state: detailsState, adopters: inUse ? [{}] : [], subscribers: []}}};
     return {value: method === 'complete' && failComplete ? null : {returnValue: true, adopted: true}, request: {cancel() {}}};
   };
   const instance = () => createStartup({store, activity, boot: () => bootId, now: () => 100000, token: () => (++count).toString(16).padStart(48, '0')});
-  return {instance, calls, state: () => store.read(), boot: value => { bootId = value; }, fail: () => { failComplete = true; }, wrongCreator: () => { wrongCreator = true; }, repairable: (kind = 'failed', next = false, busy = false) => { failComplete = false; detailsState = kind; committed = next; inUse = busy; }};
+  return {instance, calls, type: value => { activityType = value; }, state: () => store.read(), boot: value => { bootId = value; }, fail: () => { failComplete = true; }, wrongCreator: () => { wrongCreator = true; }, repairable: (kind = 'failed', next = false, busy = false) => { failComplete = false; detailsState = kind; committed = next; inUse = busy; }};
 }
 function bind(s) { const prep = s.prepare(); s.bind({token: prep.token, activityId: 17}); }
 const empty = () => ({returnValue: true, processes: {controller: [], receiver: [], ui: [], legacy: []}});
@@ -138,6 +138,26 @@ async function main() {
         assert.equal(f.state().phase, 'ready'); assert.equal(f.state().previousActivityId, 17);
       }
     }
+  }
+  for (const mode of ['idle', 'running', 'in-use', 'highest', 'wrong-creator']) {
+    const f = fixture(), upgrade = f.instance(); bind(upgrade);
+    f.type(mode === 'highest' ? {immediate: true, priority: 'highest'} : {foreground: true});
+    f.repairable(mode === 'running' ? 'running' : 'unsatisfied', false, mode === 'in-use');
+    if (mode === 'wrong-creator') f.wrongCreator();
+    if (mode === 'in-use') {
+      await assert.rejects(upgrade.repair(), /in use/);
+      assert.equal(f.state().phase, 'ready');
+    } else {
+      const result = await upgrade.repair();
+      assert.equal(result.status, mode === 'idle' ? 'cancel-required' : mode === 'wrong-creator' ? 'startup-mismatch-creator' : 'registered');
+      assert.equal(f.state().phase, mode === 'idle' ? 'cancel-pending' : 'ready');
+      if (mode === 'idle') {
+        upgrade.cancelled({activityId: 17, resetToken: result.resetToken});
+        const next = upgrade.prepare(); assert.equal(next.status, 'create-required');
+        upgrade.bind({token: next.token, activityId: 18});
+      }
+    }
+    assert.deepEqual(f.calls.map(x => x[0]), ['getDetails'], 'Priority replacement requires native creator acknowledgement');
   }
   const h = fixture(), early = h.instance(); const p = early.prepare();
   assert.equal((await early.tick(message, {token: p.token, $activity: {activityId: 19}})).returnValue, true, 'Genuine callback recovers lost create acknowledgement');

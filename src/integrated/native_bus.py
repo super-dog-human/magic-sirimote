@@ -157,7 +157,7 @@ class NativeBus:
         start = (datetime.now(timezone.utc) + timedelta(seconds=30)).strftime('%Y-%m-%d %H:%M:%SZ')
         return self._request_uri('luna://com.webos.service.activitymanager/create', {
             'activity': {'name': APP + '.startup', 'description': 'Magic Sirimote automatic startup',
-                         'type': {'foreground': True, 'persist': True, 'explicit': False, 'continuous': False},
+                         'type': {'immediate': True, 'priority': 'highest', 'persist': True, 'explicit': False, 'continuous': False},
                          'schedule': {'start': start},
                          'callback': {'method': 'luna://' + APP + '.service/startupTick', 'params': {'token': token}}},
             'start': True, 'subscribe': False, 'replace': False}, 8)

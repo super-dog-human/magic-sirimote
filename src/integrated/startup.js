@@ -171,14 +171,18 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     if (mismatch.length) return {returnValue: false, status: 'startup-mismatch-' + mismatch.join('-')};
     const terminal = ['expired', 'failed'].includes(a.state);
     if (s.phase !== 'ready' && !committed && !terminal) throw Error('Startup outcome is still uncertain');
-    if (!terminal) {
+    // Priority is fixed at creation. Replace only our verified, idle legacy
+    // reservation; an active callback or uncertain completion stays untouched.
+    const priorityUpgrade = s.phase === 'ready' && a.state === 'unsatisfied'
+      && a.type && a.type.foreground === true;
+    if (!terminal && !priorityUpgrade) {
       if (committed) { s.token = s.nextToken; delete s.nextToken; s.phase = 'ready'; store.write(s); }
       return {returnValue: true, status: 'registered'};
     }
     if (!Array.isArray(a.adopters) || a.adopters.length || !Array.isArray(a.subscribers) || a.subscribers.length) throw Error('Startup activity is in use');
-    if (a.state === 'failed') {
-      // Activity Manager cannot complete/restart a failed activity. Its creator
-      // must cancel this exact verified activity before registering a new one.
+    if (a.state === 'failed' || priorityUpgrade) {
+      // Only the native creator cancels the exact verified reservation, with
+      // durable acknowledgement before a new registration can be made.
       s.phase = 'cancel-pending'; s.resetToken = token(); store.write(s);
       return {returnValue: true, status: 'cancel-required', activityId: s.activityId, resetToken: s.resetToken};
     }
