@@ -447,10 +447,15 @@ def pending_worker():
     if not any((state / name).exists() for name in ('request.json', 'recovery-request.json')):
         return False
     from bundle_boot import receiver_settings
-    receiver_settings()  # Pins, live controller PID/start ticks and snapshot owner.
+    values = receiver_settings()  # Pins, live controller PID/start ticks and snapshot owner.
     from controller_start_record import read_record
     recovery = (state / 'recovery-request.json').exists()
     if recovery:
+        # Recovery parsing checks the GATT peer against immutable device
+        # constants. Bind the attested snapshot before those modules import.
+        from runtime_device import configure
+        configure(remote=values['remoteAddress'], adapter=values['adapterAddress'],
+                  name=values['remoteName'])
         from receiver_recovery_entry import recovery_controller_record
         from recovery_request import read_recovery_request as read
         record = recovery_controller_record(state)

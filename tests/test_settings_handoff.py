@@ -40,7 +40,7 @@ class HandoffTests(unittest.TestCase):
     def test_recovery_can_follow_normal_result_but_cannot_replay_its_own_result(self):
         (self.state/'recovery-request.json').write_text('{}')
         (self.state/('receiver-result-'+self.run+'.json')).write_text('{}')
-        with patch.object(manager,'SERVICE',self.root),patch('runtime_bundle.select'),patch('bundle_boot.receiver_settings'),patch('receiver_recovery_entry.recovery_controller_record',return_value=self.record),patch('recovery_request.read_recovery_request',return_value={'run':self.run}):
+        with patch.object(manager,'SERVICE',self.root),patch('runtime_bundle.select'),patch('bundle_boot.receiver_settings',return_value={'remoteAddress':'aa:bb:cc:dd:ee:10','adapterAddress':'aa:bb:cc:dd:ee:20','remoteName':'TEST_REMOTE'}),patch('runtime_device.configure'),patch('receiver_recovery_entry.recovery_controller_record',return_value=self.record),patch('recovery_request.read_recovery_request',return_value={'run':self.run}):
             self.assertTrue(manager.pending_worker())
             (self.state/('receiver-recovery-result-'+self.run+'.json')).write_text('{}')
             self.assertFalse(manager.pending_worker())
