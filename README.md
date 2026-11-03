@@ -114,7 +114,7 @@ ares-device --system-info --device my-tv
 
 ### 5. Download and install Magic Sirimote
 
-An **IPK** is the app's installation file. The current package is **0.6.55**.
+An **IPK** is the app's installation file. The current package is **0.1.0**.
 
 The following commands create a folder under Downloads and download the package and its checksum. Copy each command into Terminal and wait for it to finish before continuing:
 
@@ -124,8 +124,8 @@ cd "$HOME/Downloads/magic-sirimote"
 ```
 
 ```sh
-curl --fail --location --output org.magicsirimote.app_0.6.55_arm.ipk \
-  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/integrated-preview/org.magicsirimote.app_0.6.55_arm.ipk
+curl --fail --location --output org.magicsirimote.app_0.1.0_arm.ipk \
+  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/integrated-preview/org.magicsirimote.app_0.1.0_arm.ipk
 ```
 
 ```sh
@@ -139,12 +139,12 @@ Check the download:
 shasum -a 256 -c SHA256SUMS
 ```
 
-The result should end with `org.magicsirimote.app_0.6.55_arm.ipk: OK`. If it does not, download both files again before installing.
+The result should end with `org.magicsirimote.app_0.1.0_arm.ipk: OK`. If it does not, download both files again before installing.
 
 Keep the TV on, then install and open the app:
 
 ```sh
-ares-install --device my-tv org.magicsirimote.app_0.6.55_arm.ipk
+ares-install --device my-tv org.magicsirimote.app_0.1.0_arm.ipk
 ```
 
 ```sh
@@ -205,7 +205,7 @@ Choose every cell you want to use before your first save. The app cannot recover
 3. Choose **Save and restart**. The app applies all twelve displayed assignments and restarts reception.
 4. Wait for the window to close, then use Siri Remote.
 
-If saving fails partway through, some assignments may already have changed. Read the displayed result, wake the remote, and see [Saving problems](#saving-problems) before retrying. Selecting a choice or leaving the editor with Back does not itself save anything. **Close** asks whether to discard unsaved edits.
+If saving fails partway through, some assignments may already have changed. Read the displayed result, press Siri Remote's touch surface once to wake it, and see [Saving problems](#saving-problems) before retrying. Selecting a choice or leaving the editor with Back does not itself save anything. **Close** asks whether to discard unsaved edits.
 
 ## Troubleshooting
 
@@ -244,7 +244,7 @@ Infrared and Bluetooth operate independently. Working IR buttons do not confirm 
 1. Press the touch surface once, then try a few swipes. Allow time for reconnection, especially just after turning on the TV.
 2. With the LG remote, open Magic Sirimote and read any message. If a settings window was left open, choose **Close**, then try Siri Remote again.
 3. Check that Developer Mode is still enabled.
-4. If input remains unavailable, try a normal TV power-off/power-on with the LG remote, then wake Siri Remote again.
+4. If input remains unavailable, try a normal TV power-off/power-on with the LG remote, then press Siri Remote's touch surface once to wake it.
 5. If normal power cycling does not help, a full restart may clear a stuck Bluetooth state: when the TV is not updating, turn it off, unplug it for about 30 seconds, reconnect power, and turn it on. Allow startup time before testing again.
 
 Recovery is not guaranteed for every Bluetooth failure. If the problem keeps returning, report it rather than repeatedly resetting pairings or deleting app files. Include whether swipes, surface clicks, cursor movement and IR still work, and whether the problem followed sleep, power-on or saving settings.
@@ -255,7 +255,7 @@ Check that Gyro cursor is on and saved. Lift your finger completely off the touc
 
 ### Saving problems
 
-Keep the TV on and the remote nearby. Wake Siri Remote before saving, then use the LG remote to operate the app while reception pauses.
+Keep the TV on and the remote nearby. Press Siri Remote's touch surface once to wake it before saving, then use the LG remote to operate the app while reception pauses.
 
 If you see a partial-save count, the completed items may already be stored. Inspect the choices and the error before retrying; do not assume the previous configuration was restored. If Hold uses an IR action, Press must also use an IR action on the same button. For example, set TV / Control Center to **Press: Home (IR)** and **Hold: Power on/off (IR)**. Setting Press to Do nothing while Hold uses IR is not allowed.
 
@@ -271,7 +271,7 @@ Voice input is not supported.
 
 To start over:
 
-1. Have the original LG remote ready and wake Siri Remote.
+1. Have the original LG remote ready, then press Siri Remote's touch surface once to wake it.
 2. Open Magic Sirimote and choose **Reset app**.
 3. Read the confirmation. Choose **Cancel** to leave things unchanged, or **Reset everything** to proceed.
 4. Let the reset finish. If it stops partway through, read the error; reopening the app may offer **Continue reset** to finish the remaining steps. Some IR assignments may already be deleted.

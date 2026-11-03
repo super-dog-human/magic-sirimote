@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 APP = 'org.magicsirimote.app'
 NATIVE_SOURCES = ('entry.py', 'settings.py', 'graphics.py', 'ir_screen.py',
                   'ir_programmer.py', 'native_luna.py', 'tv_assignments.py')
-VERSION = '0.6.55'
+VERSION = '0.1.0'
 ROLES = ('controller', 'receiver')
 
 
