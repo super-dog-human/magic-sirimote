@@ -14,7 +14,6 @@ from ir_programmer import BUTTONS
 ACTION = 'screen-toggle'
 ACTIONS = ('none', 'back', 'home', 'settings', 'playpause', 'play', 'pause', ACTION)
 ROWS = (('Menu', 32), ('TV / Control Center', 1), ('Siri', 16), ('Play/Pause', 8), ('Volume Up', 2), ('Volume Down', 4))
-DEFAULTS = {'20:00': 'back', '01:00': 'home', '10:00': ACTION, '08:00': 'playpause'}
 
 
 def valid_action(action):
@@ -210,18 +209,6 @@ def displayed_bindings(directory, drafts):
     validate({'schema': 2, 'bindings': drafts})
     value = load(directory)
     saved = value['bindings'] if value['schema'] == 2 else {}
-    bindings = {}
-    for _, button in ROWS:
-        for delay in (0, 2):
-            key = slot(button, delay)
-            if key in drafts: action = drafts[key]
-            elif key in saved: action = saved[key]
-            else:
-                action = DEFAULTS.get(key)
-                if delay == 2 and button != 1:
-                    normal = slot(button, 0)
-                    action = drafts.get(normal, saved.get(normal, DEFAULTS.get(normal)))
-                    if action == 'none' or action and action.startswith('ir:'): action = None
-            if action is not None:
-                bindings[key] = 'ir:7C' if action == 'home' else action
-    return bindings
+    # Only explicit saved/draft slots are known. A short press does not imply
+    # a hold assignment, and unknown slots must never cause IR writes/deletes.
+    return {**saved, **drafts}

@@ -14,6 +14,39 @@ from native_bus import NativeBus
 from test_settings_render import DiscardingCanvas
 
 class AssignmentMatrixTests(unittest.TestCase):
+    def test_fresh_install_shows_twelve_unknown_slots_and_saves_no_assignments(self):
+        with tempfile.TemporaryDirectory() as d:
+            app=InfraredScreen(Path(d))
+            for _,button in table.ROWS:
+                for delay in (0,2):self.assertEqual(app.cell_label(button,delay),'IR unknown')
+            self.assertEqual(table.displayed_bindings(d,{}),{})
+            self.assertEqual(table.plan(d,{}),[])
+            self.assertEqual(list(Path(d).iterdir()),[])
+
+    def test_explicit_press_does_not_populate_unknown_hold(self):
+        with tempfile.TemporaryDirectory() as d:
+            table.execute(d,'assign',8,0,'playpause')
+            app=InfraredScreen(Path(d))
+            self.assertEqual(app.cell_label(8,0),'Play / Pause')
+            self.assertEqual(app.cell_label(8,2),'IR unknown')
+            self.assertEqual(table.displayed_bindings(d,{}),{'08:00':'playpause'})
+            with patch.object(buttons,'CONFIGURED',{'08:00':'playpause'}):
+                mapping,holds=buttons.configured_mappings({32:'back',1:'home',16:'screen-toggle'})
+                self.assertEqual(mapping[8],'playpause')
+                self.assertTrue(all(value is None for value in holds.values()))
+                self.assertTrue(all(value is None for button,value in mapping.items() if button!=8))
+
+    def test_empty_runtime_assignments_emit_no_short_or_hold_actions(self):
+        with patch.object(buttons,'CONFIGURED',{}):
+            mapping,holds=buttons.configured_mappings({32:'back',1:'home',16:'screen-toggle',8:'playpause'})
+            actions=[];now=[0.0]
+            decoder=buttons.SystemButtons(actions.append,mapping=mapping,holds=holds,clock=lambda:now[0]);decoder.bind(1)
+            for _,button in table.ROWS:
+                for duration in (0.1,1.0):
+                    decoder.feed(1,bytes((252,0,0)));decoder.feed(1,bytes((252,0,button)))
+                    now[0]+=duration;decoder.feed(1,bytes((252,0,0)))
+            self.assertEqual(actions,[])
+
     def test_all_twelve_cells_stage_exact_button_and_press_without_writing(self):
         with tempfile.TemporaryDirectory() as d:
             drafts={}
@@ -39,7 +72,7 @@ class AssignmentMatrixTests(unittest.TestCase):
                 def feed(mask):decoder.feed(1,bytes((252,0,mask)))
                 feed(0);feed(32);feed(0);self.assertEqual(actions,[])
                 feed(1);now[0]=1;feed(0);self.assertEqual(actions,[]) # IR hold cannot also send Home.
-                feed(1);feed(0);self.assertEqual(actions,['home'])
+                feed(1);feed(0);self.assertEqual(actions,[]) # Unknown Press has no TV fallback.
 
     def test_ir_choice_disables_tv_slot_and_uses_one_set_not_a_delete_then_set(self):
         with tempfile.TemporaryDirectory() as d:

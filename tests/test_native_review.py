@@ -91,7 +91,7 @@ class ReviewTests(unittest.TestCase):
             app=InfraredScreen(Path(folder));canvas=Screen();app.draw(canvas)
             self.assertEqual(app.cell_label(16,2),'Screen off / restore')
             self.assertIn('Screen off / restore',canvas.labels)
-            self.assertEqual(app.cell_label(1,2),'IR unknown *')
+            self.assertEqual(app.cell_label(1,2),'IR unknown')
 
 
     def test_existing_gatt_client_is_preserved_even_if_runtime_starts(self):

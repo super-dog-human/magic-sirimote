@@ -16,8 +16,9 @@ def configure_assignments(bindings):
 
 def configured_mappings(default):
  if CONFIGURED is None:return default, None
- normal={key:default.get(key) for key in (1,2,4,8,16,32)}
- holds={1:None}  # Default TV hold belongs to the remote's stored IR power action.
+ # Unknown slots leave the remote's stored IR alone and emit no TV action.
+ normal={key:None for key in (1,2,4,8,16,32)}
+ holds={key:None for key in normal}
  for slot,action in CONFIGURED.items():
   button,delay=(int(part,16) for part in slot.split(':'))
   if button not in normal:continue

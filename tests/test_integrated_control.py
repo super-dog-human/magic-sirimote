@@ -40,13 +40,14 @@ class ControlTests(unittest.TestCase):
             app.choose(5, Mock())
             self.assertEqual(bus.request.call_args.args[0], 'drain')
             bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found(controller=[{'pid': 1}])}
-            with patch.object(app, 'start_assignment_batch') as apply, patch.object(app, 'persist_device'):
+            with patch.object(app, 'apply') as apply, patch.object(app, 'start_assignment_batch') as assignments:
                 self.assertFalse(app.settings_tick(Mock()))
                 apply.assert_not_called()
                 app.next_settings_check = 0
                 bus.request.return_value = {'returnValue': True, 'cleanStop': True, 'processes': found()}
                 self.assertTrue(app.settings_tick(Mock()))
                 apply.assert_called_once()
+                assignments.assert_not_called()
 
     def test_settings_timeout_never_changes_configuration(self):
         from unittest.mock import Mock

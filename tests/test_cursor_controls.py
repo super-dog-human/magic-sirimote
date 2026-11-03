@@ -76,13 +76,13 @@ class CursorControlsTests(unittest.TestCase):
         self.assertEqual(flat.reference_inverse,(0.,0.,0.,1.))
 
 class FullSaveTests(unittest.TestCase):
-    def test_only_ir_home_is_selectable_and_legacy_home_is_migrated(self):
+    def test_only_ir_home_is_selectable_and_saved_slots_are_not_rewritten(self):
         self.assertNotIn('home',[v for _,v in CHOICES]);self.assertIn(('Home (IR)','ir:7C'),CHOICES)
         with tempfile.TemporaryDirectory() as d:
             table.execute(d,'assign',1,0,'home');table.execute(d,'assign',1,2,'ir:08')
             full=table.displayed_bindings(d,{})
-            self.assertEqual(full['01:00'],'ir:7C');self.assertEqual(full['01:02'],'ir:08')
-            table.plan(d,full)
+            self.assertEqual(full, {'01:00':'home','01:02':'ir:08'})
+            with self.assertRaises(ValueError): table.plan(d,full)
 
     def test_full_save_includes_unchanged_values_and_omits_unknown(self):
         with tempfile.TemporaryDirectory() as d:
@@ -92,7 +92,9 @@ class FullSaveTests(unittest.TestCase):
             self.assertEqual(full['01:00'],'ir:7C');self.assertEqual(full['01:02'],'ir:08')
             self.assertEqual(full['10:00'],'ir:09');self.assertEqual(full['08:00'],'pause')
             self.assertNotIn('02:00',full);self.assertNotIn('10:02',full)
-            self.assertEqual(full['08:02'],'pause')
+            self.assertNotIn('08:02',full)
+            with self.assertRaisesRegex(ValueError, 'Hold IR is unknown'): table.plan(d,full)
+            full=table.displayed_bindings(d,{'08:00':'pause','08:02':'none'})
             table.plan(d,full)
 
 class PreferenceRuntimeTests(unittest.TestCase):

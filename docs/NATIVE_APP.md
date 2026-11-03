@@ -2,7 +2,7 @@
 
 ## Integrated runtime build
 
-[Download Magic Sirimote 0.6.37](../releases/integrated-preview/org.magicsirimote.app_0.6.37_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
+[Download Magic Sirimote 0.6.38](../releases/integrated-preview/org.magicsirimote.app_0.6.38_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 
 One IPK contains the native settings window, input receiver, connection controller and startup service. No computer stays in the input path after installation. The app uses the TV's existing Python 3.10+, SDL2 and SDL_ttf libraries and a TV-provided font; these dependencies are not bundled. The tested configuration is the A1513 Siri Remote and LG G3 listed in the [README](../README.md#1-tested-configuration). Other models and factory-fresh installations remain unverified.
 
@@ -21,7 +21,7 @@ One IPK contains the native settings window, input receiver, connection controll
 5. From this repository, install and open the integrated package:
 
    ```sh
-   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.37_arm.ipk
+   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.38_arm.ipk
    ares-launch --device my-tv org.magicsirimote.app
    ```
 
@@ -60,6 +60,8 @@ The diagnostic cable is not required for this tested pairing path. Cable-free pa
 A failed or uncertain request stops the attempt instead of repeatedly issuing writes. Follow the displayed result before trying again. Pairing does not program IR assignments. An address or candidate name alone is never treated as successful pairing.
 
 ## Settings
+
+Without saved button assignments, all six buttons show **IR unknown** for both Press and Hold. Unknown slots are omitted from Save and emit no TV-side button action. Existing IR codes in the remote are left untouched, and explicit saved assignments remain visible. Configuring Press does not implicitly configure Hold.
 
 The main screen contains **Gyro cursor**, a five-step **Cursor sensitivity** slider, **Reset cursor orientation**, and **Button Assignments**. **Save and restart** sits to the left of **Close** on its own row. Bluetooth addresses and device names are internal connection data, not editable settings. Reception is automatic; there is no Start/Stop button.
 

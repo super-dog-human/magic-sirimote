@@ -52,13 +52,7 @@ class InfraredScreen:
         if key in self.drafts: return label(self.drafts[key]) + ' (edited)'
         if self.tv_bindings is None: return 'Unavailable'
         if key in self.tv_bindings: return label(self.tv_bindings[key])
-        default = assignments.DEFAULTS.get(key)
-        if delay == 2 and button != 1:
-            normal = assignments.slot(button, 0)
-            default = self.drafts.get(normal, self.tv_bindings.get(normal, assignments.DEFAULTS.get(normal)))
-            if default == 'none' or default and default.startswith('ir:'):
-                default = None
-        return label(default) + ' *' if default else 'IR unknown *'
+        return 'IR unknown'
 
     def tick(self):
         return False
