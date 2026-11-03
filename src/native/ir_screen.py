@@ -7,7 +7,7 @@ BUTTONS = assignments.ROWS
 PRESETS = (('Power on/off', '08'), ('Back', '28'), ('Home', '7C'),
            ('Settings', '43'), ('Volume +', '02'), ('Volume -', '03'),
            ('Mute', '09'), ('Play', 'B0'), ('Pause', 'BA'))
-TV_ACTIONS = (('Do nothing', 'none'), ('Back', 'back'),
+TV_ACTIONS = (('Do nothing', 'none'),
               ('Play / Pause', 'playpause'),
               ('Screen off / restore', 'screen-toggle'))
 CHOICES = TV_ACTIONS + tuple((name + ' (IR)', 'ir:' + code) for name, code in PRESETS)
