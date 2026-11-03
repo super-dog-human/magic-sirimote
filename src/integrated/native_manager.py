@@ -95,7 +95,9 @@ class RuntimeSetup(Setup):
         self.confirm_boxes = []
         from battery_status import ScreenReading
         self.battery = ScreenReading(state)
-        self.message = 'Remote control starts automatically after device settings are saved.'
+        if self.message in ('Saved identities loaded. This preview does not start remote control.',
+                            'Enter the paired Siri Remote Bluetooth address. Other identities are detected.'):
+            self.message = ''
 
     def enable_startup(self):
         reply = accepted(self.bus.request('startupPrepare', {}))
@@ -153,7 +155,7 @@ class RuntimeSetup(Setup):
         # Keep the old argument for staged installer requests from earlier builds.
         self.enable_startup()
         accepted(self.bus.request('start', {}))
-        self.message = 'Settings saved. Remote control starts automatically.'
+        self.message = 'Settings saved.'
         self.resume_after_settings = False
         self.done = True  # A fresh post-HID launch must inherit fresh input nodes.
 
@@ -396,7 +398,6 @@ class RuntimeSetup(Setup):
                 self.message = str(error)[:160]
 
     def draw_footer(self, canvas):
-        canvas.text('Remote control runs automatically. No Start or Stop action is needed.', 66, 630, 21, (155, 170, 190))
         canvas.text(self.battery.text(self.values['remoteAddress'], self.values['adapterAddress']), 66, 682, 19, (155, 170, 190))
 
 

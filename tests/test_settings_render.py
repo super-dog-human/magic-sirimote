@@ -29,7 +29,11 @@ class SettingsRenderTests(unittest.TestCase):
                 self.assertEqual(len(canvas.frames) - before, 1)
                 for title in ('Magic Sirimote', 'Save', 'Button Assignments', level):
                     self.assertIn(title, canvas.frames[-1])
-                self.assertTrue(any('runs automatically' in text for text in canvas.frames[-1]))
+                self.assertFalse(any('automatically' in text for text in canvas.frames[-1]))
+                self.assertNotIn('', canvas.frames[-1])  # Native SDL rejects zero-width text.
+                boxes = dict(app.boxes)
+                self.assertGreater(boxes[5][1], boxes[6][1] + boxes[6][3])
+                self.assertEqual(boxes[5][1], boxes[7][1])
                 self.assertFalse(any('input startup is separate' in text for text in canvas.frames[-1]))
                 self.assertEqual([i for i, _ in app.boxes], [0,3,4,8,6,5,7])
 

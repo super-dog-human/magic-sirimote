@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.26_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.27_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -24,8 +24,7 @@ and verified before starting the integrated runtime.
 
 Remote reception is automatic once the paired remote's verified device settings
 are saved. Opening the app displays settings without stopping reception. The
-main screen contains **Button Assignments**, **Save**, and **Close**, in
-that order. There is no Start/Stop or device-access test button.
+main screen places **Button Assignments** above **Save** and **Close**, with Save to the left of Close. There is no Start/Stop or device-access test button.
 
 **Button Assignments** shows six rows: **Menu**, **TV / Control Center**,
 **Siri**, **Play/Pause**, **Volume Up**, and **Volume Down**, using
@@ -46,7 +45,7 @@ fails, the controls become available again and the error stays visible.
 Closing with unsaved edits asks whether to discard them.
 
 After confirmation, the app waits for input cleanup, saves the verified device
-settings, and applies changed assignments sequentially. Each local mapping is
+settings, and sends all concrete displayed assignments sequentially. Each local mapping is
 saved only after acknowledged IR delivery and a saved operation receipt. An uncertain
 or failed write stops the batch: completed changes remain saved, remaining
 changes stay pending, and no request is automatically repeated. Reception remains
