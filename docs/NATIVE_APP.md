@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.24_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.25_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -97,6 +97,32 @@ pointing, MENU for Back, the TV button for Home, playback controls, and releasin
 the microphone button to toggle screen off/restore. The saved gyro preference
 is not yet connected to this runtime. Button assignments are loaded on the next verified receiver start. Remote
 IR assignments already stored in the Siri Remote continue to work independently.
+
+## Cursor controls and full saves
+
+**Cursor sensitivity** has five steps, selected with Left/Right or by clicking
+the slider. Step 3 uses a gain of 1453.5 for both axes. Steps 1–5 are 50%, 75%,
+100%, 125% and 150% of that gain. Only movement distance changes; the 20 ms
+render interval, filtering and rest detection are unchanged. Save applies the
+selection. Older settings default to step 3. **Gyro cursor: Off** suppresses
+cursor motion while leaving swipes and button input available.
+
+If cursor directions feel rotated, lay Siri Remote flat with its top facing up
+and its tip pointing toward the TV. Use the LG remote to choose **Reset cursor
+orientation** and confirm the restart. Leave Siri Remote untouched until input
+restarts, then pick it up. This replaces the initial orientation reference; it
+does not send IR configuration. Save or discard pending edits first. This is
+not an absolute screen calibration and cannot remove every sensor limitation.
+
+Save sends every concrete displayed button assignment, not just edited cells.
+Unknown IR slots remain unchanged and are not counted. Home is offered only as
+**Home (IR)**. Stored legacy TV Home choices migrate when Save is confirmed.
+The confirmation displays the assignment count before reception is paused.
+
+Cold-boot readiness includes webOS service startup, Bluetooth and native input
+initialization and may take tens of seconds. This is not a fixed delay or
+a guarantee. The pose reference itself needs
+about 0.15 seconds of valid untouched samples after reception starts.
 
 ## Try the setup preview
 

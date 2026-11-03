@@ -1,5 +1,6 @@
 """Offline FC21 router. Pointer and semantic events are returned to fake sinks."""
 from adaptive_prefix_pose import AdaptivePrefixPose
+from runtime_device import cursor_preferences
 from normalize import normalize
 from position_press import SurfaceRegions
 from swipe_click import SwipeClick
@@ -8,7 +9,7 @@ from navigation_mode import NavigationMode
 class AdaptivePrefixRouter:
  def __init__(self, emit, *, clock, motion_enabled=True, session_policy=None, max_actions=12):
   if type(motion_enabled) is not bool:raise ValueError('explicit motion gate required')
-  self.motion_enabled=motion_enabled;self.clock=clock;self.pose=AdaptivePrefixPose();self.generation=None;self.closed=False
+  self.motion_enabled=motion_enabled;self.clock=clock;self.pose=AdaptivePrefixPose(sensitivity=cursor_preferences()[1]);self.generation=None;self.closed=False
   self.navigation=NavigationMode();self.emit=emit
   seconds=30. if session_policy is None else session_policy.seconds
   self.press=SwipeClick(self._semantic,SurfaceRegions(x_min=-1768,x_max=-200,y_min=-1032,y_max=440),clock=clock,max_seconds=seconds,max_actions=max_actions,session_policy=session_policy)

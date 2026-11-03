@@ -46,7 +46,7 @@ class TVAssignmentsTest(unittest.TestCase):
             def program(*args):
                 calls.append(args)
                 return {'status':'submitted','connectionPreserved':True,'receiptSaved':True}
-            app=InfraredScreen(Path(folder));app.choose(4);app.choose(5)
+            app=InfraredScreen(Path(folder));app.choose(4);app.choose(4)
             self.assertEqual(calls,[]);self.assertEqual(app.drafts,{'10:00':'screen-toggle'})
             self.assertFalse((Path(folder)/tv.FILE).exists())
             tv.execute(folder,'assign',16,2,'none')

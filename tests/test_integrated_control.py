@@ -40,7 +40,7 @@ class ControlTests(unittest.TestCase):
             app.choose(5, Mock()); app.confirm_restart()
             self.assertEqual(bus.request.call_args.args[0], 'drain')
             bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found(controller=[{'pid': 1}])}
-            with patch.object(app, 'apply') as apply:
+            with patch.object(app, 'start_assignment_batch') as apply, patch.object(app, 'persist_device'):
                 self.assertFalse(app.settings_tick(Mock()))
                 apply.assert_not_called()
                 app.next_settings_check = 0
@@ -79,7 +79,8 @@ class ControlTests(unittest.TestCase):
                 bus.request.return_value={'returnValue':True,'cleanStop':True,'processes':found()}
                 order=[];persist.side_effect=lambda *_:order.append('identity');submit.side_effect=lambda *_:order.append('assignments')
                 app.settings_tick(canvas);self.assertEqual(order,['identity','assignments'])
-                submit.assert_called_once_with({'20:00':'none'})
+                from tv_assignments import displayed_bindings
+                submit.assert_called_once_with(displayed_bindings(d, {'20:00':'none'}))
 
     def test_installer_cannot_interrupt_an_infrared_write(self):
         from unittest.mock import Mock

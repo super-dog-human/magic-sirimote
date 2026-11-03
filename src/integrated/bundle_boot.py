@@ -136,6 +136,8 @@ def main(role):
         app_state = Path('/media/developer/apps/usr/palm/applications/org.magicsirimote.app/state')
         assignments = load_assignments(app_state)
         configure_assignments(assignments['bindings'] if assignments['schema'] == 2 else {})
+    from runtime_device import configure_cursor
+    configure_cursor(enabled=values['gyroEnabled'], sensitivity=values['gyroSensitivity'])
     configure(remote=values['remoteAddress'], adapter=values['adapterAddress'], name=values['remoteName'])
     if role == 'controller':
         from resident_controller_entry import main as run

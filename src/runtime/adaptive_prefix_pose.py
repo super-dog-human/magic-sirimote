@@ -17,7 +17,8 @@ class AdaptivePrefixPose:
     PERIOD = .020
     ANGLE_DEADBAND = .00035
     MAX_SINGLE_REPORT_ROTATION = 1.0
-    AXIS_GAINS = (1453.5, 1744.2)
+    AXIS_GAINS = (1453.5, 1453.5)
+    SENSITIVITY_FACTORS = (.5, .75, 1., 1.25, 1.5)
     # Resting-pose noise must not accumulate into visible cursor creep.
     REST_RADIUS = .0012
     REST_SECONDS = .20
@@ -30,7 +31,10 @@ class AdaptivePrefixPose:
     DERIVATIVE_CUTOFF_HZ = ReducedGainVectorAdaptivePosePointer.DERIVATIVE_CUTOFF_HZ
     _render_target = ReducedGainVectorAdaptivePosePointer._render_target
 
-    def __init__(self):
+    def __init__(self, sensitivity=3):
+        if type(sensitivity) is not int or not 1 <= sensitivity <= 5:
+            raise ValueError('Choose sensitivity 1..5')
+        self.AXIS_GAINS = tuple(g * self.SENSITIVITY_FACTORS[sensitivity - 1] for g in type(self).AXIS_GAINS)
         self.last_time = None
         self.reference_inverse = None
         self._reset_calibration()

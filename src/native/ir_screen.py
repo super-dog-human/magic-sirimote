@@ -7,7 +7,7 @@ BUTTONS = assignments.ROWS
 PRESETS = (('Power on/off', '08'), ('Back', '28'), ('Home', '7C'),
            ('Settings', '43'), ('Volume +', '02'), ('Volume -', '03'),
            ('Mute', '09'), ('Play', 'B0'), ('Pause', 'BA'))
-TV_ACTIONS = (('Do nothing', 'none'), ('Back', 'back'), ('Home', 'home'),
+TV_ACTIONS = (('Do nothing', 'none'), ('Back', 'back'),
               ('Settings', 'settings'), ('Play / Pause', 'playpause'),
               ('Screen off / restore', 'screen-toggle'))
 CHOICES = TV_ACTIONS + tuple((name + ' (IR)', 'ir:' + code) for name, code in PRESETS)
@@ -15,6 +15,7 @@ CUSTOM = len(CHOICES)
 
 
 def label(action):
+    if action == 'home': return 'Home (legacy TV)'
     return next((name for name, value in CHOICES if value == action),
                 'Code ' + action[3:] + ' (IR)' if action.startswith('ir:') else action)
 
@@ -48,7 +49,7 @@ class InfraredScreen:
         default = assignments.DEFAULTS.get(key)
         if delay == 2 and button != 1:
             normal = assignments.slot(button, 0)
-            default = self.tv_bindings.get(normal, assignments.DEFAULTS.get(normal))
+            default = self.drafts.get(normal, self.tv_bindings.get(normal, assignments.DEFAULTS.get(normal)))
             if default == 'none' or default and default.startswith('ir:'):
                 default = None
         return label(default) + ' *' if default else 'IR unknown *'

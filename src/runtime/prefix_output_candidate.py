@@ -10,12 +10,14 @@ class PrefixOutputCandidate(CombinedReceiver):
  def __init__(self,outputs,*,clock,sensor_input_verified=False,session_policy=None,max_actions=12,action_history_limit=None):
   if type(sensor_input_verified) is not bool:raise ValueError('explicit gate required')
   super().__init__(outputs,clock=clock,sensor_input_verified=sensor_input_verified,session_policy=session_policy,max_actions=max_actions,action_history_limit=action_history_limit)
-  self.router=AdaptivePrefixRouter(self._emit,clock=clock,motion_enabled=sensor_input_verified,session_policy=session_policy,max_actions=max_actions)
+  from runtime_device import cursor_preferences
+  self.gyro_enabled=cursor_preferences()[0]
+  self.router=AdaptivePrefixRouter(self._emit,clock=clock,motion_enabled=sensor_input_verified and self.gyro_enabled,session_policy=session_policy,max_actions=max_actions)
   self.prefix_sensor_verified=sensor_input_verified
  def feed_raw(self,generation,report):
   if self.closed or self.failed or generation != self.generation or self.generation is None:return False
   try:
-   self.router.motion_enabled=self.bridge.sensor_input_verified
+   self.router.motion_enabled=self.bridge.sensor_input_verified and self.gyro_enabled
    return self.router.feed(generation,report)
   except BaseException:
    self.failed=True;self._stop_after_error();raise

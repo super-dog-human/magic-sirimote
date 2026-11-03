@@ -203,3 +203,25 @@ def assign(directory, action, button, delay, code, *, program):
     except (OSError, ValueError):
         return {**result, 'status': 'partial', 'mappingSaved': False}
     return {**result, 'status': 'saved', 'mappingSaved': True}
+
+
+def displayed_bindings(directory, drafts):
+    """A full save replays every concrete displayed value, never unknown IR."""
+    validate({'schema': 2, 'bindings': drafts})
+    value = load(directory)
+    saved = value['bindings'] if value['schema'] == 2 else {}
+    bindings = {}
+    for _, button in ROWS:
+        for delay in (0, 2):
+            key = slot(button, delay)
+            if key in drafts: action = drafts[key]
+            elif key in saved: action = saved[key]
+            else:
+                action = DEFAULTS.get(key)
+                if delay == 2 and button != 1:
+                    normal = slot(button, 0)
+                    action = drafts.get(normal, saved.get(normal, DEFAULTS.get(normal)))
+                    if action == 'none' or action and action.startswith('ir:'): action = None
+            if action is not None:
+                bindings[key] = 'ir:7C' if action == 'home' else action
+    return bindings

@@ -17,7 +17,7 @@ BACK = (27, 461, 1073742094)
 class Setup:
     def __init__(self, state):
         self.state = state
-        self.values = {**dict.fromkeys(settings.FIELDS, ''), 'gyroEnabled': True}
+        self.values = {**dict.fromkeys(settings.FIELDS, ''), 'gyroEnabled': True, 'gyroSensitivity': 3}
         self.focus = 0
         self.editing = None
         self.key_focus = 0
@@ -28,7 +28,7 @@ class Setup:
         self.infrared = None
         self.button_drafts = {}
         try:
-            self.values.update({key: value for key, value in settings.load(state).items() if key in (*settings.FIELDS, 'gyroEnabled')})
+            self.values.update({key: value for key, value in settings.load(state).items() if key in (*settings.FIELDS, *settings.PREFERENCES)})
             self.message = 'Saved identities loaded. This preview does not start remote control.'
         except FileNotFoundError:
             pass
@@ -74,7 +74,9 @@ class Setup:
             self.values['gyroEnabled'] = not self.values['gyroEnabled']
             self.message = 'Gyro preference changed. Choose Save settings; runtime integration is pending.'
         elif index == 4:
-            return
+            self.values['gyroSensitivity'] = self.values['gyroSensitivity'] % 5 + 1
+        elif index == 8:
+            self.message = 'Use the integrated app to reset cursor orientation.'
         elif index == 5:
             if self.button_drafts:
                 self.message = 'Use the integrated app to save button assignments.'
@@ -110,7 +112,10 @@ class Setup:
             for index, box in self.boxes:
                 x, y, width, height = box
                 if x <= value[0] < x + width and y <= value[1] < y + height:
-                    self.choose(index, canvas)
+                    if index == 4 and self.editing is None:
+                        self.values['gyroSensitivity'] = max(1, min(5, round((value[0] - 100) / 160) + 1))
+                    else:
+                        self.choose(index, canvas)
                     break
         elif kind == 'text' and self.editing is not None:
             field = settings.FIELDS[self.editing]
@@ -124,7 +129,9 @@ class Setup:
                     self.editing = None
                     canvas.stop_text()
             elif value in ARROWS:
-                if self.editing is None:
+                if self.editing is None and self.focus == 4 and value in (1073741904, 1073741903):
+                    self.values['gyroSensitivity'] = max(1, min(5, self.values['gyroSensitivity'] + ARROWS[value]))
+                elif self.editing is None:
                     self.focus = settings.MAIN_FOCUS[(settings.MAIN_FOCUS.index(self.focus) + ARROWS[value]) % len(settings.MAIN_FOCUS)]
                 else:
                     step = ARROWS[value] * (10 if value in (1073741906, 1073741905) else 1)
@@ -174,14 +181,28 @@ class Setup:
             canvas.rectangle(box, fill(self.focus == 3))
             canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 258, 25, ink)
             if not disabled: self.boxes.append((3, box))
+            box = (64, 312, 742, 82)
+            canvas.rectangle(box, fill(self.focus == 4))
+            canvas.text('Cursor sensitivity: ' + str(self.values['gyroSensitivity']) + ' / 5', 82, 322, 23, ink)
+            canvas.rectangle((100, 372, 640, 3), ink)
+            for step in range(1, 6):
+                x = 100 + (step - 1) * 160
+                canvas.rectangle((x - 7, 365, 14, 17), ink)
+            x = 100 + (self.values['gyroSensitivity'] - 1) * 160
+            canvas.rectangle((x - 11, 361, 22, 25), (105, 115, 130) if disabled else (114, 191, 227))
+            if not disabled: self.boxes.append((4, box))
+            box = (826, 312, 390, 82)
+            canvas.rectangle(box, fill(self.focus == 8))
+            canvas.text('Reset cursor orientation', 842, 337, 23, ink, max_width=358)
+            if not disabled: self.boxes.append((8, box))
             for column, (index, title) in enumerate(((6, 'Button Assignments'), (5, 'Save'), (7, 'Close'))):
-                box = (64 + column * 390, 330, 372, 61)
+                box = (64 + column * 390, 418, 372, 61)
                 canvas.rectangle(box, fill(self.focus == index))
                 canvas.text(title, box[0] + 25, box[1] + 17, 25, ink, max_width=322)
                 if not disabled: self.boxes.append((index, box))
-            canvas.text(self.message, 66, 425, 22, max_width=1148)
+            canvas.text(self.message, 66, 514, 22, max_width=1148)
             if self.button_drafts and not disabled:
-                canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose Save to apply.', 66, 476, 23, (114, 191, 227))
+                canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose Save to apply.', 66, 553, 21, (114, 191, 227))
             self.draw_footer(canvas)
         canvas.present()
 

@@ -36,7 +36,7 @@ class PairSafetyTests(unittest.TestCase):
 
     def test_unsafe_save_is_rejected_before_input_drain(self):
         with tempfile.TemporaryDirectory() as d:
-            app=RuntimeSetup(Path(d),Mock());app.button_drafts={'01:00':'home','01:02':'ir:08'};app.confirm_action='save'
+            app=RuntimeSetup(Path(d),Mock());app.button_drafts={'01:00':'back','01:02':'ir:08'};app.confirm_action='save'
             with patch.object(app,'detect_tv',return_value={}),patch.object(app,'prepare_settings') as prepare:
                 app.confirm_restart();prepare.assert_not_called()
             self.assertFalse(app.controls_disabled);self.assertIn('IR Hold needs',app.message)

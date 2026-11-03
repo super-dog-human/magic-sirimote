@@ -14,16 +14,20 @@ FIELDS = ('remoteAddress', 'remoteName', 'adapterAddress')
 LABELS = ('Remote Bluetooth address', 'Remote device name / serial', 'TV Bluetooth address')
 LIMITS = (17, 64, 17)
 EDITABLE_FIELDS = FIELDS[:1]
-MAIN_FOCUS = (0, 3, 6, 5, 7)
+MAIN_FOCUS = (0, 3, 4, 8, 6, 5, 7)
+PREFERENCES = ('gyroEnabled', 'gyroSensitivity')
 ADDRESS = re.compile(r'(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\Z')
 NAME = re.compile(r'[A-Za-z0-9_-]{1,64}\Z')
 
 
 def validate(values):
-    if type(values) is not dict or set(values) not in ({'schema', *FIELDS}, {'schema', *FIELDS, 'gyroEnabled'}) or type(values['schema']) is not int or values['schema'] != 1:
+    if type(values) is not dict or not {'schema', *FIELDS} <= set(values) <= {'schema', *FIELDS, *PREFERENCES} or type(values['schema']) is not int or values['schema'] != 1:
         raise ValueError('Unsupported settings format.')
     result = dict(values)
     result.setdefault('gyroEnabled', True)
+    result.setdefault('gyroSensitivity', 3)
+    if type(result['gyroSensitivity']) is not int or not 1 <= result['gyroSensitivity'] <= 5:
+        raise ValueError('Choose gyro sensitivity from 1 to 5.')
     if type(result['gyroEnabled']) is not bool:
         raise ValueError('Gyro cursor must be On or Off.')
     for key in ('remoteAddress', 'adapterAddress'):

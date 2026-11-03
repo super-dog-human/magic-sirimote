@@ -146,7 +146,7 @@ class RuntimeSetup(Setup):
     def persist_device(self, values):
         accepted(self.bus.request('configure', {'settings': values}))
         settings.save(self.state, values)
-        self.values.update({key: values[key] for key in (*settings.FIELDS, 'gyroEnabled')})
+        self.values.update({key: values[key] for key in (*settings.FIELDS, *settings.PREFERENCES)})
         self.saved_values = dict(self.values)
     def activate_settings(self):
         # Both installer configure and the TV Save action activate reception.
@@ -179,7 +179,7 @@ class RuntimeSetup(Setup):
         self.resume_after_settings = True
         self.pending_settings = (action, values, time.monotonic() + 20)
         self.next_settings_check = 0
-        self.message = 'Saving settings and restarting. Please wait...'
+        self.message = 'Resetting cursor orientation. Please wait...' if action == 'recenter' else 'Saving settings and restarting. Please wait...'
 
     def settings_tick(self, canvas):
         if self.pending_settings is None or time.monotonic() < self.next_settings_check:
@@ -198,6 +198,8 @@ class RuntimeSetup(Setup):
                 self.start_assignment_batch(dict(self.pending_assignments))
             elif action == 'save':
                 self.apply(values)
+            elif action == 'recenter':
+                self.resume_settings()
             else:
                 raise RuntimeError('Unknown settings operation.')
         except (OSError, ValueError, RuntimeError) as error:
@@ -291,6 +293,12 @@ class RuntimeSetup(Setup):
             elif index == 6:
                 super().choose(index, canvas)
                 self.infrared.detail = 'Both remotes can browse. No change is sent until Save.'
+            elif index == 8:
+                if self.has_unsaved():
+                    self.message = 'Save or discard pending changes before resetting cursor orientation.'
+                    return
+                self.confirm_action = 'recenter'
+                self.confirm_focus = 0
             elif index == 3:
                 self.values['gyroEnabled'] = not self.values['gyroEnabled']
                 self.message = 'Choose Save to save this preference.'
@@ -310,10 +318,13 @@ class RuntimeSetup(Setup):
                 self.message = 'Saving settings and restarting. Please wait...'
                 if canvas is not None: self.draw(canvas)
                 values = self.detect_tv({'schema': 1, **self.values})
-                from tv_assignments import plan
-                self.pending_assignments = dict(self.button_drafts)
+                from tv_assignments import plan, displayed_bindings
+                self.pending_assignments = displayed_bindings(self.state, self.button_drafts)
                 plan(self.state, self.pending_assignments)
                 self.prepare_settings('save', values)
+            elif action == 'recenter':
+                self.save_in_progress = True
+                self.prepare_settings('recenter')
             elif action == 'resume':
                 self.resume_settings()
             elif action == 'discard':
@@ -330,12 +341,16 @@ class RuntimeSetup(Setup):
             return super().draw(canvas)
         canvas.clear()
         discard = self.confirm_action == 'discard'
-        canvas.text('Discard unsaved changes?' if discard else 'Save settings and restart?' if self.confirm_action == 'save' else 'Restart remote control?', 64, 90, 36)
+        canvas.text('Discard unsaved changes?' if discard else 'Save settings and restart?' if self.confirm_action == 'save' else 'Reset cursor orientation?' if self.confirm_action == 'recenter' else 'Restart remote control?', 64, 90, 36)
         canvas.text('Unsaved edits will be discarded when you close this screen.' if discard else 'Remote control will pause briefly while the app restarts.', 66, 205, 26)
         canvas.text('This screen will close. The TV may briefly show Home or reopen the app.', 66, 258, 24)
-        canvas.text('Use the LG remote until Siri Remote reception resumes.', 66, 311, 24)
-        if self.button_drafts and not discard:
-            canvas.text(str(len(self.button_drafts)) + ' button changes will be applied in order.', 66, 363, 24)
+        canvas.text('Lay Siri Remote flat, top facing up and tip toward the TV. Use the LG remote to confirm.' if self.confirm_action == 'recenter' else 'Use the LG remote until Siri Remote reception resumes.', 66, 311, 22, max_width=1148)
+        if self.confirm_action == 'save':
+            from tv_assignments import displayed_bindings
+            try: count = len(displayed_bindings(self.state, self.button_drafts))
+            except (OSError, ValueError): count = 0
+            canvas.text(str(count) + ' displayed assignments will be sent, including unchanged ones.', 66, 363, 23)
+            canvas.text('Unknown IR slots stay unchanged. IR choices are written to the remote.', 66, 400, 21)
         self.confirm_boxes = [(64, 425, 552, 70), (640, 425, 552, 70)]
         for index, title in enumerate(('Cancel', 'Discard and close' if discard else 'Save and restart' if self.confirm_action == 'save' else 'Restart')):
             box = self.confirm_boxes[index]

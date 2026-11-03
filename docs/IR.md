@@ -17,7 +17,10 @@ swipe navigation and gyro movement are separate from these six buttons.
    second keyboard or Enter confirmation is needed.
 4. Use **Back** to return to the first screen. Edits remain pending, including
    when you reopen Button Assignments. Selecting a value does not write it yet.
-5. Choose **Save**, then **Save and restart** in the confirmation.
+5. Choose **Save**, then **Save and restart** in the confirmation. This sends every
+   concrete displayed assignment, including unchanged values. **IR unknown** slots
+   are excluded because their values cannot be reconstructed. The confirmation
+   shows how many assignments will be sent. No writes happen while browsing.
    Reception pauses during programming; use the LG remote until it restarts.
    On success, the window closes and reception resumes automatically.
 6. Test each changed button. Delivery acknowledgement is not a readback of the
@@ -30,7 +33,7 @@ asks whether to discard them. Edits are held in memory, so an app termination
 or TV restart before saving loses them.
 
 **Do nothing** deletes the selected IR entry and disables its TV-side action.
-It leaves other buttons and the other press type unchanged. For a button to
+A full Save also resends the other displayed assignments. For a button to
 have no effect at either duration, set both cells to **Do nothing**.
 Deleting cannot restore an overwritten previous value.
 
@@ -67,8 +70,8 @@ arbitrary hold durations are not offered.
 For unchanged buttons, the integrated runtime retains its normal TV actions:
 MENU is Back, TV is Home, Mic is Screen off / restore, and Play / Pause toggles
 playback. Unassigned holds retain the corresponding TV press behavior, except
-TV hold is reserved for the remote's existing IR power action. Existing IR
-settings remain untouched until its pending change is saved from the first screen.
+TV hold is reserved for the remote's existing IR power action. Concrete displayed IR settings are resent only on an explicitly confirmed Save.
+Unknown IR slots remain untouched.
 
 ## What the displayed values mean
 
@@ -90,7 +93,9 @@ Saving a new assignment migrates to schema 2 without enabling those old choices.
 
 ## Available actions
 
-TV actions are Back, Home, Settings, Play / Pause, and Screen off / restore.
+TV actions are Back, Settings, Play / Pause, and Screen off / restore.
+Home is offered only as **Home (IR)**. A previously saved TV Home is shown as
+**Home (legacy TV)** and converted to Home (IR) on the next confirmed Save.
 Screen off / restore keeps audio playing and suppresses cursor/touch output
 that would wake the picture; pressing its assigned button again restores it.
 
@@ -161,10 +166,23 @@ DCSD diagnostic access is a separate path used during development. Its UART
 commands differ from the Bluetooth reports above. Neither that cable nor this
 app currently provides a verified complete IR-table backup procedure.
 
-## Timing and two routes for Home
+## Timing and Home
 
 The delay selector is a firmware setting, not seconds. Selector `02` gives a hold threshold of approximately 0.7 seconds on the tested firmware. This is the hold threshold, while the TV may need longer to show a picture.
 
-The working remote also has an immediate IR Home entry, and the Bluetooth decoder maps the TV button to Home. A long press may therefore reach Home before the delayed power command. The two routes do not guarantee mutually exclusive short-press and long-press actions.
+Home (IR) sends immediately. Holding that button can first reach Home, then
+send the delayed power command. The corresponding TV action is disabled so
+the app does not also send Home over Bluetooth.
 
 MENU → Back and microphone → Back are mappings in the TV input program. They do not require corresponding IR entries in the remote.
+
+
+## Repeated saves and memory wear
+
+A confirmed Save sends the displayed known assignments again, even if only one
+value changed. It does not run on startup, reconnection or slider movement.
+IR set/delete commands update the remote's persistent settings; those memories
+have finite write endurance. The application cannot measure remaining endurance
+or equate one Save with a specified number of internal erase cycles. Avoid
+repeatedly saving as a connectivity test. **Reset cursor orientation** restarts
+input without sending IR configuration and does not rewrite the remote's IR table.
