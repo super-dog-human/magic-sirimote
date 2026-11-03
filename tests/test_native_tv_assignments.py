@@ -40,24 +40,21 @@ class TVAssignmentsTest(unittest.TestCase):
             self.assertTrue(file.is_symlink())
             self.assertEqual(target.read_text(), 'unchanged')
 
-    def test_screen_choice_never_uses_ir_transport(self):
+    def test_screen_choice_removes_competing_ir_only_after_confirmation(self):
+        calls=[]
         with tempfile.TemporaryDirectory() as folder:
-            def no_ir(*args): self.fail('TV assignment reached the infrared transport')
-            app = InfraredScreen(Path(folder), submit=no_ir)
-            app.choose(2); app.choose(len(PRESETS))
-            self.assertEqual(app.route, 'tv')
-            app.choose(3); app.choose(0)  # Cancel the review.
-            self.assertFalse((Path(folder) / tv.FILE).exists())
-            app.choose(3); app.choose(1)
-            result = app.results.get(timeout=2); app.results.put(result); app.tick()
-            self.assertIn('not active', app.message)
-            self.assertEqual(tv.load(folder)['bindings'], {'01:00': 'screen-toggle'})
-            app.choose(4); app.choose(1)
-            result = app.results.get(timeout=2); app.results.put(result); app.tick()
-            self.assertEqual(tv.load(folder)['bindings'], {})
-            app.choose(2); app.choose(0)
-            self.assertEqual(app.route, 'ir')
-            self.assertEqual(app.code, '08')
+            def program(*args):
+                calls.append(args)
+                return {'status':'submitted','clientReleased':True,'receiptSaved':True}
+            app=InfraredScreen(Path(folder),submit=lambda *a:tv.assign(*a,program=program))
+            app.choose(4);app.choose(5)  # Mic / press -> screen off / restore.
+            self.assertEqual(calls,[]);app.choose(0);self.assertEqual(calls,[])
+            app.choose(4);app.choose(5);app.choose(1)
+            result=app.results.get(timeout=2);app.results.put(result);app.tick()
+            self.assertEqual(calls,[(Path(folder),'delete',16,0,'')])
+            self.assertEqual(tv.load(folder)['bindings'],{'10:00':'screen-toggle'})
+            self.assertEqual(tv.load(folder)['schema'],2)
+
 
     def test_invalid_selector_fails_before_storage(self):
         for button, delay in ((64, 0), (16, 1), (True, 0), (16, False)):

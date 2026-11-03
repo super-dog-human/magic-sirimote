@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.16_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.17_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -28,14 +28,31 @@ automatic startup and starts input, then closes the window so the receiver can
 open with the current input devices. Opening the app again displays its settings
 without stopping the running receiver.
 
-**Buttons** keeps input running while you browse buttons, press types and actions,
-so either the LG remote or Siri Remote can navigate the settings. Only confirming
-an IR Set/Delete pauses reception and waits for verified cleanup before writing.
-After the result appears, use the LG remote to leave that screen; the window
-closes and Siri Remote reception resumes. Saving device settings also pauses and
-resumes input automatically. If cleanup cannot be confirmed, no write is sent.
-Package updates still use a separate installer maintenance stop; closing a
-window cannot undo that stop.
+**Buttons** shows six rows: MENU, TV, Mic, Play / Pause, Plus and Minus. Each
+row has **Press** and **Hold (~0.7 s)** cells. Select a cell, choose an action,
+and confirm **Save**. Choices without `(IR)` run on the TV; `(IR)` choices
+program the remote. **Do nothing** removes the chosen IR entry and disables
+its TV-side action. Surface clicking and swipes are not changed by this editor.
+See [button assignment details](IR.md) for timing and readback limitations.
+
+Either remote can navigate while browsing. Confirming an assignment pauses
+input and waits for verified cleanup before setting or deleting that slot's IR
+entry. The local runtime mapping is saved only after acknowledged IR delivery
+and connection cleanup. If either part is uncertain, the app reports it and
+does not repeat the operation. Use the LG remote while reception is paused.
+**Back** from any button settings page returns to the first settings screen;
+choose **Close** there to resume input with the new mapping. Back while browsing
+without a save keeps input running. Saving device settings also pauses and
+resumes input automatically. A package installer's maintenance stop remains
+separate and is not undone by closing a window.
+
+The device form asks only for the remote's Bluetooth address and exact device
+name / serial. When saving, it reads the TV's own Bluetooth adapter address.
+The detected address remains an internal identity check, including comparison
+with any previously saved value. Missing, ambiguous or mismatched adapter
+information prevents configuration changes; it never silently selects another
+TV. Existing installer data containing the adapter address is still accepted
+when it matches the detected TV. New installer data can omit it.
 
 Automatic startup uses one persistent webOS Activity owned by this same app.
 No separate startup app or running Mac is needed. The bundled service watches the
@@ -63,14 +80,14 @@ Connection setup also reads the battery once.
 On the tested TV, this build supports swipe navigation, surface clicks, gyro
 pointing, MENU for Back, the TV button for Home, playback controls, and releasing
 the microphone button to toggle screen off/restore. The saved gyro preference
-and configurable TV assignments are not yet connected to this runtime. Remote
+is not yet connected to this runtime. Button assignments are loaded on the next verified receiver start. Remote
 IR assignments already stored in the Siri Remote continue to work independently.
 
 ## Try the setup preview
 
 [Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.2.7_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
 
-This package contains a native settings screen, a remote-friendly character picker, settings validation and a non-mutating input-access check. It contains **no device addresses or serial numbers**. Saving settings changes only this app's saved configuration. It does not pair a remote, start remote control or register automatic startup. The **Buttons** screen provides a list of all seven physical buttons and separate normal/long-press selectors. It offers named LG actions and direct two-digit code entry, and can explicitly set or delete one stored assignment; it never writes automatically. The new IR integration is not yet hardware-validated.
+This package contains a native settings screen, a remote-friendly character picker, settings validation and a non-mutating input-access check. It contains **no device addresses or serial numbers**. Saving settings changes only this app's saved configuration. It does not pair a remote, start remote control or register automatic startup. This older downloadable setup-only package uses the earlier button/press selectors; use the integrated package for the six-row editor. It offers named LG actions and direct two-digit code entry, and can explicitly set or delete one stored assignment; it never writes automatically. The new IR integration is not yet hardware-validated.
 
 The preview requires the same tested G3 environment, including the TV's 32-bit Python 3.10+ interpreter, SDL2 and SDL_ttf. It uses a font already installed on the TV. These dependencies are not bundled. Other TV models remain unverified.
 

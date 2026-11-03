@@ -136,6 +136,11 @@ class NativeBus:
             raise ValueError('Unsupported application request')
         return self._request_uri('luna://' + APP + '.service/' + method, params, timeout)
 
+    def tv_address(self):
+        # A failed Bluetooth read must not invalidate the lifecycle/service bus.
+        from settings import read_tv_address
+        return read_tv_address()
+
     def cancel_startup(self, activity_id):
         if type(activity_id) is not int or activity_id <= 0: raise ValueError('Invalid activity ID')
         return self._request_uri('luna://com.webos.service.activitymanager/cancel', {'activityId': activity_id}, 8)

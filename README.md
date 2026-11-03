@@ -25,7 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.16** (integrated preview) |
+| Integrated TV app | Magic Sirimote **0.6.17** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -201,7 +201,7 @@ Links credit research and tooling; they do not imply endorsement or identical co
 
 ## 4. Setup guide
 
-A [native setup preview](docs/NATIVE_APP.md) is available as one generic IPK, with an editable TV-side settings screen, input-access check, and explicit infrared **Set/Delete** controls. The new infrared integration has passed offline tests; on-TV validation is pending. It does not yet replace the three-package input runtime described below. The complete single-app version is under development.
+The [integrated native app](docs/NATIVE_APP.md) combines settings, input reception and automatic startup in one IPK. Its **Buttons** screen shows six rows with separate **Press** and **Hold** actions, including **Do nothing** and custom LG infrared codes. The TV detects its own Bluetooth address; there is no field to enter it. The app requires an already paired remote and verified setup; the legacy source-build procedure below still uses explicit device identities. The assignment editor has offline coverage; each IR change must still be tested with the physical remote.
 
 The steps below describe the intended setup sequence. **They are not yet a complete executable installation guide.** “Missing tool” means the reader would currently have to write or adapt code; it does not mean running the next command will fill in the gap.
 

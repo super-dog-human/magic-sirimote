@@ -1,101 +1,89 @@
-# Infrared assignments: set and delete
+# Button assignments and infrared commands
 
-The A1513 can store IR commands and transmit them without the TV's Bluetooth input program. This is how the tested setup handles volume and power, including powering the TV on while the receiver program is not processing input.
+Open **Buttons** in the [integrated native app](NATIVE_APP.md). The screen has
+six rows: **MENU**, **TV**, **Mic**, **Play / Pause**, **Plus**, and **Minus**.
+Each row has a **Press** cell and a **Hold (~0.7 s)** cell. Surface clicking,
+swipe navigation and gyro movement are separate from these six buttons.
 
-The [native setup app](NATIVE_APP.md) includes a **Buttons** screen with explicit
-**Set** and **Delete** actions. Version 0.2.7 has passed offline transaction and UI
-tests; the new screen and its native Bluetooth transport still need hardware
-validation. Installing or opening the app never programs the remote.
+## Change an assignment
 
-## Use infrared assignments
+1. Keep the paired Siri Remote awake and have the LG remote nearby.
+2. Open **Buttons** and select the desired row and column. Use arrows or
+   Siri Remote swipes and a click to select a cell.
+3. Choose an action. Choices ending in **(IR)** send infrared from the remote.
+   The other choices run on the TV. **Custom code (IR)** accepts exactly two
+   hexadecimal digits, such as `08`, using the on-screen or USB keyboard.
+4. Review the button, press type and action, then confirm **Save**. Browsing,
+   choosing an action, or cancelling does not write anything.
+5. Wait for the result. Reception pauses during programming, so use the LG
+   remote to press **Back**, returning to the first settings screen. Choose
+   **Close** to resume reception with the new mapping.
+6. Test the button. Delivery acknowledgement is not a readback of the remote's
+   stored IR entry. Unknown or partial outcomes are reported without retrying.
 
-1. Save the correct device identities on the setup screen. Pairing and an
-   existing HID/GATT connection are prerequisites; this screen does not pair.
-2. Stop the input runtime and its automatic restarts through the existing
-   deployment procedure. The screen refuses to operate while another project
-   app is running or the remote's motion sensors are active. It does not stop
-   an existing installation for you. Use the original LG remote for setup.
-3. Open **Buttons**, select **Button** and choose a physical button
-   from the list: TV / Home, Volume +, Volume −, Play / Pause, Microphone,
-   MENU, or Surface click. All seven buttons have the same Set/Delete options.
-   Select **Press** and choose **Normal press (immediate)** or
-   **Long press (about 0.7 seconds)**. These are separate stored entries;
-   selecting or cancelling either list does not send a request.
-4. Select **Action** and choose a named action such as **Power on/off (IR)**
-   or **Back (IR)**. Alternatively, choose **Enter code directly (IR)** and
-   enter exactly two hexadecimal digits (`00`–`FF`) using the on-screen keys,
-   then select **Done**. A USB keyboard can also enter the code. Select **Set**, review the button, press type and
-   action, then confirm with **Set**. Choosing an action alone sends nothing.
-5. To remove that entry, select **Delete** and confirm with **Delete**.
-   No action code is needed. Other buttons and delay selectors are untouched.
-6. Test the button physically. A TV service acknowledgement is shown as
-   **Request sent**, not proof that the remote saved the entry. An interrupted
-   or missing acknowledgement is shown as unknown and never retried automatically.
+**Do nothing** deletes the selected IR entry and disables its TV-side action.
+It leaves other buttons and the other press type unchanged. For a button to
+have no effect at either duration, set both cells to **Do nothing**.
+Deleting cannot restore an overwritten previous value.
 
-**Normal press is immediate, not “short press only.”** If both normal and
-long-press entries are set, holding a button can send the normal command first
-and the long-press command later. To make a button send only a long-press IR
-command, delete its normal-press IR entry separately. This does not remove any
-Bluetooth action. The two choices use firmware selectors `00` and `02`;
-the app does not offer arbitrary hold times.
+Choosing a TV action deletes that slot's competing IR entry. Choosing an IR
+action sets that entry and disables its competing TV action. The app commits
+the local mapping only after confirmed delivery and cleanup; if saving then
+fails, it reports a partial result rather than claiming that both parts changed.
 
-The editor supports all seven button selectors and both press types; this does
-not mean every combination has been tested on hardware. Surface click means
-physically pressing the touch surface. Touching or swiping is not an IR button
-entry, and this screen does not remap those gestures.
+## Press and hold timing
 
-Physical button names and Save/Set/Delete controls use plain labels. The action
-choices identify their route: **(IR)** for infrared and **(TV)** for TV-side
-processing.
+TV actions run when the button is released. A hold of about 0.7 seconds selects
+the hold action instead of the press action. Held buttons at connection start,
+button combinations, and a press interrupted by reconnection do not become a
+new button action.
 
-The named choices are Power on/off (`08`), Back (`28`), Home (`7C`),
-Settings (`43`), Volume + (`02`), Volume − (`03`), Mute (`09`), Play (`B0`)
-and Pause (`BA`). These are LG command choices, not settings read from your
-remote or factory defaults. Support depends on the TV and active app; Play
-and Pause are separate commands. See the [LG IR code reference](https://gscs-b2c.lge.com/open/downloadFile?fileId=JzkdczeDuzRq6UZINzzTJw).
+**IR Press is immediate, not short-press-only.** The remote can send the Press
+entry first and the Hold entry later during the same hold. A TV-side Hold action
+cannot undo an IR Press command that was already transmitted. If only the hold
+should act, set the Press cell to **Do nothing** first. The IR delay selectors
+are `00` and `02`; arbitrary hold durations are not offered.
 
-The screen currently encodes LG TV commands using the tested NEC format. It
-is not a universal manufacturer selector. A command code alone does not
-identify the complete IR signal for other brands.
+For unchanged buttons, the integrated runtime retains its normal TV actions:
+MENU is Back, TV is Home, Mic is Screen off / restore, and Play / Pause toggles
+playback. Unassigned holds retain the corresponding TV press behavior, except
+TV hold is reserved for the remote's existing IR power action. Existing IR
+settings remain untouched until a cell is explicitly saved.
 
-**Delete removes an assignment; it does not restore its previous value.**
-It does not disable Bluetooth button reports or change the TV runtime's button
-mapping. Deleting an immediate entry also does not delete a held-button entry.
-The app never clears the entire IR table and never automatically deletes before
-setting: Set replaces/adds only the selected button/delay entry.
+## What the displayed values mean
 
-Current IR settings cannot be read back through the verified public workflow
-on this locked firmware. The app does not require an unavailable full-table
-backup, invent factory defaults, or present saved operation receipts as remote
-readback. Receipts in `state/ir-operation-*.json` record what this app attempted;
-keep them private. Known code/selector values can be set again, but an unknown
-previous assignment cannot be reconstructed from a receipt.
+The remote's production firmware does not provide a verified full IR-table
+readback. An unchanged cell marked with `*` shows the TV default or **IR unknown**;
+it does not assert that the remote has no IR command. A saved cell shows the
+choice last submitted through this app, not an independent memory readback.
+Opening this screen never resets entries or installs guessed factory defaults.
 
-## Screen off / restore (TV)
+`state/ir-operation-*.json` records attempted IR operations. These private
+receipts are not a backup of unknown entries. Known codes can be set again;
+an unknown previous value cannot be reconstructed from a receipt.
 
-**Buttons → Action → Screen off / restore (TV)** is a TV-side choice, not an
-infrared command or a two-digit code. Its intended behavior is to keep audio
-playing while the picture is off, then restore the picture on the next press.
-Choose a button and normal/long press, then confirm **Save**. **Delete**
-removes only that locally saved TV assignment. The main Buttons screen shows
-the saved TV choice for the selected button and press type, including after
-reopening the app. Neither operation changes the
-remote's infrared entries or sends a power command.
+The local `state/tv-assignments.json` uses schema 2 and keys such as `10:00`
+(Mic / Press) and `10:02` (Mic / Hold). Values identify a TV action, `none`, or
+an IR command such as `ir:08`. The receiver loads this file at session start.
+Schema 1 came from a configuration-only preview and is not silently activated.
+Saving a new assignment migrates to schema 2 without enabling those old choices.
 
-**The native preview saves this choice but does not activate it.** Its input
-runtime is not integrated yet. Saving reports “not active in this preview”;
-closing the settings app does not start a background listener. The existing
-three-package runtime does not read this new file either.
+## Available actions
 
-`state/tv-assignments.json` stores schema 1 and a `bindings` object whose keys
-are `BUTTON:PRESS` in hexadecimal (for example `10:00` for the microphone's
-normal press), and whose values are `screen-toggle`. `00` requests normal
-release behavior and `02` requests a hold of about 0.7 seconds. They are TV-side
-binding identifiers in this file, not IR writes. A future runtime must handle
-short/long selection, suppress wake-producing motion/click output while the
-screen is off, and keep receiving the restore button. The earlier standalone
-TV implementation demonstrated that suppression is necessary; calling screen
-off alone can allow the next cursor event to wake the picture immediately.
+TV actions are Back, Home, Settings, Play / Pause, and Screen off / restore.
+Screen off / restore keeps audio playing and suppresses cursor/touch output
+that would wake the picture; pressing its assigned button again restores it.
+
+The named LG IR actions are Power on/off (`08`), Back (`28`), Home (`7C`),
+Settings (`43`), Volume + (`02`), Volume - (`03`), Mute (`09`), Play (`B0`),
+and Pause (`BA`). These are command choices, not factory defaults. Commands
+and app support may differ between TVs. The encoder uses the tested LG NEC
+format; entering a code does not make it a universal manufacturer selector.
+
+The editor's six rows and both press types have offline coverage. This does
+not establish that every assignment works on every remote and TV firmware.
+The lower-level packet encoder still supports the surface-click selector for
+explicit external tools; the app does not expose or modify it.
 
 ## Packet reference
 

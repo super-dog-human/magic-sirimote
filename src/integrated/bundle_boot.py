@@ -130,6 +130,12 @@ def main(role):
         if processes()['legacy']:
             raise RuntimeError('The previous input runtime is still active')
         values = receiver_settings()
+    if role == 'receiver':
+        from tv_assignments import load as load_assignments
+        from system_buttons import configure_assignments
+        app_state = Path('/media/developer/apps/usr/palm/applications/org.magicsirimote.app/state')
+        assignments = load_assignments(app_state)
+        configure_assignments(assignments['bindings'] if assignments['schema'] == 2 else {})
     configure(remote=values['remoteAddress'], adapter=values['adapterAddress'], name=values['remoteName'])
     if role == 'controller':
         from resident_controller_entry import main as run

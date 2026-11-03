@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src/native'), str(ROOT / 'src'), str(ROOT / 'tests')]
 from entry import Setup
 from graphics import Canvas
-from ir_screen import InfraredScreen, PRESETS
+from ir_screen import InfraredScreen, PRESETS, CUSTOM
 import settings
 import tv_assignments
 import ir_programmer as ir
@@ -32,7 +32,7 @@ class Screen:
 class ReviewTests(unittest.TestCase):
     def test_hex_keyboard_up_down_preserves_column(self):
         app = InfraredScreen(Path('/unused'))
-        app.choose(2); app.choose(len(PRESETS)+1)
+        app.choose(0); app.choose(CUSTOM)
         app.handle(('key', 1073741905))
         self.assertEqual(app.focus, 6)
         app.handle(('key', 13))
@@ -49,13 +49,13 @@ class ReviewTests(unittest.TestCase):
             app.choose(6, canvas)
             app.infrared.focus = 2
             app.handle(('key', 13), canvas)
-            app.infrared.focus = len(PRESETS)+1
+            app.infrared.focus = CUSTOM
             app.handle(('key', 13), canvas)
             self.assertTrue(canvas.text_active)
             app.handle(('text', '4D'), canvas)
             app.handle(('key', 27), canvas)
             self.assertFalse(canvas.text_active)
-            self.assertEqual(app.infrared.code, '')
+            self.assertIsNone(app.infrared)
 
     def test_key_repeat_does_not_retrigger_confirm_or_gyro_toggle(self):
         frames = []
@@ -82,13 +82,12 @@ class ReviewTests(unittest.TestCase):
 
     def test_saved_tv_assignment_is_visible_after_reopen(self):
         with tempfile.TemporaryDirectory() as folder:
-            tv_assignments.execute(folder, 'set', 16, 2)
-            app = InfraredScreen(Path(folder)); canvas = Screen()
-            app.choose(0); app.choose(4); app.choose(1); app.choose(1)
-            app.draw(canvas)
-            self.assertTrue(any('Saved TV' in t and 'Screen off / restore' in t for t in canvas.labels))
-            app.choose(1); app.choose(0); app.draw(canvas)
-            self.assertTrue(any('Saved TV' in t and 'None' in t for t in canvas.labels))
+            tv_assignments.execute(folder,'assign',16,2,'screen-toggle')
+            app=InfraredScreen(Path(folder));canvas=Screen();app.draw(canvas)
+            self.assertEqual(app.cell_label(16,2),'Screen off / restore')
+            self.assertIn('Screen off / restore',canvas.labels)
+            self.assertEqual(app.cell_label(1,2),'IR unknown *')
+
 
     def test_owned_gatt_client_is_released_even_if_runtime_starts(self):
         tv = TV()

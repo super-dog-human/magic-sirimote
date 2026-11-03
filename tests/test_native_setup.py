@@ -72,6 +72,9 @@ class NativeSettingsTest(unittest.TestCase):
             self.assertIs(Setup(Path(path)).values['gyroEnabled'], True)
 
     def test_gyro_toggle_requires_save_and_survives_reopen(self):
+        from unittest.mock import patch
+        mock = patch.object(settings, 'read_tv_address', return_value=self.good()['adapterAddress'].lower())
+        mock.start(); self.addCleanup(mock.stop)
         with tempfile.TemporaryDirectory() as path:
             settings.save(path, self.good())
             app = Setup(Path(path)); canvas = CanvasStub()

@@ -62,17 +62,15 @@ class RemoteNavigationTests(unittest.TestCase):
 
     def test_main_and_buttons_receive_navigation_and_ok(self):
         with tempfile.TemporaryDirectory() as d:
-            app = RuntimeSetup(Path(d), Mock()); canvas = Mock()
-            for event in decode([(1073741905,0),(1073741905,0),(1073741906,0)]): app.handle(event, canvas)
-            self.assertEqual(app.focus, 1)
-            app.infrared = InfraredScreen(Path(d))
-            for event in decode([(1073741905,0),(13,0)]): app.handle(event, canvas)
-            self.assertEqual(app.infrared.selecting, 'press')
-            for event in decode([(1073741905,0),(13,0)]): app.handle(event, canvas)
-            self.assertEqual(app.infrared.delay, 2)
-            self.assertIsNone(app.infrared.selecting)
-            self.assertIsNone(app.infrared.review)
-            self.assertFalse(app.infrared.busy)
+            app=RuntimeSetup(Path(d),Mock());canvas=Mock()
+            for event in decode([(1073741905,0),(1073741905,0),(1073741906,0)]):app.handle(event,canvas)
+            self.assertEqual(app.focus,1)
+            app.infrared=InfraredScreen(Path(d))
+            for event in decode([(1073741905,0),(1073741903,0),(13,0)]):app.handle(event,canvas)
+            self.assertEqual(app.infrared.button,1);self.assertEqual(app.infrared.delay,2)
+            self.assertTrue(app.infrared.picking)
+            app.handle(('key',27),canvas);self.assertIsNone(app.infrared);self.assertFalse(app.done)
+
 
     def test_hex_picker_keeps_grid_step_for_remote_up_down(self):
         with tempfile.TemporaryDirectory() as d:

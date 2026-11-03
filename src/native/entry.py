@@ -34,6 +34,13 @@ class Setup:
         except (OSError, ValueError):
             self.message = 'Saved settings could not be read. Check and save the fields again.'
 
+    def detect_tv(self, values):
+        adapter = settings.read_tv_address()
+        saved = values.get('adapterAddress')
+        if saved and (type(saved) is not str or saved.strip().lower() != adapter):
+            raise ValueError('The saved TV identity does not match this TV. Settings were not changed.')
+        return settings.validate({**values, 'adapterAddress': adapter})
+
     def choose(self, index, canvas):
         if self.editing is not None:
             key = self.keys[index]
@@ -50,12 +57,14 @@ class Setup:
             elif len(self.values[field]) < settings.LIMITS[self.editing]:
                 self.values[field] += key
             return
-        if index < 3:
+        if index in (0, 1):
             self.editing = index
             alphabet = '0123456789abcdef:' if index != 1 else 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'
             self.keys = list(alphabet) + (['Case'] if index == 1 else []) + ['Delete', 'Clear', 'Done']
             self.key_focus = 0
             canvas.start_text()
+        elif index == 2:
+            return  # TV adapter identity is detected, never edited.
         elif index == 3:
             self.values['gyroEnabled'] = not self.values['gyroEnabled']
             self.message = 'Gyro preference changed. Choose Save settings; runtime integration is pending.'
@@ -71,10 +80,12 @@ class Setup:
                 self.message = 'The compatibility check could not finish.'
         elif index == 5:
             try:
-                settings.save(self.state, {'schema': 1, **self.values})
+                values = self.detect_tv({'schema': 1, **self.values})
+                settings.save(self.state, values)
+                self.values.update({key: values[key] for key in settings.FIELDS})
                 self.message = 'Settings saved. Gyro preference is not active until runtime integration is complete.'
-            except (OSError, ValueError) as error:
-                self.message = str(error) if isinstance(error, ValueError) else 'Could not save settings.'
+            except (OSError, ValueError, RuntimeError) as error:
+                self.message = str(error) if isinstance(error, (ValueError, RuntimeError)) else 'Could not save settings.'
         elif index == 6:
             from ir_screen import InfraredScreen
             self.infrared = InfraredScreen(self.state)
@@ -117,7 +128,7 @@ class Setup:
                     canvas.stop_text()
             elif value in ARROWS:
                 if self.editing is None:
-                    self.focus = (self.focus + ARROWS[value]) % 8
+                    self.focus = settings.MAIN_FOCUS[(settings.MAIN_FOCUS.index(self.focus) + ARROWS[value]) % len(settings.MAIN_FOCUS)]
                 else:
                     step = ARROWS[value] * (10 if value in (1073741906, 1073741905) else 1)
                     self.key_focus = (self.key_focus + step) % len(self.keys)
@@ -148,23 +159,23 @@ class Setup:
             canvas.text('Select characters with arrows and OK, or use a USB keyboard.', 66, 632, 22)
             canvas.text('Back closes the keyboard. Choose Save settings on the previous screen.', 66, 665, 20, (155, 170, 190))
         else:
-            for index, field in enumerate(settings.FIELDS):
+            for index, field in enumerate(settings.EDITABLE_FIELDS):
                 y = 140 + index * 91
                 canvas.text(settings.LABELS[index], 66, y, 21, (155, 170, 190))
                 box = (64, y + 31, 1152, 57)
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
                 canvas.text(self.values[field] or 'Select to enter', 82, y + 44, 25, max_width=1110)
                 self.boxes.append((index, box))
-            box = (64, 416, 1152, 54)
+            box = (64, 335, 1152, 54)
             canvas.rectangle(box, (30, 113, 156) if self.focus == 3 else (36, 48, 65))
-            canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 430, 25)
+            canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 349, 25)
             self.boxes.append((3, box))
             for index, title in enumerate(('Check this TV', 'Save settings', 'Buttons', 'Close'), 4):
-                box = (64 + (index - 4) * 292, 492, 274, 61)
+                box = (64 + (index - 4) * 292, 421, 274, 61)
                 canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
                 canvas.text(title, box[0] + 25, box[1] + 17, 25)
                 self.boxes.append((index, box))
-            canvas.text(self.message, 66, 568, 22, max_width=1148)
+            canvas.text(self.message, 66, 516, 22, max_width=1148)
             self.draw_footer(canvas)
         canvas.present()
 

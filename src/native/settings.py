@@ -13,6 +13,8 @@ from pathlib import Path
 FIELDS = ('remoteAddress', 'remoteName', 'adapterAddress')
 LABELS = ('Remote Bluetooth address', 'Remote device name / serial', 'TV Bluetooth address')
 LIMITS = (17, 64, 17)
+EDITABLE_FIELDS = FIELDS[:2]
+MAIN_FOCUS = (0, 1, 3, 4, 5, 6, 7)
 ADDRESS = re.compile(r'(?:[0-9a-f]{2}:){5}[0-9a-f]{2}\Z')
 NAME = re.compile(r'[A-Za-z0-9_-]{1,64}\Z')
 
@@ -97,3 +99,24 @@ def save(directory, values):
             os.unlink(name)
         except FileNotFoundError:
             pass
+
+
+def tv_address_from_reply(reply):
+    if type(reply) is not dict:
+        raise RuntimeError('The TV Bluetooth adapter could not be identified.')
+    adapters = reply.get('adapters')
+    if reply.get('returnValue') is not True or type(adapters) is not list or len(adapters) != 1:
+        raise RuntimeError('The TV Bluetooth adapter could not be identified. Settings were not changed.')
+    adapter = adapters[0]
+    import re
+    address = adapter.get('adapterAddress') if type(adapter) is dict else None
+    if (type(address) is not str or not re.fullmatch(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}', address)
+            or int(address[:2], 16) & 1 or address.lower() == '00:00:00:00:00:00'):
+        raise RuntimeError('The TV returned an invalid Bluetooth identity.')
+    return address.lower()
+
+
+def read_tv_address():
+    from native_luna import Luna
+    with Luna() as call:
+        return tv_address_from_reply(call('adapter/getStatus', {'subscribe': False}, 5))

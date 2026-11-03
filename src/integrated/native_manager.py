@@ -57,7 +57,9 @@ def consume_installer(params, apply, stop=None):
     value = json.loads(raw, object_pairs_hook=settings._unique)
     if type(value) is not dict or set(value) != {'nonce', 'settings', 'action'} or value['nonce'] != nonce or value['action'] not in ('configure', 'start', 'stop'):
         raise ValueError('Invalid installer data')
-    values = settings.validate(value['settings'])
+    values = value['settings']
+    if value['action'] == 'stop':
+        values = settings.validate(values)
     write_status(result, {'status': 'pending'})
     try:
         if value['action'] == 'stop':
@@ -108,9 +110,19 @@ class RuntimeSetup(Setup):
         accepted(self.bus.request('startupCancelled', {'activityId': reply['activityId'], 'resetToken': reply['resetToken']}))
         return True
 
+    def detect_tv(self, values):
+        if type(values) is not dict:
+            raise ValueError('Invalid device settings.')
+        adapter = self.bus.tv_address()
+        saved = values.get('adapterAddress')
+        if saved and (type(saved) is not str or saved.strip().lower() != adapter):
+            raise ValueError('The saved TV identity does not match this TV. Settings were not changed.')
+        return settings.validate({**values, 'adapterAddress': adapter})
+
     def apply(self, values, start=True):
         if self.infrared is not None:
             raise RuntimeError('Close button settings before updating device settings or starting input.')
+        values = self.detect_tv(values)
         accepted(self.bus.request('configure', {'settings': values}))
         settings.save(self.state, values)
         self.values.update({key: values[key] for key in (*settings.FIELDS, 'gyroEnabled')})
@@ -192,14 +204,15 @@ class RuntimeSetup(Setup):
                 raise RuntimeError('Input cleanup must finish before programming infrared.')
             runtime_idle(allow_idle_service=True)
         idle()
-        return execute(*args, idle=idle)
+        from tv_assignments import assign
+        return assign(*args, program=lambda *request: execute(*request, idle=idle))
 
     def choose(self, index, canvas):
         if self.editing is not None:
             return super().choose(index, canvas)
         try:
             if index == 5:
-                self.prepare_settings('save', settings.validate({'schema': 1, **self.values}))
+                self.prepare_settings('save', self.detect_tv({'schema': 1, **self.values}))
             elif index == 6:
                 super().choose(index, canvas)
                 self.infrared.submit = self.program_ir
@@ -219,7 +232,9 @@ class RuntimeSetup(Setup):
         if self.pending_settings is not None:
             return  # Wait for cooperative cleanup; never edit a live session.
         super().handle(event, canvas)
-        if self.done or (was_infrared and self.infrared is None and self.resume_after_settings):
+        if was_infrared and self.infrared is None and self.resume_after_settings:
+            self.message = 'Assignment saved. Choose Close to resume Siri Remote; use the LG remote here.'
+        if self.done:
             try:
                 self.resume_settings()
             except (OSError, ValueError, RuntimeError) as error:

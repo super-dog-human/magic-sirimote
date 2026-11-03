@@ -3,7 +3,7 @@
 Not wired into a TV runner. Callers supply an already-created rolling receiver
 and an independently validated semantic system-key sink.
 """
-from system_buttons import SystemButtons,observed_mask
+from system_buttons import SystemButtons,observed_mask,configured_mappings
 
 class CombinedControls:
  def __init__(self,rolling,emit,*,max_system_actions=128,screen_control=None):
@@ -25,7 +25,9 @@ class CombinedControls:
   generation=self.rolling.generation
   if self.button_generation==generation and not force:return
   if self.buttons is not None:self.buttons.unbind(self.button_generation)
-  self.buttons=SystemButtons(self._emit,max_actions=self.max_system_actions,mapping=({0x01:"home",0x08:"playpause",0x20:"back",0x10:"screen-toggle"} if self.screen is not None else None));self.buttons.bind(generation);self.button_generation=generation
+  from system_buttons import MASK_TO_ACTION
+  mapping,holds=configured_mappings({0x01:"home",0x08:"playpause",0x20:"back",0x10:"screen-toggle"} if self.screen is not None else MASK_TO_ACTION)
+  self.buttons=SystemButtons(self._emit,max_actions=self.max_system_actions,mapping=mapping,holds=holds);self.buttons.bind(generation);self.button_generation=generation
  def start(self):
   if self.closed or self.buttons is not None:raise RuntimeError('already started')
   self.rolling.start();self._sync()
