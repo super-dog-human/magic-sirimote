@@ -49,9 +49,10 @@ class TVAssignmentsTest(unittest.TestCase):
             app=InfraredScreen(Path(folder));app.choose(4);app.choose(5)
             self.assertEqual(calls,[]);self.assertEqual(app.drafts,{'10:00':'screen-toggle'})
             self.assertFalse((Path(folder)/tv.FILE).exists())
+            tv.execute(folder,'assign',16,2,'none')
             self.assertEqual(tv.assign(Path(folder),'assign',16,0,app.drafts['10:00'],program=program)['status'],'saved')
             self.assertEqual(calls,[(Path(folder),'delete',16,0,'')])
-            self.assertEqual(tv.load(folder)['bindings'],{'10:00':'screen-toggle'})
+            self.assertEqual(tv.load(folder)['bindings'],{'10:00':'screen-toggle','10:02':'none'})
 
     def test_invalid_selector_fails_before_storage(self):
         for button, delay in ((64, 0), (16, 1), (True, 0), (16, False)):

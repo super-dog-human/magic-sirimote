@@ -207,12 +207,14 @@ class RuntimeSetup(Setup):
         return True
 
     def start_assignment_batch(self, changes):
+        from tv_assignments import plan
+        ordered = plan(self.state, changes)
         self.saving_assignments = True
         self.message = 'Saving button assignments. Please wait...'
         def work():
             completed = []
             result = {'status': 'saved'}
-            for key, action in sorted(changes.items()):
+            for key, action in ordered:
                 button, delay = (int(part, 16) for part in key.split(':'))
                 try:
                     result = self.program_ir(self.state, 'assign', button, delay, action)
@@ -308,9 +310,9 @@ class RuntimeSetup(Setup):
                 self.message = 'Saving settings and restarting. Please wait...'
                 if canvas is not None: self.draw(canvas)
                 values = self.detect_tv({'schema': 1, **self.values})
-                from tv_assignments import validate
+                from tv_assignments import plan
                 self.pending_assignments = dict(self.button_drafts)
-                validate({'schema': 2, 'bindings': self.pending_assignments})
+                plan(self.state, self.pending_assignments)
                 self.prepare_settings('save', values)
             elif action == 'resume':
                 self.resume_settings()

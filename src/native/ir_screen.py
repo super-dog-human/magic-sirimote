@@ -148,5 +148,5 @@ class InfraredScreen:
             button(12,'Back',(64,530,220,51))
         canvas.text(self.message,66,594,21,max_width=1148)
         canvas.text(self.detail,66,628,19,(155,170,190),max_width=1148)
-        canvas.text('IR press sends immediately; holding can also send the press entry. TV actions run on release.',66,669,18,(155,170,190),max_width=1148)
+        canvas.text('IR Hold requires IR Press; a hold can send both. TV actions run on release.',66,669,18,(155,170,190),max_width=1148)
         canvas.present()

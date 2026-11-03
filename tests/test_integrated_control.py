@@ -64,6 +64,8 @@ class ControlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             bus=Mock();bus.tv_address.return_value='aa:bb:cc:dd:ee:20';bus.remote_name.return_value='Remote'
             bus.request.return_value={'returnValue':True,'cleanStop':False,'processes':found()}
+            from tv_assignments import execute
+            execute(d,'assign',32,2,'none')
             app=RuntimeSetup(Path(d),bus);app.values['remoteAddress']='aa:bb:cc:dd:ee:10';canvas=Mock()
             app.choose(6,canvas);app.infrared.choose(0);app.infrared.choose(0)
             app.handle(('key',461),canvas);app.choose(5,canvas)

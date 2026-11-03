@@ -10,11 +10,13 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'src/integrated'),str(ROOT/'src/native'),str(ROOT/'src')]
 from native_manager import RuntimeSetup
 from settings import remote_name_from_reply
+import tv_assignments as table
 
 class SaveTests(unittest.TestCase):
     def test_batch_stops_at_failure_retains_unsaved_slots_and_never_replays_success(self):
         with tempfile.TemporaryDirectory() as d:
             app=RuntimeSetup(Path(d),Mock())
+            for button in (1,16,32): table.execute(d,'assign',button,2,'none')
             changes={'01:00':'home','10:00':'screen-toggle','20:00':'back'}
             app.button_drafts=dict(changes)
             app.program_ir=Mock(side_effect=[{'status':'saved'},{'status':'uncertain'}])
@@ -73,6 +75,7 @@ class SaveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             app=RuntimeSetup(Path(d),Mock());entered=threading.Event();release=threading.Event()
             def send(*args):entered.set();release.wait(2);return {'status':'saved'}
+            table.execute(d,'assign',32,2,'none')
             app.program_ir=Mock(side_effect=send);app.button_drafts={'20:00':'back'}
             app.start_assignment_batch(dict(app.button_drafts));self.assertTrue(entered.wait(1))
             try:

@@ -48,9 +48,21 @@ new button action.
 
 **IR Press is immediate, not short-press-only.** The remote can send the Press
 entry first and the Hold entry later during the same hold. A TV-side Hold action
-cannot undo an IR Press command that was already transmitted. If only the hold
-should act, set the Press cell to **Do nothing** first. The IR delay selectors
-are `00` and `02`; arbitrary hold durations are not offered.
+cannot undo an IR Press command that was already transmitted.
+
+**An IR Hold requires an IR Press on the same button.** On the tested A1513
+Main0241 firmware, leaving only a delayed IR entry makes that command fire
+immediately. In particular, **Home (TV)** / **Power (IR)** is unsafe: saving the
+TV action deletes the immediate IR entry, so even a short press can turn the
+TV off. Use **Home (IR)** / **Power on/off (IR)** for that combination.
+
+The app rejects this unsafe pairing before stopping input or writing settings.
+If Hold is unknown, explicitly choose its TV action or **Do nothing** before
+saving a TV-only Press. Clearing both cells removes Hold first; adding both IR
+cells writes Press first. An unconfirmed operation stops the save. Other buttons
+are left unchanged. A hold-only action with **Do nothing** on Press is supported
+for TV actions, not IR actions. The IR delay selectors are `00` and `02`;
+arbitrary hold durations are not offered.
 
 For unchanged buttons, the integrated runtime retains its normal TV actions:
 MENU is Back, TV is Home, Mic is Screen off / restore, and Play / Pause toggles

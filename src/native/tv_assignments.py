@@ -111,6 +111,76 @@ def execute(directory, operation, button, delay, code=''):
             except FileNotFoundError: pass
 
 
+def ir_knowledge(directory, known):
+    """Use durable transport receipts even if the subsequent UI save failed.
+
+    This is delivery evidence, not firmware readback. Pending/uncertain writes
+    invalidate the slot rather than retaining a possibly stale local choice.
+    """
+    from settings import _unique
+    latest = {}
+    for path in Path(directory).glob('ir-operation-*.json'):
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or info.st_size > 4096:
+                raise ValueError('IR delivery history is unavailable.')
+            raw = os.read(fd, 4097)
+            after = os.fstat(fd)
+            if (info.st_size, info.st_mtime_ns, info.st_ctime_ns) != (after.st_size, after.st_mtime_ns, after.st_ctime_ns) or len(raw) != info.st_size:
+                raise ValueError('IR delivery history changed. Try again after saving finishes.')
+            receipt = json.loads(raw, object_pairs_hook=_unique)
+            if type(receipt) is not dict:
+                raise ValueError('IR delivery history is invalid.')
+            status = receipt.get('status')
+            if status == 'not-sent': continue
+            key = slot(receipt.get('button'), receipt.get('delay'))
+            action = receipt.get('action')
+            code = receipt.get('code')
+            if status not in ('pending', 'uncertain', 'submitted') or action not in ('set', 'delete'):
+                raise ValueError('IR delivery history is invalid.')
+            value = None
+            if status == 'submitted':
+                value = 'none' if action == 'delete' else 'ir:' + str(code).upper()
+                if not valid_action(value): raise ValueError('IR delivery history is invalid.')
+            rank = (info.st_mtime_ns, path.name)
+            if key not in latest or rank > latest[key][0]: latest[key] = (rank, value)
+        finally:
+            os.close(fd)
+    result = dict(known)
+    for key, (_, value) in latest.items():
+        if value is None: result.pop(key, None)
+        else: result[key] = value
+    return result
+
+
+def plan(directory, changes):
+    """Validate affected pairs and order writes without exposing a hold-only IR row.
+
+    A1513 Main0241 sends the first IR entry immediately, even with delay 02.
+    Unknown slots are not absent slots. Never invent an IR guard or erase an
+    unspecified hold to make a requested TV press safe.
+    """
+    validate({'schema': 2, 'bindings': changes})
+    value = load(directory)
+    known = dict(value['bindings']) if value['schema'] == 2 else {}
+    final = {**ir_knowledge(directory, known), **changes}
+    for name, button in ROWS:
+        press, hold = slot(button, 0), slot(button, 2)
+        if press not in changes and hold not in changes:
+            continue
+        p, h = final.get(press), final.get(hold)
+        if h is not None and h.startswith('ir:') and (p is None or not p.startswith('ir:')):
+            raise ValueError(name + ': IR Hold needs an IR Press. Choose an IR Press or change Hold to a TV action / Do nothing.')
+        if press in changes and not changes[press].startswith('ir:') and h is None:
+            raise ValueError(name + ': Hold IR is unknown. Also choose Hold (TV action / Do nothing) before removing Press IR.')
+    # Clear a hold before removing its immediate IR guard. Install an immediate
+    # entry before adding an IR hold. Stop the batch on any unconfirmed write.
+    return sorted(changes.items(), key=lambda item: (
+        0 if item[0].endswith(':02') and not item[1].startswith('ir:') else
+        2 if item[0].endswith(':02') else 1, item[0]))
+
+
 def assign(directory, action, button, delay, code, *, program):
     """Update one slot, removing its competing IR action before a TV/None choice.
 
@@ -121,7 +191,7 @@ def assign(directory, action, button, delay, code, *, program):
     slot(button, delay)
     if action != 'assign' or not valid_action(code) or button not in [mask for _, mask in ROWS]:
         raise ValueError('Choose an available action.')
-    load(directory)  # Refuse malformed storage before a persistent remote write.
+    plan(directory, {slot(button, delay): code})  # Check the other duration before writing.
     ir = code.startswith('ir:')
     result = program(directory, 'set' if ir else 'delete', button, delay, code[3:] if ir else '')
     if result.get('status') != 'submitted':
