@@ -9,7 +9,6 @@ Magic Sirimote lets a first-generation Siri Remote control an LG webOS TV. Insta
 This is an experimental community project with limited hardware testing. Reconnection and recovery are still being improved. Keep the original LG remote available.
 
 - [Compatibility and requirements](#compatibility-and-requirements)
-- [What you can do](#what-you-can-do)
 - [Set up from a Mac](#set-up-from-a-mac)
 - [Troubleshooting](#troubleshooting)
 - [Reset or uninstall](#reset-or-uninstall)
@@ -29,39 +28,13 @@ This is an experimental community project with limited hardware testing. Reconne
 
 The webOS platform version and TV firmware version are different values. You can check your TV's values during the connection step below. You do not need to look up the remote's firmware before starting; the app checks its identity and firmware during setup.
 
-**A1962 is also accepted by the pairing filter, but has not been tested with this app on an LG TV.** Do not assume its cursor, infrared programming or full reset will work. The infrared writer rejects firmware it has not been validated against. Later, silver Siri Remote generations are not supported.
-
-Testing includes removing and recreating the A1513's pairing. An independently clean installation with a factory-fresh remote and a different TV has not been verified.
-
-### Have these ready
-
-- A compatible LG webOS TV and its original LG remote. Use the LG remote for setup and saving settings.
-- A charged Siri Remote.
-- [Node.js and npm](https://nodejs.org/en/download) installed on the Mac.
-- A Mac and TV connected to the same local network. Either device can use Wi-Fi or Ethernet, provided they can communicate with each other.
-- Internet access to create an LG Developer account and download the tools and app.
-
-The guide uses LG's Developer Mode installation method. Root access is not required. The app relies on Python 3.10+, Node.js, SDL2 and SDL_ttf already present on the tested TV; these TV components are not included in the download. Other TV firmware may lack the components or permissions it needs.
-
-**Do not pair Siri Remote with the Mac as part of this guide.** The Mac installs the app; the TV app pairs directly with Siri Remote. You will enter the TV's network IP address on the Mac.
-
-## What you can do
-
-After configuring the relevant button assignments:
-
-- Turn the TV on and off, and adjust its volume using infrared.
-- Go back, open Home or Settings, and play or pause video.
-- Turn only the picture off while audio continues, then restore the picture.
-- Swipe the touch surface to move the selection up, down, left or right.
-- Press the touch surface to select the highlighted item or click at the pointer.
-- Move the pointer by moving the remote, with your finger off the touch surface.
-- Change button assignments, enable or disable the gyro cursor, adjust cursor sensitivity, and view battery level in the TV app.
-
-Voice input is not supported. This covers many everyday remote functions, but does not replace every feature of LG's Magic Remote.
+The pairing filter accepts the black **A1513** and **A1962** models. Later, silver Siri Remote generations are not supported.
 
 ## Set up from a Mac
 
-The steps below are for a first installation of the current single-app package. You do not need to build the source code, install Python on the Mac, or install any separate Magic Sirimote helper apps.
+**Use Magic Sirimote to pair the remote. The TV's standard Bluetooth device settings cannot complete the Siri Remote pairing used by this app.**
+
+Do not pair Siri Remote with the Mac. The Mac installs the app; the TV app pairs directly with Siri Remote. You will enter the TV's network IP address on the Mac.
 
 ### 1. Create an LG Developer account
 
@@ -79,7 +52,7 @@ If Dev Mode Status is already on, leave it on. LG documents this process in its 
 
 ### 3. Install the Mac tools
 
-Open **Terminal** on the Mac.
+Open **Terminal** on a Mac with [Node.js and npm](https://nodejs.org/en/download) installed.
 
 Run these commands to check whether Node.js and npm are installed:
 
@@ -103,7 +76,7 @@ ares-config --profile tv
 
 ### 4. Connect the Mac tools to your TV
 
-In Terminal, run:
+Connect the Mac and TV to the same local network, using Wi-Fi or Ethernet. In Terminal, run:
 
 ```sh
 ares-setup-device
@@ -180,11 +153,13 @@ ares-launch --device my-tv org.magicsirimote.app
 
 Wait for the installation command to report success before running the launch command. **Magic Sirimote** should open on the TV. You can open it later from the TV's Home screen, like other apps.
 
-If you already downloaded the repository, the same IPK is in [`releases/integrated-preview`](releases/integrated-preview). You can install that file instead; there is no need to download it twice.
-
 ### 6. Pair Siri Remote with the TV
 
-Keep the LG remote in your hand for this step. The app normally shows **Pair a Siri Remote**. If it recognizes a remote already paired with this TV and opens the settings screen instead, skip to step 7.
+Open **Magic Sirimote** on the TV. If it is not already open, select this icon from the TV's Home screen:
+
+![Magic Sirimote app icon](assets/app-icon.png)
+
+The app shows **Pair a Siri Remote**. If it opens the settings screen instead, continue to [Choose all of your button assignments](#7-choose-all-of-your-button-assignments).
 
 1. On the TV, choose **Start pairing** with the LG remote.
 2. Wait until the app starts searching. **Start the search before pressing the pairing buttons.**
@@ -195,8 +170,6 @@ Keep the LG remote in your hand for this step. The app normally shows **Pair a S
 7. Press Siri Remote's touch surface once to wake it. Try swiping to move the TV's selection, then pressing the surface to select an item.
 
 If the app reports an error or no candidate appears, see [Pairing problems](#pairing-problems).
-
-Pairing alone **does not rewrite the infrared assignments already stored in the remote**. Set up the six buttons next, even if some of them happen to work already.
 
 ### 7. Choose all of your button assignments
 
@@ -219,7 +192,7 @@ Here is a useful starting configuration. **It is a suggestion, not a preset appl
 
 **What “IR” means:** the remote itself sends infrared light to the TV. Point its front end toward the TV's infrared receiver. Configured IR power and volume can work even when the app's Bluetooth input is unavailable. Choices without “(IR)” are handled by the app running on the TV.
 
-**How Press and Hold interact:** an IR Press action is sent immediately and may also happen at the beginning of a long hold. For example, holding the suggested TV button can send Home first, then Power. An IR Hold action requires an IR Press action on the same button; the app rejects combinations that lack it. TV-side actions such as Play / Pause run when you release the button.
+**How Press and Hold interact:** an IR Press action is sent immediately and may also happen at the beginning of a long hold. For example, holding the suggested TV button can send Home first, then Power. If you assign an IR action to Hold, also assign an IR action to Press on that button. A hold-only IR assignment can fire on a short press, so the app prevents that combination.
 
 **What “Do nothing” means:** on an unconfigured app, all twelve cells display Do nothing. That display is not a readback of the remote's existing infrared memory. Saving applies the displayed choices: Do nothing deletes that slot's IR assignment and disables its TV-side action. To disable a button completely, set both its cells to Do nothing.
 
@@ -228,7 +201,7 @@ Choose every cell you want to use before your first save. The app cannot recover
 ### 8. Save your settings
 
 1. Press **Back** to return to the first settings screen. Your button edits remain pending.
-2. Leave **Gyro cursor** on if you want pointer control. Set **Cursor sensitivity** to **3 / 5** as a starting point, or choose a lower value for less movement.
+2. Leave **Gyro cursor** on if you want pointer control.
 3. Choose **Save and restart**. The app applies all twelve displayed assignments and restarts reception.
 4. Wait for the window to close, then use Siri Remote.
 
@@ -242,13 +215,17 @@ Periodically open **Developer Mode** on the TV and check **Remain Session**. Whi
 
 ### The Mac cannot connect to the TV
 
-Confirm that the TV is on, Dev Mode Status is on, and both devices are on the same local network. Recheck the IP address shown by the TV: it can change after a restart. Run `ares-setup-device`, choose **modify**, and update `my-tv` if needed. Then retry the system-information command from step 4.
+Confirm that the TV is on, Dev Mode Status is on, and both devices are on the same local network. Recheck the IP address shown by the TV: it can change after a restart. Run `ares-setup-device`, choose **modify**, and update `my-tv` if needed. Then retry `ares-device --system-info --device my-tv`.
 
 If key authentication fails, enable Key Server and repeat `ares-novacom --device my-tv --getkey` with the current on-screen passphrase. Do not switch Developer Mode off and on merely to refresh an IP address or key.
 
 ### The app does not open
 
-Check that installation reported success, then try the launch command from step 5. If it still fails, note your TV model, system-information output and error message. An installed icon alone does not establish compatibility: the app needs the TV components listed under requirements. There is no universal dependency installer for unsupported TV firmware.
+Check that installation reported success, then run this command on the Mac to open the app:
+
+```sh
+ares-launch --device my-tv org.magicsirimote.app
+```
 
 ### Pairing problems
 
@@ -280,13 +257,13 @@ Check that Gyro cursor is on and saved. Lift your finger completely off the touc
 
 Keep the TV on and the remote nearby. Wake Siri Remote before saving, then use the LG remote to operate the app while reception pauses.
 
-If you see a partial-save count, the completed items may already be stored. Inspect the choices and the error before retrying; do not assume the previous configuration was restored. An IR Hold must have an IR Press on the same row. For the TV button, use **Home (IR)** with **Power on/off (IR)** as shown in the suggested configuration.
+If you see a partial-save count, the completed items may already be stored. Inspect the choices and the error before retrying; do not assume the previous configuration was restored. If Hold uses an IR action, Press must also use an IR action on the same button. For example, set TV / Control Center to **Press: Home (IR)** and **Hold: Power on/off (IR)**. Setting Press to Do nothing while Hold uses IR is not allowed.
 
 The displayed assignments are the app's saved choices, not a complete readback of the remote's memory. Saving writes persistent IR settings, even when values are unchanged. Save when you intend to apply settings, rather than repeatedly saving as a connection test.
 
-### Report a problem
+### Voice input
 
-Open an issue in this repository with your TV model, firmware, Siri Remote model, app version, the steps you took, and the exact message shown. Remove account details, passphrases, device addresses and serial numbers from screenshots or logs before posting them.
+Voice input is not supported.
 
 ## Reset or uninstall
 
@@ -298,7 +275,7 @@ To start over:
 2. Open Magic Sirimote and choose **Reset app**.
 3. Read the confirmation. Choose **Cancel** to leave things unchanged, or **Reset everything** to proceed.
 4. Let the reset finish. If it stops partway through, read the error; reopening the app may offer **Continue reset** to finish the remaining steps. Some IR assignments may already be deleted.
-5. When **Start pairing** appears, return to step 6 of this guide, then configure and save your button assignments again.
+5. When **Start pairing** appears, follow [Pair Siri Remote with the TV](#6-pair-siri-remote-with-the-tv), then configure and save your button assignments again.
 
 To remove the app and its remote setup, complete that reset first, close the app, then run on the Mac:
 
