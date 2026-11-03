@@ -202,11 +202,6 @@ Pairing alone **does not rewrite the infrared assignments already stored in the 
 
 Reopen **Magic Sirimote** from the TV's Home screen using the LG remote. Choose **Button Assignments**.
 
-The editor has six rows and two columns:
-
-- **Press:** the ordinary press action.
-- **Hold (~0.7 s):** the long-press action.
-
 The six rows are **Menu**, **TV / Control Center** (the button with a TV picture), **Siri** (the microphone button), **Play/Pause**, **Volume Up**, and **Volume Down**. Touch-surface clicks and swipes are separate and do not need button assignments.
 
 Use the LG remote's direction keys to select a cell, press OK to open its choices, and select an action. Siri Remote can also navigate these screens when reception is working, but keep using the LG remote for saving.
