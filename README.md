@@ -25,7 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.35** (integrated preview) |
+| Integrated TV app | Magic Sirimote **0.6.37** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -151,7 +151,6 @@ The implementation uses a persistent webOS **Activity**, roughly a recurring sys
 src/
   check.py              # Host-only test runner
   build_integrated.py   # Current single-app IPK builder
-  build_pairing.py      # Separate native pairing experiment
   build.py              # Older configured three-package builder
   build_support.py      # Deterministic IPK archives and tiny ARM launchers
   runtime-files.json    # Explicit list of source modules allowed in packages
@@ -225,11 +224,11 @@ Enter the passphrase shown on the TV when prompted. If you already have a workin
 From the repository root:
 
 ```sh
-ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.35_arm.ipk
+ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.37_arm.ipk
 ares-launch --device my-tv org.magicsirimote.app
 ```
 
-Only this IPK is needed. The separate pairing-test app is a development tool, not a dependency. Stop any older Magic Sirimote runtime and its automatic startup before replacing it; do not run competing receivers.
+Only this IPK is needed. Stop any older Magic Sirimote runtime and its automatic startup before replacing it; do not run competing receivers.
 
 ### Step 3: Pair Siri Remote on the TV
 
@@ -238,7 +237,7 @@ If the remote is already paired to this TV, Magic Sirimote opens its settings sc
 1. Use the LG remote to choose **Start pairing**.
 2. Once searching begins, hold **MENU + Volume Up** on Siri Remote for about five seconds, then release both. Keep the remote near the TV.
 3. Select the matching candidate if prompted. A previously known remote is selected by its saved identity.
-4. Keep the remote awake with occasional surface presses during the approximately 70-second connection check.
+4. The app checks the connection, serial number and supported firmware, then proceeds directly to setup completion. There is no fixed waiting period.
 5. The app saves the verified connection information and starts reception. Check swipe, surface click and pointer movement. Reopen Magic Sirimote for settings.
 
 ```mermaid
@@ -251,7 +250,7 @@ sequenceDiagram
     User->>Remote: Hold MENU + Volume Up
     Remote-->>App: Bluetooth advertisement
     App->>Remote: Pair, connect HID, initialize input
-    App->>App: Verify registration and connection for 70 seconds
+    App->>App: Verify registration, connection and remote identity
     App->>App: Save device identity and start input
 ```
 

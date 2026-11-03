@@ -11,7 +11,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src/integrated'), str(ROOT / 'src/native')]
 import control
-from native_manager import RuntimeSetup, consume_installer
+from native_manager import RuntimeSetup, consume_installer, maintenance_action
 
 
 def found(**changes):
@@ -27,7 +27,7 @@ class ControlTests(unittest.TestCase):
             bus.create_startup.side_effect = RuntimeError('unknown create outcome')
             app = RuntimeSetup(Path(d), bus)
             values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
-            with patch('native_manager.settings.save'), self.assertRaises(RuntimeError): app.apply(values, True)
+            with patch('native_manager.settings.save'), self.assertRaises(RuntimeError): app.apply(values)
             self.assertEqual([call.args[0] for call in bus.request.call_args_list], ['configure', 'startupPrepare'])
             self.assertFalse(app.done)
 
@@ -103,14 +103,14 @@ class ControlTests(unittest.TestCase):
             self.assertIsNone(app.pending_settings);self.assertEqual(app.button_drafts,{'20:00':'none'})
             self.assertIn('not confirmed',app.message)
 
-    def test_installer_configuration_always_activates_but_stop_stays_internal(self):
+    def test_configuration_always_activates_but_stop_stays_internal(self):
         from unittest.mock import Mock
         values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
         with tempfile.TemporaryDirectory() as d:
             bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'; bus.request.return_value = {'returnValue': True, 'status': 'registered'}
             app = RuntimeSetup(Path(d), bus)
             with patch('native_manager.settings.save'):
-                app.apply(values, False)
+                app.apply(values)
             self.assertTrue(app.done)
             self.assertEqual(bus.request.call_args.args[0], 'start')
             app.pending_settings = ('buttons', None, 100)
@@ -174,7 +174,7 @@ class ControlTests(unittest.TestCase):
             bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'; bus.remote_name.return_value = 'Remote'; app = RuntimeSetup(Path(d), bus)
             app.infrared = Mock()
             with self.assertRaisesRegex(RuntimeError, 'Close button settings'):
-                app.apply({}, True)
+                app.apply({})
             bus.request.assert_not_called()
 
     def test_ir_programming_refuses_retained_sensor_state(self):
@@ -259,9 +259,37 @@ class ControlTests(unittest.TestCase):
             bus = Bus(); app = RuntimeSetup(Path(d), bus)
             values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
             with patch('native_manager.settings.save'):
-                app.apply(values, True)
+                app.apply(values)
             self.assertTrue(app.done)
             self.assertEqual(bus.calls, ['configure', 'startupPrepare', 'startupRepair', 'start'])
+
+    def test_external_device_configuration_is_rejected(self):
+        nonce = 'a' * 32
+        for request in ({'nonce':nonce,'action':'configure'},
+                        {'nonce':nonce,'action':'start','settings':{'remoteAddress':'aa:bb:cc:dd:ee:10'}},
+                        {'nonce':nonce,'action':'stop','remoteAddress':'aa:bb:cc:dd:ee:10'}):
+            with self.assertRaises(ValueError): maintenance_action(request, nonce)
+        for action in ('start', 'stop'):
+            self.assertEqual(maintenance_action({'nonce':nonce,'action':action},nonce),action)
+
+    def test_maintenance_start_uses_only_saved_identity(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); bus.tv_address.return_value = 'aa:bb:cc:dd:ee:20'
+            bus.remote_name.return_value = 'Remote'
+            bus.request.return_value = {'returnValue':True,'status':'registered'}
+            app = RuntimeSetup(Path(d), bus)
+            app.saved_values = {'remoteAddress':'aa:bb:cc:dd:ee:10',
+                'adapterAddress':'aa:bb:cc:dd:ee:20','remoteName':'Remote',
+                'gyroEnabled':True,'gyroSensitivity':3}
+            app.values['remoteAddress'] = 'aa:bb:cc:dd:ee:99'
+            with patch('native_manager.settings.save'):
+                app.start_saved()
+            method, payload = bus.request.call_args_list[0].args
+            self.assertEqual(method, 'configure')
+            self.assertEqual(payload['settings']['schema'], 1)
+            self.assertEqual(payload['settings']['remoteAddress'], 'aa:bb:cc:dd:ee:10')
+            self.assertTrue(app.done)
 
     def test_installer_unknown_result_cannot_be_replayed(self):
         with tempfile.TemporaryDirectory() as d:

@@ -1,5 +1,7 @@
 # Cable-free pairing verification
 
+The 0.6.35 observations below are historical verification. In 0.6.37, identity verification hands off immediately to the normal receiver; there is no 70-second wait. The separate pairing-test application, builder, instructions and release files have been removed. External installer requests accept only start/stop using saved settings, and cannot provide Bluetooth identities.
+
 The integrated package is `org.magicsirimote.app` 0.6.35. The tested hardware is the first-generation A1513 (main firmware 0241, radio firmware 0107) and LG OLED55G3PJA described in the README.
 
 ## Verified on the TV
@@ -22,4 +24,8 @@ The integrated package is `org.magicsirimote.app` 0.6.35. The tested hardware is
 
 ## Scope
 
-This verifies cable-free re-pairing of the current remote after TV-side registration removal. A factory-fresh remote, an independently clean TV installation, other firmware and other models still require testing. The separate test package was exercised at 0.1.5; the published 0.1.6 shares the final identity-reading flow with the integrated package but was not separately installed for another hardware trial. Build manifests describe generic outputs and do not assert universal hardware compatibility.
+This verifies cable-free re-pairing of the current remote after TV-side registration removal. A factory-fresh remote, an independently clean TV installation, other firmware and other models still require testing. The separate test package was exercised at 0.1.5; the former 0.1.6 package shared the identity-reading flow with the integrated package but was not separately installed for another hardware trial. Build manifests describe generic outputs and do not assert universal hardware compatibility.
+
+## Cleanup release verification
+
+Version 0.6.37 passed 303 host Python tests, the integrated/scheduler JavaScript suites and 10 scheduler Python tests. The strengthened saved-settings start regression also passed with the other 22 control tests. All 175 installed files matched the IPK. A start request containing no device settings was accepted; input reception and cursor calibration resumed with the existing pairing. The immediate pairing handoff was tested with simulated replies, without deleting and recreating the live pairing again.

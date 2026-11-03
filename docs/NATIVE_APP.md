@@ -2,7 +2,7 @@
 
 ## Integrated runtime build
 
-[Download Magic Sirimote 0.6.35](../releases/integrated-preview/org.magicsirimote.app_0.6.35_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
+[Download Magic Sirimote 0.6.37](../releases/integrated-preview/org.magicsirimote.app_0.6.37_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 
 One IPK contains the native settings window, input receiver, connection controller and startup service. No computer stays in the input path after installation. The app uses the TV's existing Python 3.10+, SDL2 and SDL_ttf libraries and a TV-provided font; these dependencies are not bundled. The tested configuration is the A1513 Siri Remote and LG G3 listed in the [README](../README.md#1-tested-configuration). Other models and factory-fresh installations remain unverified.
 
@@ -21,13 +21,13 @@ One IPK contains the native settings window, input receiver, connection controll
 5. From this repository, install and open the integrated package:
 
    ```sh
-   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.35_arm.ipk
+   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.37_arm.ipk
    ares-launch --device my-tv org.magicsirimote.app
    ```
 
    Install only this IPK. The older settings-only and separate controller/receiver packages are not dependencies. If an older runtime is already running, stop it cooperatively and disable its automatic startup before switching packages; do not run two input runtimes together.
 
-The network IP entered into the Mac's CLI is unrelated to the remote's Bluetooth identity. You do not need to pair Siri Remote to the Mac or enter a Bluetooth address in the TV app.
+The network IP entered into the Mac's CLI is unrelated to the remote's Bluetooth identity. You do not need to pair Siri Remote to the Mac or enter a Bluetooth address in the TV app. Installer requests cannot supply device addresses or settings; the TV app obtains them from pairing.
 
 ## Pair on the TV
 
@@ -36,10 +36,10 @@ The app checks the TV's current paired-device list when opened. With a matching 
 1. Use the LG remote to select **Start pairing**. The app waits for any existing receiver to stop safely.
 2. When searching begins, hold **MENU + Volume Up** on the first-generation Siri Remote for approximately five seconds, then release both. Keep it near the TV and disconnect any diagnostic cable.
 3. If the app already knows this remote's address, it sends one pairing request as soon as the remote appears. For a new remote, choose the matching candidate and select **Pair selected remote**. Names and advertised Apple/HID information identify candidates; they do not prove compatibility with every Apple remote.
-4. Keep the remote awake with occasional surface presses while the app verifies the connection for approximately 70 seconds. The app establishes HID, sends the input-start request, and reads the serial number and supported firmware from the remote. Device information is read individually because this TV rejects a combined read.
+4. The app establishes HID, sends the input-start request, and reads the serial number and supported firmware from the remote. Once these checks succeed, it proceeds immediately to saving and reception.
 5. When verification succeeds, the app saves the verified device identity and enables automatic input reception. The window closes as the receiver starts. Wake the remote and check swipe, surface click and cursor movement. Reopening Magic Sirimote now shows settings.
 
-The 70-second check runs when a new pairing is completed. Opening settings, waking the remote or turning the TV on does not repeat this pairing check. Ordinary startup and Bluetooth reconnection can have their own preparation delay.
+There is no fixed delay after pairing. Bluetooth setup and receiver startup still take time; the normal controller continues monitoring the connection during use.
 
 ```mermaid
 flowchart TD
@@ -51,12 +51,11 @@ flowchart TD
     Scan --> Pair[Select remote and pair]
     Pair --> HID[Connect HID and initialize input]
     HID --> Identity[Read serial number and firmware]
-    Identity --> Check[Verify retention for 70 seconds]
-    Check --> Save[Save identity and start reception]
+    Identity --> Save[Save identity and start reception]
     Save --> Settings
 ```
 
-The diagnostic cable is not required for this tested pairing path. Cable-free pairing was verified by removing the existing TV registration and pairing the same A1513 again, then confirming normal operation. This is not a compatibility claim for every firmware or an independent factory-fresh installation test. The [separate pairing test app](PAIRING-TEST.md) remains available for development.
+The diagnostic cable is not required for this tested pairing path. Cable-free pairing was verified by removing the existing TV registration and pairing the same A1513 again, then confirming normal operation. This is not a compatibility claim for every firmware or an independent factory-fresh installation test.
 
 A failed or uncertain request stops the attempt instead of repeatedly issuing writes. Follow the displayed result before trying again. Pairing does not program IR assignments. An address or candidate name alone is never treated as successful pairing.
 

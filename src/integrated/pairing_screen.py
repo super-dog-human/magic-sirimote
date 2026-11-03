@@ -24,7 +24,7 @@ class PairingScreen:
 
     @property
     def busy(self):
-        return self.route == 'stopping' or self.flow.phase in ('pair-preflight', 'pairing', 'connecting', 'initializing', 'identity', 'observing')
+        return self.route == 'stopping' or self.flow.phase in ('pair-preflight', 'pairing', 'connecting', 'initializing', 'identity')
 
     def record(self, value):
         value.update(session=self.session, purpose='integrated-pairing')

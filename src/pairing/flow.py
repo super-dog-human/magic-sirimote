@@ -1,6 +1,5 @@
-"""Explicit pairing experiment; never writes IR, starts sensors or retries a write."""
+"""TV pairing flow; validates identity before handing off to normal reception."""
 import re
-import time
 
 
 def address(value):
@@ -48,23 +47,21 @@ def paired_route(devices, saved):
 
 
 class PairingFlow:
-    def __init__(self, bus, record, clock=time.monotonic):
-        self.bus, self.record, self.clock = bus, record, clock
-        self.phase = 'idle'; self.message = 'Read status to begin. Use the LG remote for this test.'
+    def __init__(self, bus, record):
+        self.bus, self.record = bus, record
+        self.phase = 'idle'; self.message = 'Use the LG remote to begin pairing.'
         self.adapter = None; self.target = None; self.known = {}; self.candidates = {}
         self.selected = 0; self.evidence = []; self.was_paired = False
-        self.auto_pair = False; self.prepared = False; self.serial = None; self.confirmed = False; self.pair_ended = False
-        self.started = None; self.next_poll = None; self.disconnected = set()
-        self.unpair_deadline = None; self.unpair_poll = None
+        self.auto_pair = False; self.serial = None; self.confirmed = False; self.pair_ended = False
         self.save()
 
     def save(self):
         self.record({'phase': self.phase, 'message': self.message, 'adapter': self.adapter,
-                     'target': self.target, 'serialVerified': self.serial is not None, 'wasPaired': self.was_paired, 'prepared': self.prepared,
+                     'target': self.target, 'serialVerified': self.serial is not None, 'wasPaired': self.was_paired,
                      'candidates': list(self.candidates.values()), 'evidence': self.evidence})
 
     def note(self, kind, value):
-        self.evidence.append({'elapsed': round(self.clock(), 3), 'kind': kind, 'value': value})
+        self.evidence.append({'kind': kind, 'value': value})
         self.evidence = self.evidence[-512:]; self.save()
 
     def send(self, tag, method, params, **kw):
@@ -85,22 +82,13 @@ class PairingFlow:
         self.phase = 'checking'; self.message = 'Reading TV Bluetooth state...'
         self.send('adapter', 'adapter/getStatus', {'subscribe': False})
 
-    def prepare(self):
-        if self.phase != 'ready': return
-        if not self.target and self.candidates:
-            self.target = list(self.candidates)[self.selected]
-            self.was_paired = self.known.get(self.target, {}).get('paired') is True
-        if not self.target: raise ValueError('Select a known remote or scan first')
-        self.phase = 'preflight'; self.message = 'Checking that the main app is safely stopped...'
-        self.send('idle', 'main/status', {})
-
     def scan_and_pair(self):
         if not self.target or self.was_paired: raise ValueError('A known unpaired target is required')
         self.auto_pair = True
         self.scan()
 
     def scan(self):
-        if self.phase not in ('ready', 'prepared', 'scanned'): return
+        if self.phase not in ('ready', 'scanned'): return
         self.candidates = {}; self.selected = 0
         self.phase = 'scanning'; self.message = 'Hold MENU + Volume Up for 5 seconds. Searching for 45 seconds...'
         self.send('scan', 'le/startScan', {'subscribe': True}, timeout=45, subscription=True)
@@ -110,7 +98,7 @@ class PairingFlow:
         chosen = list(self.candidates.values())[self.selected]
         if self.target and chosen['address'] != self.target: raise ValueError('Unexpected remote')
         self.target = chosen['address']
-        if chosen.get('paired'): raise ValueError('Already paired: prepare first; reconnect is not first pairing')
+        if chosen.get('paired'): raise ValueError('This remote is already paired. Reopen settings.')
         self.phase = 'pair-preflight'; self.message = 'Checking that the main app remains stopped...'
         self.send('pair-idle', 'main/status', {})
 
@@ -143,61 +131,15 @@ class PairingFlow:
             self.candidates = {a: {'address': a, 'name': str(d.get('name', 'Unnamed remote'))[:48],
                                    'paired': d.get('paired', False)}
                                for a, d in self.known.items() if a == self.target or (not self.target and plausible(d))}
-            self.phase = 'ready'; self.message = 'Ready. Prepare removes only the selected remote pairing.'
+            self.phase = 'ready'; self.message = 'Ready to pair.'
             if self.target:
                 self.was_paired = self.known.get(self.target, {}).get('paired') is True
-        elif tag in ('idle', 'pair-idle'):
+        elif tag == 'pair-idle':
             if value.get('cleanStop') is not True or value.get('startup', {}).get('enabled') is not False:
                 raise RuntimeError('Stop the main app and its automatic startup before pairing')
-            if tag == 'pair-idle':
-                self.phase = 'pairing'; self.message = 'Pairing with the selected remote...'
-                self.send('pair', 'adapter/pair', {'address': self.target, 'subscribe': True},
-                          timeout=45, subscription=True)
-            else:
-                self.send('before-hid', 'hid/getStatus', {'address': self.target})
-        elif tag in ('before-hid', 'before-gatt'):
-            profile = tag.split('-')[1]
-            if address(value.get('address', '')) != self.target or address(value.get('adapterAddress', '')) != self.adapter:
-                raise ValueError('Unexpected device identity')
-            if value.get('connecting') is not False or value.get('connectRequest', False):
-                raise RuntimeError('A connection is still pending')
-            if value.get('connected') is True:
-                if profile in self.disconnected: raise RuntimeError('Disconnect not confirmed')
-                self.disconnected.add(profile)
-                if profile == 'gatt':
-                    self.send('gatt-client', 'gatt/connect', {'address': self.target, 'subscribe': False})
-                else: self.send('disconnect-hid', 'hid/disconnect', {'address': self.target})
-            elif value.get('connected') is not False:
-                raise RuntimeError('Connection state is unknown')
-            elif profile == 'hid':
-                self.send('before-gatt', 'gatt/getStatus', {'address': self.target})
-            elif self.was_paired:
-                self.message = 'Removing the old TV pairing for this remote...'
-                self.send('unpair', 'adapter/unpair', {'address': self.target})
-            else: self.send('unpaired-check', 'device/getStatus', {'subscribe': False})
-        elif tag == 'gatt-client':
-            if address(value.get('address', '')) != self.target or address(value.get('adapterAddress', '')) != self.adapter:
-                raise ValueError('Wrong GATT peer')
-            client = value.get('clientId')
-            if type(client) is not str or not re.fullmatch(r'[0-9]{1,5}', client) or not 0 < int(client) <= 65535:
-                raise ValueError('Missing GATT client identity')
-            self.send('disconnect-gatt', 'gatt/disconnect', {'clientId': client})
-        elif tag in ('disconnect-hid', 'disconnect-gatt'):
-            profile = tag.split('-')[1]
-            self.send('before-' + profile, profile + '/getStatus', {'address': self.target})
-        elif tag == 'unpair':
-            if address(value.get('adapterAddress', '')) != self.adapter: raise ValueError('Wrong adapter')
-            self.unpair_deadline = self.clock() + 5
-            self.send('unpaired-check', 'device/getStatus', {'subscribe': False})
-        elif tag == 'unpaired-check':
-            matches = [d for d in value.get('devices', []) if address(d['address']) == self.target]
-            if any(d.get('paired') is not False for d in matches):
-                if self.unpair_deadline is None or self.clock() >= self.unpair_deadline:
-                    raise ValueError('Unpair not confirmed')
-                self.unpair_poll = self.clock() + .25
-                return
-            self.prepared = True; self.phase = 'prepared'
-            self.message = 'Old TV pairing removed. Choose Scan, then hold MENU + Volume Up.'
+            self.phase = 'pairing'; self.message = 'Pairing with the selected remote...'
+            self.send('pair', 'adapter/pair', {'address': self.target, 'subscribe': True},
+                      timeout=45, subscription=True)
         elif tag == 'scan':
             # Commercial TVs may return only a devices list. Keep its provenance:
             # a listed candidate is not proof of fresh advertising or first pairing.
@@ -231,16 +173,13 @@ class PairingFlow:
                 self.pair_ended = True; self.bus.cancel('pair', completed=True)
                 self.send('paired-check', 'device/getStatus', {'subscribe': False})
         elif tag == 'confirm': pass
-        elif tag in ('paired-check', 'retained-devices'):
+        elif tag == 'paired-check':
             matches = [d for d in value.get('devices', []) if address(d['address']) == self.target]
             if len(matches) != 1 or matches[0].get('paired') is not True or matches[0].get('pairing') is True:
-                raise ValueError('Remote pairing was not retained')
-            if tag == 'paired-check':
-                self.known[self.target] = matches[0]
-                self.phase = 'connecting'; self.message = 'Pairing complete. Establishing HID input...'
-                self.send('hid-check', 'hid/getStatus', {'address': self.target})
-            else:
-                self.send('retained-hid', 'hid/getStatus', {'address': self.target})
+                raise ValueError('Remote pairing was not confirmed')
+            self.known[self.target] = matches[0]
+            self.phase = 'connecting'; self.message = 'Pairing complete. Establishing HID input...'
+            self.send('hid-check', 'hid/getStatus', {'address': self.target})
         elif tag == 'hid-check':
             if self.profile_ok(value): self.initialize()
             else: self.send('connect', 'hid/connect', {'address': self.target}, timeout=35)
@@ -249,7 +188,7 @@ class PairingFlow:
             if not self.profile_ok(value): raise ValueError('HID connection not confirmed')
             self.initialize()
         elif tag == 'initialize':
-            self.started = self.clock(); self.phase = 'identity'
+            self.phase = 'identity'
             self.message = 'Reading the paired remote identity...'
             self.send('identity-client', 'gatt/connect', {'address': self.target, 'subscribe': False})
         elif tag == 'identity-client':
@@ -294,16 +233,8 @@ class PairingFlow:
                 firmware = read('00002a26-0000-1000-8000-00805f9b34fb')
                 if firmware != b'01004102200070033000070131001800B000410240001508':
                     raise ValueError('This remote firmware has not been validated')
-                self.serial = self.pending_serial; self.phase = 'observing'; self.next_poll = self.clock()
-                self.message = 'Remote identity verified. Checking pairing retention for 70 seconds...'
-        elif tag == 'retained-hid':
-            if not self.profile_ok(value): raise ValueError('HID disconnected during retention check')
-            elapsed = self.clock() - self.started
-            if elapsed >= 70:
-                self.phase = 'success'; self.message = 'Cable-free pairing and 70-second HID retention confirmed.'
-            else:
-                self.message = 'Pairing retained: %d / 70 seconds. Keep the remote awake.' % elapsed
-                self.next_poll = self.clock() + 2
+                self.serial = self.pending_serial
+                self.phase = 'success'; self.message = 'Pairing verified. Starting remote control...'
         self.save()
 
     def initialize(self):
@@ -314,10 +245,4 @@ class PairingFlow:
     def tick(self):
         try:
             for tag, value in self.bus.events(): self.on_reply(tag, value)
-            if self.unpair_poll is not None and self.clock() >= self.unpair_poll:
-                self.unpair_poll = None
-                self.send('unpaired-check', 'device/getStatus', {'subscribe': False})
-            if self.phase == 'observing' and self.next_poll is not None and self.clock() >= self.next_poll:
-                self.next_poll = None
-                self.send('retained-devices', 'device/getStatus', {'subscribe': False})
         except Exception as error: self.fail(error)

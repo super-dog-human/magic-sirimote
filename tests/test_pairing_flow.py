@@ -21,15 +21,15 @@ class Bus:
 
 class PairingTests(unittest.TestCase):
     def setUp(self):
-        self.bus = Bus(); self.now = 0
-        self.flow = m.PairingFlow(self.bus, lambda value: None, lambda: self.now)
+        self.bus = Bus()
+        self.flow = m.PairingFlow(self.bus, lambda value: None)
         self.flow.target = REMOTE; self.flow.adapter = TV
     def reply(self, tag, **kw): self.flow.on_reply(tag, {'returnValue': True, **kw})
     def test_refuse_active_main(self):
-        self.flow.phase = 'ready'; self.flow.prepare()
+        self.flow.phase = 'scanned'; self.flow.candidates = {REMOTE: {'address':REMOTE,'paired':False}}; self.flow.pair()
         with self.assertRaisesRegex(RuntimeError, 'Stop the main'):
-            self.reply('idle', cleanStop=False, startup={'enabled': False})
-        self.assertFalse(any(x[1] == 'adapter/unpair' for x in self.bus.sent))
+            self.reply('pair-idle', cleanStop=False, startup={'enabled': False})
+        self.assertFalse(any(x[1] == 'adapter/pair' for x in self.bus.sent))
     def test_cached_scan_is_not_proof(self):
         self.flow.phase = 'ready'; self.flow.scan()
         self.reply('scan', devices=[{'address': REMOTE, 'name': 'Siri Remote'}])
@@ -39,8 +39,8 @@ class PairingTests(unittest.TestCase):
         self.assertEqual(self.bus.sent[-1][1], 'main/status')
     def test_pair_already_paired_is_rejected(self):
         self.flow.phase = 'scanned'; self.flow.candidates = {REMOTE: {'address': REMOTE, 'paired': True}}
-        with self.assertRaisesRegex(ValueError, 'Already paired'): self.flow.pair()
-    def test_no_success_before_70_seconds(self):
+        with self.assertRaisesRegex(ValueError, 'already paired'): self.flow.pair()
+    def test_success_immediately_after_verified_identity(self):
         self.reply('pair', address=REMOTE, request='endPairing')
         self.reply('paired-check', devices=[{'address': REMOTE, 'paired': True}])
         self.reply('hid-check', address=REMOTE, adapterAddress=TV, connected=True, connecting=False)
@@ -60,12 +60,10 @@ class PairingTests(unittest.TestCase):
             service='0000180a-0000-1000-8000-00805f9b34fb', values=[
                 {'characteristic':'00002a25-0000-1000-8000-00805f9b34fb', 'value':{'bytes':list(b'DL0000000000')}},
                 {'characteristic':'00002a26-0000-1000-8000-00805f9b34fb', 'value':{'bytes':list(b'01004102200070033000070131001800B000410240001508')}}])
-        self.now = 69
-        self.reply('retained-hid', address=REMOTE, adapterAddress=TV, connected=True, connecting=False)
-        self.assertEqual(self.flow.phase, 'observing')
-        self.now = 70
-        self.reply('retained-hid', address=REMOTE, adapterAddress=TV, connected=True, connecting=False)
         self.assertEqual(self.flow.phase, 'success')
+        sent = list(self.bus.sent)
+        self.flow.tick()
+        self.assertEqual(self.bus.sent, sent)  # No delayed retention polling.
     def test_unknown_delivery_fails_without_retry(self):
         self.flow.initialize(); before = len(self.bus.sent)
         self.bus.incoming = [('initialize', {'returnValue': False, 'errorText': 'Request timed out'})]
@@ -80,17 +78,8 @@ class PairingTests(unittest.TestCase):
             self.reply('pair', address=REMOTE, request='enterPasskey')
         self.assertFalse(self.bus.sent)
     def test_paired_flag_loss_fails(self):
-        with self.assertRaisesRegex(ValueError, 'not retained'):
-            self.reply('retained-devices', devices=[{'address': REMOTE, 'paired': False}])
-    def test_prepare_known_remote(self):
-        self.reply('devices', devices=[{'address': REMOTE, 'name': 'Siri Remote', 'paired': True}])
-        self.flow.prepare(); self.reply('idle', cleanStop=True, startup={'enabled': False})
-        self.reply('before-hid', address=REMOTE, adapterAddress=TV, connected=False, connecting=False)
-        self.reply('before-gatt', address=REMOTE, adapterAddress=TV, connected=False, connecting=False)
-        self.assertEqual(self.bus.sent[-1][1], 'adapter/unpair')
-        self.reply('unpair', adapterAddress=TV); self.reply('unpaired-check', devices=[])
-        self.assertEqual(self.flow.phase, 'prepared')
-
+        with self.assertRaisesRegex(ValueError, 'not confirmed'):
+            self.reply('paired-check', devices=[{'address': REMOTE, 'paired': False}])
     def test_advertised_name_and_service_without_top_level_name(self):
         raw = [2,1,6,3,2,18,24,3,255,76,0,13,8] + list(b'DL0000000000')
         ad = m.advertising({'scanRecord': raw})

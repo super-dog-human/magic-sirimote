@@ -6,9 +6,9 @@ from collections import deque
 from native_luna import Error
 
 BASE = 'luna://com.webos.service.bluetooth2/'
-METHODS = {'adapter/getStatus', 'device/getStatus', 'le/startScan', 'adapter/unpair',
+METHODS = {'adapter/getStatus', 'device/getStatus', 'le/startScan',
            'adapter/pair', 'adapter/supplyPasskeyConfirmation', 'hid/getStatus',
-           'hid/connect', 'hid/disconnect', 'gatt/getStatus', 'gatt/connect', 'gatt/disconnect', 'hid/internal/setReport', 'gatt/discoverServices', 'gatt/getServices', 'gatt/readCharacteristicValues'}
+           'hid/connect', 'gatt/connect', 'hid/internal/setReport', 'gatt/discoverServices', 'gatt/getServices', 'gatt/readCharacteristicValues'}
 
 
 class BluetoothBus:
@@ -52,7 +52,7 @@ class BluetoothBus:
 
     def request(self, tag, method, params, timeout=10, subscription=False):
         if tag in self.jobs or len(self.callbacks) >= 512:
-            raise RuntimeError('Too many requests; reopen the test app')
+            raise RuntimeError('Too many requests; reopen the app')
         if method == 'main/status':
             uri = 'luna://org.magicsirimote.app.service/status'
             if params != {}: raise ValueError('Read-only main app status required')

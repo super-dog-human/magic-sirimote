@@ -63,7 +63,7 @@ The public builder preserves these declared access-control groups:
 
 These declarations do not guarantee access to every internal operation on every firmware. A command that works in a developer SSH session may fail in an app, and the reverse can also happen. Validate under the actual native app identity. Do not impersonate a system service.
 
-The runtime uses the existing Bluetooth service for status, connection management, notification configuration, input activation and sensor-mode reads/writes. The older three-package export requires existing pairing. The integrated app now provides a cable-free pairing screen using the TV Bluetooth service and MENU + Volume Up, followed by HID initialization and a 70-second retention check. This was tested by deleting and recreating the A1513/G3 registration without the diagnostic cable; factory-fresh and other-device compatibility remains unverified. See [the current pairing guide](NATIVE_APP.md#pair-on-the-tv).
+The runtime uses the existing Bluetooth service for status, connection management, notification configuration, input activation and sensor-mode reads/writes. The older three-package export requires existing pairing. The integrated app now provides a cable-free pairing screen using the TV Bluetooth service and MENU + Volume Up, followed by HID initialization and verification of the remote identity. This was tested by deleting and recreating the A1513/G3 registration without the diagnostic cable; factory-fresh and other-device compatibility remains unverified. See [the current pairing guide](NATIVE_APP.md#pair-on-the-tv).
 
 ### Initial account and device inventory
 

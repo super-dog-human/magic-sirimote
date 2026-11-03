@@ -35,8 +35,16 @@ def write_status(name, value):
     os.replace(temp, STATE / name)
 
 
-def consume_installer(params, apply, stop=None):
-    """An SSH installer stages a bounded data file and passes its random name."""
+def maintenance_action(value, nonce):
+    """External maintenance can resume saved settings or stop; never select a device."""
+    if (type(value) is not dict or set(value) != {'nonce', 'action'}
+            or value['nonce'] != nonce or value['action'] not in ('start', 'stop')):
+        raise ValueError('Invalid maintenance request; device settings cannot be supplied')
+    return value['action']
+
+
+def consume_installer(params, start, stop=None):
+    """Read a bounded start/stop maintenance request; no external settings are accepted."""
     if type(params) is not dict or 'installerRequest' not in params:
         return False
     nonce = params['installerRequest']
@@ -57,18 +65,14 @@ def consume_installer(params, apply, stop=None):
     finally:
         os.close(fd)
     value = json.loads(raw, object_pairs_hook=settings._unique)
-    if type(value) is not dict or set(value) != {'nonce', 'settings', 'action'} or value['nonce'] != nonce or value['action'] not in ('configure', 'start', 'stop'):
-        raise ValueError('Invalid installer data')
-    values = value['settings']
-    if value['action'] == 'stop':
-        values = settings.validate(values)
+    action = maintenance_action(value, nonce)
     write_status(result, {'status': 'pending'})
     try:
-        if value['action'] == 'stop':
+        if action == 'stop':
             if stop is None: raise RuntimeError('Stop handler unavailable')
             stop()
         else:
-            apply(values, value['action'] == 'start')
+            start()
     except Exception as error:
         write_status(result, {'status': 'attention', 'errorType': type(error).__name__, 'errorText': str(error)[:180]})
         raise
@@ -145,7 +149,7 @@ class RuntimeSetup(Setup):
             raise ValueError('The saved TV identity does not match this TV. Settings were not changed.')
         remote = values.get('remoteAddress', '')
         if type(remote) is not str:
-            raise ValueError('Enter the remote Bluetooth address first.')
+            raise ValueError('Pair a Siri Remote before saving settings.')
         remote = remote.strip().lower()
         # A verified saved serial remains usable when webOS omits the LE display name.
         prior = self.saved_values if remote == self.saved_values.get('remoteAddress') and adapter == self.saved_values.get('adapterAddress') else {}
@@ -153,7 +157,7 @@ class RuntimeSetup(Setup):
         name = self.bus.remote_name(remote, adapter, verified)
         return settings.validate({**values, 'remoteAddress': remote, 'adapterAddress': adapter, 'remoteName': name})
 
-    def apply(self, values, start=True):
+    def apply(self, values):
         if self.saving_assignments or self.pending_settings is not None:
             raise RuntimeError("Wait for settings to finish before updating.")
         if self.infrared is not None:
@@ -168,13 +172,15 @@ class RuntimeSetup(Setup):
         self.values.update({key: values[key] for key in (*settings.FIELDS, *settings.PREFERENCES)})
         self.saved_values = dict(self.values)
     def activate_settings(self):
-        # Both installer configure and the TV Save action activate reception.
-        # Keep the old argument for staged installer requests from earlier builds.
+        # Verified pairing and the TV Save action activate reception.
         self.enable_startup()
         accepted(self.bus.request('start', {}))
         self.message = 'Settings saved.'
         self.resume_after_settings = False
         self.done = True  # A fresh post-HID launch must inherit fresh input nodes.
+
+    def start_saved(self):
+        self.apply({'schema': 1, **self.saved_values})
 
     def stop_runtime(self):
         """Installer maintenance only; never exposed as a settings choice."""
@@ -456,7 +462,7 @@ def main():
                         canvas.restore()
                         app.battery.refresh(worker)
                         try:
-                            consumed = consume_installer(params, app.apply, stop=app.stop_runtime)
+                            consumed = consume_installer(params, app.start_saved, stop=app.stop_runtime)
                             if not consumed: app.refresh_pairing()
                         except (OSError, ValueError, RuntimeError) as error: app.message = str(error)[:160]
                         app.draw(canvas)
