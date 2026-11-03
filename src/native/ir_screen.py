@@ -5,8 +5,7 @@ ARROWS = {1073741906: -1, 1073741905: 1, 1073741904: -1, 1073741903: 1}
 BACK = (27, 461, 1073742094)
 BUTTONS = assignments.ROWS
 PRESETS = (('Power on/off', '08'), ('Back', '28'), ('Home', '7C'),
-           ('Settings', '43'), ('Volume +', '02'), ('Volume -', '03'),
-           ('Mute', '09'), ('Play', 'B0'), ('Pause', 'BA'))
+           ('Settings', '43'), ('Volume +', '02'), ('Volume -', '03'))
 TV_ACTIONS = (('Do nothing', 'none'),
               ('Play / Pause', 'playpause'),
               ('Screen off / restore', 'screen-toggle'))
