@@ -4,6 +4,7 @@
   "adaptive_prefix_pose.py",
   "adaptive_prefix_router.py",
   "atomic_session_directory.py",
+  "battery_read.py",
   "boot_diagnostics.py",
   "bootstrap_connect.py",
   "borrowed_control_guard.py",

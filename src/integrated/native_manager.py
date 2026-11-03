@@ -138,7 +138,8 @@ class RuntimeSetup(Setup):
             canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
             canvas.text(title, box[0] + 20, box[1] + 16, 24)
             self.boxes.append((index, box))
-        canvas.text('Start closes this window while the input connection is prepared.', 66, 682, 19, (155, 170, 190))
+        from battery_status import label
+        canvas.text(label(self.state, self.values['remoteAddress'], self.values['adapterAddress']), 66, 682, 19, (155, 170, 190))
         canvas.present()
 
 

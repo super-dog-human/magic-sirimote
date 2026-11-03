@@ -9,7 +9,7 @@ import build_support
 
 ROOT = Path(__file__).resolve().parent
 APP = build_native.APP
-VERSION = '0.5.4'
+VERSION = '0.5.6'
 ROLES = ('controller', 'receiver')
 
 
@@ -24,6 +24,7 @@ def build(output):
     service = {'runtime/' + name: (ROOT / 'runtime' / name).read_bytes() for name in names}
     # One copy of the native sources is visible to both native and service UIDs.
     service.update({'native/' + name: (ROOT / 'native' / name).read_bytes() for name in build_native.SOURCES})
+    service['native/battery_status.py'] = (ROOT / 'native/battery_status.py').read_bytes()
     for name in ('native_bus.py', 'native_manager.py'):
         service['native/' + name] = (ROOT / 'integrated' / name).read_bytes()
     service['runtime/control_processes.py'] = (ROOT / 'integrated/control_processes.py').read_bytes()

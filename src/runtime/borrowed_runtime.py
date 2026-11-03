@@ -83,6 +83,10 @@ def prepare(*,watch,lease,paired,external_feature_guard,record,pump=lambda:None,
   writer=BorrowedModeWriter(activation,stop,guard=control);post=BorrowedStopModeRead(stop,guard=control)
   session,_=create_session(watch=watch,view=view,lease=lease,paired=True,call=activation,write_mode=writer,read_stop_mode=post,external_feature_guard=external_feature_guard,record=record,clock=clock,reader_clock=clock)
   ensure_notifications(view.client_id,pump=pump,guard=control,record=record)
+  import runtime_bundle as bundle
+  if bundle.active():
+   from battery_read import capture
+   capture(view.client_id,pump=pump,guard=control)
   return session
  except BaseException:
   view.close();raise

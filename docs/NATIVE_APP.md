@@ -2,6 +2,37 @@
 
 The available IPK is a **native webOS settings preview**. It does not include an input receiver or background service, and is not a replacement for the working three-package input runtime. The intended integrated design is described below.
 
+## Integrated runtime build
+
+The source also includes a single-package runtime build:
+
+```sh
+python3 src/build_integrated.py --out /tmp/magic-sirimote-integrated
+```
+
+Choose a new output directory. This build contains the native window, input
+receiver and bundled background service in one IPK. It is separate from the
+downloadable setup preview below. It requires an already paired remote and
+verified device settings; a fresh-install pairing workflow is not yet available.
+
+The settings window provides **Start remote control** and **Stop remote control**.
+Start closes the window while the connection is prepared. Opening the app again
+shows its settings. Stop and wait for cleanup before programming infrared or
+updating the package. **Automatic startup after a TV restart is not yet included.**
+
+The integrated window displays the last battery percentage reported by the remote,
+with the age of the reading. It reads once while preparing an authenticated
+connection, without pairing, reconnecting or changing remote settings. A missing,
+invalid or timed-out reading shows **unavailable** and does not prevent input.
+Older readings are explicitly marked as potentially changed; the value is not a
+live battery monitor or a charging indicator.
+
+On the tested TV, this build supports swipe navigation, surface clicks, gyro
+pointing, MENU for Back, the TV button for Home, playback controls, and releasing
+the microphone button to toggle screen off/restore. The saved gyro preference
+and configurable TV assignments are not yet connected to this runtime. Remote
+IR assignments already stored in the Siri Remote continue to work independently.
+
 ## Try the setup preview
 
 [Download the native setup preview](../releases/native-preview/org.magicsirimote.app_0.2.7_arm.ipk) and [its SHA-256 checksum](../releases/native-preview/SHA256SUMS).
