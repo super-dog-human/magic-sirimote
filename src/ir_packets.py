@@ -18,7 +18,7 @@ def encode_delete(button,delay):
     return bytes([0xf0,2,button,delay])
 
 def main():
-    print('INSPECTION ONLY. No connection or transmission. Read docs/IR.md before using these bytes.')
+    print('INSPECTION ONLY. No connection or transmission. See README.md for app setup and infrared assignments.')
     for name,button,delay,nec in ENTRIES:
         print(name+': '+encode_entry(button,delay,bytes.fromhex(nec)).hex(' '))
 if __name__=='__main__':main()
