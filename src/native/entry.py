@@ -68,7 +68,6 @@ class Setup:
             alphabet = '0123456789abcdef:' if index != 1 else 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'
             self.keys = list(alphabet) + (['Case'] if index == 1 else []) + ['Delete', 'Clear', 'Done']
             self.key_focus = 0
-            canvas.start_text()
         elif index in (1, 2):
             return  # Device identifiers are detected, never edited.
         elif index == 3:
@@ -100,10 +99,7 @@ class Setup:
                 self.done = True
             return
         if self.infrared is not None:
-            was_editing = self.infrared.editing
             self.infrared.handle(event)
-            if was_editing != self.infrared.editing:
-                (canvas.start_text if self.infrared.editing else canvas.stop_text)()
             if self.infrared.done:
                 self.infrared = None
             return

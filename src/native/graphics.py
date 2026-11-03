@@ -29,6 +29,16 @@ class Color(C.Structure):
     _fields_ = [('r', C.c_uint8), ('g', C.c_uint8), ('b', C.c_uint8), ('a', C.c_uint8)]
 
 
+def hex_character(key, modifiers=0):
+    """Limited physical-key input without activating webOS's separate IME."""
+    if key in range(48,58) or key in range(65,71) or key in range(97,103) or key == 58:
+        return chr(key)
+    if key == 59 and modifiers & 3: return ':'  # Shift + semicolon.
+    if 1073741913 <= key <= 1073741921: return str(key-1073741912)
+    if key == 1073741922: return '0'
+    return None
+
+
 class Canvas:
     WIDTH, HEIGHT = 1280, 720
 
@@ -78,8 +88,9 @@ class Canvas:
             self.poll = self.bind(self.sdl, 'SDL_PollEvent', C.c_int, [C.c_void_p])
             self.present_frame = self.bind(self.sdl, 'SDL_RenderPresent', None, [C.c_void_p])
             self.clear_frame = self.bind(self.sdl, 'SDL_RenderClear', C.c_int, [C.c_void_p])
-            self.start_text = self.bind(self.sdl, 'SDL_StartTextInput', None, [])
             self.stop_text = self.bind(self.sdl, 'SDL_StopTextInput', None, [])
+            # The app owns its hex keypad. Do not also open the TV keyboard.
+            self.stop_text()
         except BaseException:
             self.close()
             raise
@@ -143,7 +154,8 @@ class Canvas:
                     key = 461
                 # A held OK/Back must not activate controls repeatedly.
                 if not keyboard.repeat or key in (1073741906, 1073741905, 1073741904, 1073741903):
-                    yield ('key', key)
+                    character = hex_character(key, keyboard.keysym.mod)
+                    yield ('text', character) if character is not None else ('key', key)
             elif kind == 0x303:
                 yield ('text', TextInputEvent.from_buffer_copy(raw).text.decode('utf-8', 'replace'))
             elif kind == 0x402 and raw[16] == 1:  # Left mouse button release.

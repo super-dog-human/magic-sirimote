@@ -41,7 +41,7 @@ class ReviewTests(unittest.TestCase):
         app.handle(('key', 13))
         self.assertEqual(app.draft, '60')
 
-    def test_ir_keyboard_enables_and_disables_sdl_text_input(self):
+    def test_custom_keypad_never_opens_system_keyboard_and_done_stages_once(self):
         with tempfile.TemporaryDirectory() as folder:
             app = Setup(Path(folder)); canvas = Screen()
             app.choose(0, canvas); app.handle(('key', 27), canvas)
@@ -51,8 +51,13 @@ class ReviewTests(unittest.TestCase):
             app.handle(('key', 13), canvas)
             app.infrared.focus = CUSTOM
             app.handle(('key', 13), canvas)
-            self.assertTrue(canvas.text_active)
+            self.assertFalse(canvas.text_active)
             app.handle(('text', '4D'), canvas)
+            app.infrared.focus=17
+            app.handle(('key',13),canvas)
+            self.assertFalse(app.infrared.editing)
+            self.assertEqual(app.button_drafts,{'01:00':'ir:4D'})
+            self.assertFalse(list(Path(folder).iterdir()))
             app.handle(('key', 27), canvas)
             self.assertFalse(canvas.text_active)
             self.assertIsNone(app.infrared)

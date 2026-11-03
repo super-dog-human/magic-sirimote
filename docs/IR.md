@@ -12,7 +12,9 @@ swipe navigation and gyro movement are separate from these six buttons.
    Siri Remote swipes and a click to select a cell.
 3. Choose an action. Choices ending in **(IR)** send infrared from the remote.
    The other choices run on the TV. **Custom code (IR)** accepts exactly two
-   hexadecimal digits, such as `08`, using the on-screen or USB keyboard.
+   hexadecimal digits, such as `08`, using the app keypad or a USB keyboard.
+   **Done** finishes entry and returns directly to the assignment matrix; no
+   second keyboard or Enter confirmation is needed.
 4. Use **Back** to return to the first screen. Edits remain pending, including
    when you reopen Button Assignments. Selecting a value does not write it yet.
 5. Choose **Save**, then **Save and restart** in the confirmation.

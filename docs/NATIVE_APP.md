@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.20_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.21_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
