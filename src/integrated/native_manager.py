@@ -448,6 +448,27 @@ def pending_worker():
         return False
     from bundle_boot import receiver_settings
     receiver_settings()  # Pins, live controller PID/start ticks and snapshot owner.
+    from controller_start_record import read_record
+    recovery = (state / 'recovery-request.json').exists()
+    if recovery:
+        from receiver_recovery_entry import recovery_controller_record
+        from recovery_request import read_recovery_request as read
+        record = recovery_controller_record(state)
+        prefix = 'receiver-recovery-'
+    else:
+        from receiver_request import read_request as read
+        record = read_record(state)
+        prefix = 'receiver-'
+    owner = int(record['process']['status']['Uid'].split()[0])
+    request = read(state, owner_uid=owner)  # Includes the request's expiry.
+    if request['run'] != record['run']:
+        raise RuntimeError('Input handoff run changed')
+    # Retained requests are recovery evidence, not permission to replay work.
+    # Keep settings open after a completed/failed run; a new recovery request
+    # uses its own start/result records and still follows normal attestation.
+    for kind in ('start', 'result'):
+        path = state / (prefix + kind + '-' + request['run'] + '.json')
+        if path.exists() or path.is_symlink(): return False
     return True
 
 
@@ -464,6 +485,7 @@ def main():
             except (OSError, ValueError, RuntimeError):
                 handoff = False; app.message = 'Input handoff needs attention. Existing recovery records were retained.'
             if not handoff: app.refresh_pairing()
+            window_visible = not handoff
             canvas = Canvas(APP); app.draw(canvas)
             if handoff:
                 worker = subprocess.Popen(['/usr/bin/python3', '-I', '-B', str(SERVICE / 'roles/receiver/native_probe.py')],
@@ -477,6 +499,7 @@ def main():
             while True:
                 for event, params in bus.events():
                     if event == 'relaunch':
+                        window_visible = True
                         canvas.restore()
                         app.battery.refresh(worker)
                         try:
@@ -514,9 +537,11 @@ def main():
                     if code is not None:
                         write_status('native-status.json', {'status': 'worker-ended', 'exitCode': code, 'pid': os.getpid(), 'workerPid': worker.pid})
                         worker.stdout.close(); worker.stdin.close(); worker = None; app.worker = None
-                        if closing or not app.stop_requested:
-                            break  # Next connection requires a fresh native jail.
-                        app.message = 'Finishing input cleanup before opening settings.'
+                        if closing or not (app.stop_requested or window_visible):
+                            break  # A hidden receiver can be replaced by a fresh jail.
+                        app.resume_after_settings = True
+                        app.message = ('Finishing input cleanup before opening settings.' if app.stop_requested
+                                       else 'Remote connection ended. Use the LG remote; Close resumes reception.')
                         app.draw(canvas)
                 if app.reset is not None and app.reset.tick(): app.draw(canvas)
                 if app.reset is None and app.pairing is not None and app.pairing.tick(): app.draw(canvas)
@@ -529,7 +554,7 @@ def main():
                     app.draw(canvas)
                 if app.done:
                     if worker is not None:
-                        app.done = False; canvas.minimize()
+                        app.done = False; window_visible = False; canvas.minimize()
                     else:
                         break
                 time.sleep(.02)

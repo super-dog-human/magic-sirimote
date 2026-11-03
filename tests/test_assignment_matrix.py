@@ -14,27 +14,42 @@ from native_bus import NativeBus
 from test_settings_render import DiscardingCanvas
 
 class AssignmentMatrixTests(unittest.TestCase):
-    def test_fresh_install_shows_twelve_unknown_slots_and_saves_no_assignments(self):
+    def test_fresh_install_shows_twelve_none_slots_and_full_save_deletes_both_durations(self):
         with tempfile.TemporaryDirectory() as d:
             app=InfraredScreen(Path(d))
             for _,button in table.ROWS:
-                for delay in (0,2):self.assertEqual(app.cell_label(button,delay),'IR unknown')
-            self.assertEqual(table.displayed_bindings(d,{}),{})
+                for delay in (0,2):self.assertEqual(app.cell_label(button,delay),'Do nothing')
+            self.assertEqual(table.displayed_bindings(d,{}),{table.slot(b,t):'none' for _,b in table.ROWS for t in (0,2)})
             self.assertEqual(table.plan(d,{}),[])
             self.assertEqual(list(Path(d).iterdir()),[])
 
-    def test_explicit_press_does_not_populate_unknown_hold(self):
+    def test_explicit_press_preserved_with_unconfigured_hold_defaulting_to_none(self):
         with tempfile.TemporaryDirectory() as d:
             table.execute(d,'assign',8,0,'playpause')
             app=InfraredScreen(Path(d))
             self.assertEqual(app.cell_label(8,0),'Play / Pause')
-            self.assertEqual(app.cell_label(8,2),'IR unknown')
-            self.assertEqual(table.displayed_bindings(d,{}),{'08:00':'playpause'})
+            self.assertEqual(app.cell_label(8,2),'Do nothing')
+            self.assertEqual(table.displayed_bindings(d,{})['08:00'],'playpause')
+            self.assertEqual(table.displayed_bindings(d,{})['08:02'],'none')
             with patch.object(buttons,'CONFIGURED',{'08:00':'playpause'}):
                 mapping,holds=buttons.configured_mappings({32:'back',1:'home',16:'screen-toggle'})
                 self.assertEqual(mapping[8],'playpause')
                 self.assertTrue(all(value is None for value in holds.values()))
                 self.assertTrue(all(value is None for button,value in mapping.items() if button!=8))
+
+    def test_first_save_with_siri_screen_off_removes_hold_before_press_without_unknown_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            changes=table.displayed_bindings(d,{'10:00':'screen-toggle'})
+            ordered=table.plan(d,changes)
+            self.assertEqual(len(ordered),12)
+            self.assertLess(ordered.index(('10:02','none')),ordered.index(('10:00','screen-toggle')))
+            program=Mock(return_value={'status':'submitted','connectionPreserved':True,'receiptSaved':True})
+            for key,action in ordered:
+                button,delay=(int(x,16) for x in key.split(':'))
+                self.assertEqual(table.assign(d,'assign',button,delay,action,program=program)['status'],'saved')
+            self.assertEqual(table.load(d)['bindings'],changes)
+            self.assertEqual(program.call_count,12)
+            self.assertTrue(all(call.args[1]=='delete' for call in program.call_args_list))
 
     def test_empty_runtime_assignments_emit_no_short_or_hold_actions(self):
         with patch.object(buttons,'CONFIGURED',{}):

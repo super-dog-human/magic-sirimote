@@ -25,7 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.44** (integrated preview) |
+| Integrated TV app | Magic Sirimote **0.6.45** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -224,7 +224,7 @@ Enter the passphrase shown on the TV when prompted. If you already have a workin
 From the repository root:
 
 ```sh
-ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.44_arm.ipk
+ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.45_arm.ipk
 ares-launch --device my-tv org.magicsirimote.app
 ```
 
@@ -263,7 +263,7 @@ There are no Bluetooth address or device-name fields to fill out. Pairing does n
 
 ### Step 4: Choose button actions and cursor sensitivity
 
-Open **Button Assignments**. Each of the six buttons has a **Press** and **Hold** cell. On first setup, all twelve cells show **IR unknown**. This means the app has no saved assignment for that slot, not that the remote has no stored IR code. Save leaves unknown slots untouched; there are no implicit button defaults or Press-to-Hold inheritance. Choose named actions, **Do nothing**, or **Custom code (IR)**. Return with Back and choose **Save and restart** on the first screen. Controls dim while saving. Changes are applied together, including every concrete displayed assignment; unknown IR entries are left alone.
+Open **Button Assignments**. Each of the six buttons has a **Press** and **Hold** cell. All unconfigured cells default to **Do nothing**. Choose named actions or **Custom code (IR)** where needed, then return with Back and choose **Save and restart** on the first screen. This applies all twelve displayed choices, including unchanged ones: **Do nothing** removes that slot's IR entry and disables its TV-side action. Browsing or pairing alone does not change IR settings. Controls dim while saving; reception restarts when saving finishes.
 
 For LG infrared control, useful selections are **Home (IR)** for TV / Control Center Press, **Power on/off (IR)** for its Hold, and **Volume + (IR)** / **Volume - (IR)** for the volume buttons. The delayed IR power entry requires an immediate IR entry on the same button. The app checks this combination before writing. Test the actual response after saving. See [IR.md](docs/IR.md) for custom codes and limitations.
 

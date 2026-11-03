@@ -2,7 +2,7 @@
 
 ## Integrated runtime build
 
-[Download Magic Sirimote 0.6.44](../releases/integrated-preview/org.magicsirimote.app_0.6.44_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
+[Download Magic Sirimote 0.6.45](../releases/integrated-preview/org.magicsirimote.app_0.6.45_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 
 One IPK contains the native settings window, input receiver, connection controller and startup service. No computer stays in the input path after installation. The app uses the TV's existing Python 3.10+, SDL2 and SDL_ttf libraries and a TV-provided font; these dependencies are not bundled. The tested configuration is the A1513 Siri Remote and LG G3 listed in the [README](../README.md#1-tested-configuration). Other models and factory-fresh installations remain unverified.
 
@@ -21,7 +21,7 @@ One IPK contains the native settings window, input receiver, connection controll
 5. From this repository, install and open the integrated package:
 
    ```sh
-   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.44_arm.ipk
+   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.45_arm.ipk
    ares-launch --device my-tv org.magicsirimote.app
    ```
 
@@ -67,13 +67,13 @@ A failed or uncertain request stops the attempt instead of repeatedly issuing wr
 
 ## Settings
 
-Without saved button assignments, all six buttons show **IR unknown** for both Press and Hold. Unknown slots are omitted from Save and emit no TV-side button action. Existing IR codes in the remote are left untouched, and explicit saved assignments remain visible. Configuring Press does not implicitly configure Hold.
+Without saved button assignments, all six buttons show **Do nothing** for both Press and Hold. Saved assignments remain visible. Save applies every displayed cell, including the default **Do nothing** choices, and clears those slots' IR entries. Merely opening the app or pairing does not program the remote; the defaults describe what the next Save will apply.
 
 The main screen contains **Gyro cursor**, a five-step **Cursor sensitivity** slider, **Reset cursor orientation**, **Button Assignments**, and **Reset app**. **Save and restart** sits to the left of **Close** on its own row. Bluetooth addresses and device names are internal connection data, not editable settings. Reception is automatic; there is no Start/Stop button.
 
 **Button Assignments** has six rows: **Menu**, **TV / Control Center**, **Siri**, **Play/Pause**, **Volume Up**, and **Volume Down**, each with **Press** and **Hold (~0.7 s)**. Select a cell to choose an action. Choices marked **(IR)** are sent directly from the remote. Other choices run in the TV. **Do nothing** removes the slot's IR entry and disables its TV action. **Custom code (IR)** accepts a two-digit LG command code. Surface clicks and swipes are separate from this editor.
 
-Back returns to the main settings screen and keeps pending edits. Save and restart begins immediately without a confirmation dialog; controls dim and become unavailable while saving. It sends all concrete displayed assignments, including unchanged ones. Unknown slots remain unchanged. A failed or uncertain write stops the batch; completed changes remain saved and the remaining edits stay pending. Do not interpret an unknown result as success. See [IR.md](IR.md) for delivery, timing and readback limits. Closing with unsaved edits asks whether to discard them.
+Back returns to the main settings screen and keeps pending edits. Save and restart begins immediately without a confirmation dialog; controls dim and become unavailable while saving. It sends all twelve displayed assignments, including unchanged ones and default Do nothing choices. A failed or uncertain write stops the batch; completed changes remain saved and the remaining edits stay pending. Do not interpret an unknown result as success. See [IR.md](IR.md) for delivery, timing and readback limits. Closing with unsaved edits asks whether to discard them.
 
 ### Cursor controls
 

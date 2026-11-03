@@ -36,7 +36,7 @@ class InfraredScreen:
         self.draft = ''
         self.boxes = []
         self.message = 'Changes stay pending until ' + self.save_label + ' on the first screen.'
-        self.detail = 'Existing IR entries are unknown until changed here. Browsing does not change them.'
+        self.detail = 'Unconfigured cells default to Do nothing. Save and restart applies all displayed choices.'
         self.refresh_saved_tv()
 
     def refresh_saved_tv(self):
@@ -51,7 +51,7 @@ class InfraredScreen:
         if key in self.drafts: return label(self.drafts[key]) + ' (edited)'
         if self.tv_bindings is None: return 'Unavailable'
         if key in self.tv_bindings: return label(self.tv_bindings[key])
-        return 'IR unknown'
+        return label('none')
 
     def tick(self):
         return False

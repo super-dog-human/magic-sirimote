@@ -205,10 +205,9 @@ def assign(directory, action, button, delay, code, *, program):
 
 
 def displayed_bindings(directory, drafts):
-    """A full save replays every concrete displayed value, never unknown IR."""
+    """Save every displayed slot; unconfigured cells explicitly default to none."""
     validate({'schema': 2, 'bindings': drafts})
     value = load(directory)
     saved = value['bindings'] if value['schema'] == 2 else {}
-    # Only explicit saved/draft slots are known. A short press does not imply
-    # a hold assignment, and unknown slots must never cause IR writes/deletes.
-    return {**saved, **drafts}
+    defaults = {slot(button, delay): 'none' for _, button in ROWS for delay in (0, 2)}
+    return {**defaults, **saved, **drafts}

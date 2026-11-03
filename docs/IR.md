@@ -17,19 +17,17 @@ swipe navigation and gyro movement are separate from these six buttons.
    second keyboard or Enter confirmation is needed.
 4. Use **Back** to return to the first screen. Edits remain pending, including
    when you reopen Button Assignments. Selecting a value does not write it yet.
-5. Choose **Save**, then **Save and restart** in the confirmation. This sends every
-   concrete displayed assignment, including unchanged values. **IR unknown** slots
-   are excluded because their values cannot be reconstructed. The confirmation
-   shows how many assignments will be sent. No writes happen while browsing.
-   Reception pauses during programming; use the LG remote until it restarts.
-   On success, the window closes and reception resumes automatically.
+5. Choose **Save and restart** on the first screen. It starts immediately and
+   sends all twelve displayed assignments, including unchanged values and default
+   **Do nothing** cells. No writes happen while browsing. Reception pauses during
+   programming; use the LG remote until it restarts. On success, the window closes
+   and reception resumes automatically.
 6. Test each changed button. Delivery acknowledgement is not a readback of the
    remote's stored IR entry. If a batch fails partway through, completed slots
    stay saved and remaining edits stay pending. Unknown or partial outcomes stop
    the batch without automatic retry. Inspect the result before retrying.
 
-Cancel in the restart confirmation changes nothing. Closing with pending edits
-asks whether to discard them. Edits are held in memory, so an app termination
+Closing with pending edits asks whether to discard them. Edits are held in memory, so an app termination
 or TV restart before saving loses them.
 
 **Do nothing** deletes the selected IR entry and disables its TV-side action.
@@ -60,26 +58,24 @@ TV action deletes the immediate IR entry, so even a short press can turn the
 TV off. Use **Home (IR)** / **Power on/off (IR)** for that combination.
 
 The app rejects this unsafe pairing before stopping input or writing settings.
-If Hold is unknown, explicitly choose its TV action or **Do nothing** before
-saving a TV-only Press. Clearing both cells removes Hold first; adding both IR
-cells writes Press first. An unconfirmed operation stops the save. Other buttons
-are left unchanged. A hold-only action with **Do nothing** on Press is supported
+Unconfigured cells default to **Do nothing**, so a first Save includes the Hold
+slot even when you only selected a Press action. Clearing both cells removes
+Hold first; adding both IR cells writes Press first. An unconfirmed operation
+stops the save. A hold-only action with **Do nothing** on Press is supported
 for TV actions, not IR actions. The IR delay selectors are `00` and `02`;
 arbitrary hold durations are not offered.
 
-For unchanged buttons, the integrated runtime retains its normal TV actions:
-MENU is Back, TV is Home, Mic is Screen off / restore, and Play / Pause toggles
-playback. Unassigned holds retain the corresponding TV press behavior, except
-TV hold is reserved for the remote's existing IR power action. Concrete displayed IR settings are resent only on an explicitly confirmed Save.
-Unknown IR slots remain untouched.
+Unconfigured buttons have no TV-side action. Press and Hold are independent;
+a configured Press does not imply a Hold action.
 
 ## What the displayed values mean
 
 The remote's production firmware does not provide a verified full IR-table
-readback. An unchanged cell marked with `*` shows the TV default or **IR unknown**;
-it does not assert that the remote has no IR command. A saved cell shows the
-choice last submitted through this app, not an independent memory readback.
-Opening this screen never resets entries or installs guessed factory defaults.
+readback. Each cell shows the saved app choice, a pending edit, or the default
+**Do nothing**. Defaults are not a claim about the remote's current memory:
+Save applies them and removes the corresponding IR entries. Opening the screen
+or pairing does not perform these writes. Saved choices reflect acknowledged
+requests, not an independent memory readback.
 
 `state/ir-operation-*.json` records attempted IR operations. These private
 receipts are not a backup of unknown entries. Known codes can be set again;
@@ -96,13 +92,13 @@ Saving a new assignment migrates to schema 2 without enabling those old choices.
 TV action choices are Play / Pause and Screen off / restore.
 Back and Settings are offered only as **Back (IR)** (`28`) and **Settings (IR)** (`43`).
 Home is offered only as **Home (IR)**. A previously saved TV Home is shown as
-**Home (legacy TV)** and converted to Home (IR) on the next confirmed Save.
+**Home (legacy TV)** and remains unchanged until you select a replacement.
 Screen off / restore keeps audio playing and suppresses cursor/touch output
 that would wake the picture; pressing its assigned button again restores it.
 
 The named LG IR actions are Power on/off (`08`), Back (`28`), Home (`7C`),
-Settings (`43`), Volume + (`02`), Volume - (`03`), Mute (`09`), Play (`B0`),
-and Pause (`BA`). These are command choices, not factory defaults. Commands
+Settings (`43`), Volume + (`02`), and Volume - (`03`). Custom codes include
+Mute (`09`), Play (`B0`), and Pause (`BA`). These are command choices, not factory defaults. Commands
 and app support may differ between TVs. The encoder uses the tested LG NEC
 format; entering a code does not make it a universal manufacturer selector.
 

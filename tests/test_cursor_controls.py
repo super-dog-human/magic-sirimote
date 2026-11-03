@@ -81,19 +81,19 @@ class FullSaveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             table.execute(d,'assign',1,0,'home');table.execute(d,'assign',1,2,'ir:08')
             full=table.displayed_bindings(d,{})
-            self.assertEqual(full, {'01:00':'home','01:02':'ir:08'})
+            self.assertEqual(full['01:00'],'home');self.assertEqual(full['01:02'],'ir:08')
             with self.assertRaises(ValueError): table.plan(d,full)
 
-    def test_full_save_includes_unchanged_values_and_omits_unknown(self):
+    def test_full_save_includes_unchanged_values_and_defaults_unconfigured_to_none(self):
         with tempfile.TemporaryDirectory() as d:
             for b,t,v in ((1,0,'ir:7C'),(1,2,'ir:08'),(16,0,'ir:09'),(32,0,'back'),(32,2,'none')):
                 table.execute(d,'assign',b,t,v)
             full=table.displayed_bindings(d,{'08:00':'pause'})
             self.assertEqual(full['01:00'],'ir:7C');self.assertEqual(full['01:02'],'ir:08')
             self.assertEqual(full['10:00'],'ir:09');self.assertEqual(full['08:00'],'pause')
-            self.assertNotIn('02:00',full);self.assertNotIn('10:02',full)
-            self.assertNotIn('08:02',full)
-            with self.assertRaisesRegex(ValueError, 'Hold IR is unknown'): table.plan(d,full)
+            self.assertEqual(full['02:00'],'none');self.assertEqual(full['10:02'],'none')
+            self.assertEqual(full['08:02'],'none')
+            self.assertEqual(len(table.plan(d,full)),12)
             full=table.displayed_bindings(d,{'08:00':'pause','08:02':'none'})
             table.plan(d,full)
 

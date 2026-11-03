@@ -31,7 +31,7 @@ class ControlTests(unittest.TestCase):
             self.assertEqual([call.args[0] for call in bus.request.call_args_list], ['configure', 'startupPrepare'])
             self.assertFalse(app.done)
 
-    def test_save_waits_for_clean_stop_then_automatically_starts(self):
+    def test_first_save_waits_for_clean_stop_before_applying_all_twelve_cells(self):
         from unittest.mock import Mock
         values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
         with tempfile.TemporaryDirectory() as d:
@@ -46,8 +46,9 @@ class ControlTests(unittest.TestCase):
                 app.next_settings_check = 0
                 bus.request.return_value = {'returnValue': True, 'cleanStop': True, 'processes': found()}
                 self.assertTrue(app.settings_tick(Mock()))
-                apply.assert_called_once()
-                assignments.assert_not_called()
+                apply.assert_not_called()
+                assignments.assert_called_once()
+                self.assertEqual(len(assignments.call_args.args[0]),12)
 
     def test_settings_timeout_never_changes_configuration(self):
         from unittest.mock import Mock
