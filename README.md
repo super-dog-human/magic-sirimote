@@ -39,7 +39,7 @@ Testing includes removing and recreating the A1513's pairing. An independently c
 
 - A compatible LG webOS TV and its original LG remote. Use the LG remote for setup and saving settings.
 - A charged Siri Remote.
-- A Mac connected to the same local network as the TV. The TV may use Ethernet while the Mac uses Wi-Fi, provided they can communicate.
+- A Mac and TV connected to the same local network. Either device can use Wi-Fi or Ethernet, provided they can communicate with each other.
 - Internet access to create an LG Developer account and download the tools and app.
 
 The guide uses LG's Developer Mode installation method. Root access is not required. The app relies on Python 3.10+, Node.js, SDL2 and SDL_ttf already present on the tested TV; these TV components are not included in the download. Other TV firmware may lack the components or permissions it needs.
