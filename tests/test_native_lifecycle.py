@@ -67,6 +67,19 @@ class NativeLifecycleTests(unittest.TestCase):
             bus.request('start', {})
         self.assertEqual(len(calls), 1)
 
+    def test_startup_activity_is_persistent_and_calls_only_own_service(self):
+        import json
+        bus, calls = self.bus()
+        bus.create_startup('a' * 48)
+        uri, raw = calls[0]
+        value = json.loads(raw)
+        self.assertEqual(uri, b'luna://com.webos.service.activitymanager/create')
+        self.assertIs(value['replace'], False)
+        self.assertIs(value['activity']['type']['persist'], True)
+        self.assertEqual(value['activity']['name'], 'org.magicsirimote.app.startup')
+        self.assertEqual(value['activity']['callback']['method'], 'luna://org.magicsirimote.app.service/startupTick')
+        with self.assertRaises(ValueError): bus.create_startup('invalid')
+
 
 if __name__ == '__main__':
     unittest.main()

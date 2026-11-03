@@ -33,7 +33,7 @@ def write_status(name, value):
     os.replace(temp, STATE / name)
 
 
-def consume_installer(params, apply):
+def consume_installer(params, apply, stop=None):
     """An SSH installer stages a bounded data file and passes its random name."""
     if type(params) is not dict or 'installerRequest' not in params:
         return False
@@ -55,12 +55,16 @@ def consume_installer(params, apply):
     finally:
         os.close(fd)
     value = json.loads(raw, object_pairs_hook=settings._unique)
-    if type(value) is not dict or set(value) != {'nonce', 'settings', 'action'} or value['nonce'] != nonce or value['action'] not in ('configure', 'start'):
+    if type(value) is not dict or set(value) != {'nonce', 'settings', 'action'} or value['nonce'] != nonce or value['action'] not in ('configure', 'start', 'stop'):
         raise ValueError('Invalid installer data')
     values = settings.validate(value['settings'])
     write_status(result, {'status': 'pending'})
     try:
-        apply(values, value['action'] == 'start')
+        if value['action'] == 'stop':
+            if stop is None: raise RuntimeError('Stop handler unavailable')
+            stop()
+        else:
+            apply(values, value['action'] == 'start')
     except Exception as error:
         write_status(result, {'status': 'attention', 'errorType': type(error).__name__, 'errorText': str(error)[:180]})
         raise
@@ -74,7 +78,16 @@ class RuntimeSetup(Setup):
         self.bus = bus
         self.stop_requested = False
         self.worker = None
-        self.message = 'Save device settings, then choose Start. Stop before programming infrared.'
+        self.message = 'Start enables automatic startup. Stop pauses it until you choose Start again.'
+
+    def enable_startup(self):
+        reply = accepted(self.bus.request('startupPrepare', {}))
+        if reply.get('status') == 'registered': return
+        if reply.get('status') != 'create-required': raise RuntimeError('Automatic startup is unavailable')
+        created = accepted(self.bus.create_startup(reply['token']))
+        activity_id = created.get('activityId')
+        if type(activity_id) is not int or activity_id <= 0: raise RuntimeError('Automatic startup registration is unconfirmed')
+        accepted(self.bus.request('startupBind', {'token': reply['token'], 'activityId': activity_id}))
 
     def apply(self, values, start=False):
         if self.infrared is not None:
@@ -83,11 +96,17 @@ class RuntimeSetup(Setup):
         settings.save(self.state, values)
         self.values.update({key: values[key] for key in (*settings.FIELDS, 'gyroEnabled')})
         if start:
+            self.enable_startup()
             accepted(self.bus.request('start', {}))
             self.message = 'Starting remote control.'
             self.done = True  # A fresh post-HID launch must inherit fresh input nodes.
         else:
             self.message = 'Settings saved to the input service.'
+
+    def stop_runtime(self):
+        self.stop_requested = True
+        reply = accepted(self.bus.request('stop', {}))
+        self.message = 'Stopping input; automatic startup disabled.' if reply['status'] == 'stop-requested' else reply['status']
 
     def program_ir(self, *args):
         from ir_programmer import execute, runtime_idle
@@ -107,9 +126,7 @@ class RuntimeSetup(Setup):
             if index in (5, 8):
                 self.apply(settings.validate({'schema': 1, **self.values}), index == 8)
             elif index == 9:
-                self.stop_requested = True
-                reply = accepted(self.bus.request('stop', {}))
-                self.message = 'Stopping input safely.' if reply['status'] == 'stop-requested' else reply['status']
+                self.stop_runtime()
             elif index == 6:
                 reply = accepted(self.bus.request('status', {}))
                 if not reply.get('cleanStop') or reply['processes']['legacy']:
@@ -178,7 +195,7 @@ def main():
                 for event, params in bus.events():
                     if event == 'relaunch':
                         canvas.restore()
-                        try: consume_installer(params, app.apply)
+                        try: consume_installer(params, app.apply, stop=app.stop_runtime)
                         except (OSError, ValueError, RuntimeError) as error: app.message = str(error)[:160]
                         app.draw(canvas)
                     elif event == 'close':
@@ -187,7 +204,7 @@ def main():
                 if stop_signal[0] and not closing and not programming:
                     closing = True
                     if worker is not None and worker.poll() is None:
-                        try: accepted(bus.request('stop', {}))
+                        try: accepted(bus.request('drain', {}))
                         except (OSError, ValueError, RuntimeError): worker.terminate()
                     else:
                         break

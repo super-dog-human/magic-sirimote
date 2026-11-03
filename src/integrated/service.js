@@ -2,11 +2,14 @@
 // The native client registers its own app name. Only it may mutate settings/run state.
 const fs = require('fs'), path = require('path'), cp = require('child_process');
 const APP = 'org.magicsirimote.app';
-function createService({Handle = require('palmbus').Handle, timers = globalThis, processExit = () => process.exit(0)} = {}) {
+const startupModule = require('./startup');
+function createService({Handle = require('palmbus').Handle, timers = globalThis, processExit = () => process.exit(0), startupFactory = startupModule.createStartup, startupStore} = {}) {
   if (global.unified_service) throw Error('Service already initialized');
   global.unified_service = true;
   const handle = new Handle(APP + '.service');
   let tail = Promise.resolve(), controller = null;
+  const startup = startupFactory({store: startupStore || startupModule.disk(path.join(__dirname, 'state/startup-private')),
+    activity: (method, params, subscribe) => startupModule.activityCall(handle, method, params, subscribe, timers)});
   function trace(stage) {
     try { fs.writeFileSync(path.join(__dirname, 'state', 'control-status.json'),
       JSON.stringify({stage, pid: process.pid, epochMs: Date.now()}), {mode: 0o640}); } catch (_) {}
@@ -15,7 +18,7 @@ function createService({Handle = require('palmbus').Handle, timers = globalThis,
   function keepAlive() {
     timers.clearTimeout(lifetime);
     lifetime = timers.setTimeout(() => {
-      if (controller && controller.exitCode === null) { keepAlive(); return; }
+      if ((controller && controller.exitCode === null) || startup.summary().enabled) { keepAlive(); return; }
       trace('idle-exit'); handle.unregister(); global.unified_service = false;
       processExit();
     }, 60000);
@@ -53,19 +56,48 @@ function createService({Handle = require('palmbus').Handle, timers = globalThis,
       child.once('close', () => { close(); if (controller === child) controller = null; });
     });
   }
-  for (const method of ['status', 'configure', 'start', 'stop']) handle.registerMethod('/', method);
+  async function startInput() {
+    let value = await helper('start', {});
+    if (value.returnValue === true && value.status === 'start-ready') value = await launch();
+    return value;
+  }
+  function power() {
+    return new Promise(resolve => cp.execFile('/usr/bin/python3', ['-I', '-B', path.join(__dirname, 'power-read.py')],
+      {timeout: 5000, maxBuffer: 2048}, (error, stdout) => {
+        try { resolve(error ? null : JSON.parse(stdout)); } catch (_) { resolve(null); }
+      }));
+  }
+  function schedulePower() {
+    timers.setTimeout(() => {
+      const work = () => startup.poll({power, status: () => helper('status', {}), start: startInput, stop: () => helper('stop', {})});
+      tail = tail.then(work, work).catch(() => trace('startup-attention'));
+      tail.then(schedulePower);
+    }, 2000);
+  }
+  schedulePower();
+  const methods = ['status', 'configure', 'start', 'stop', 'drain', 'startupPrepare', 'startupBind', 'startupDisable', 'startupTick'];
+  for (const method of methods) handle.registerMethod('/', method);
   handle.addListener('request', message => {
     trace('request-received');
     keepAlive();
     const work = async () => {
       try {
         const method = message.method(), raw = message.payload();
-        if (!['status', 'configure', 'start', 'stop'].includes(method) || message.category() !== '/' || message.isSubscription() !== false || typeof raw !== 'string' || Buffer.byteLength(raw) > 8192) throw Error('Invalid request');
-        if (method !== 'status' && message.senderServiceName() !== APP) throw Error('Open the native application to change runtime settings');
+        if (!methods.includes(method) || message.category() !== '/' || message.isSubscription() !== false || typeof raw !== 'string' || Buffer.byteLength(raw) > 8192) throw Error('Invalid request');
+        if (!['status', 'startupTick'].includes(method) && message.senderServiceName() !== APP) throw Error('Open the native application to change runtime settings');
         const params = JSON.parse(raw);
         if (!params || typeof params !== 'object' || Array.isArray(params)) throw Error('Invalid request');
-        let value = await helper(method, params);
-        if (method === 'start' && value.returnValue === true && value.status === 'start-ready') value = await launch();
+        let value;
+        if (method === 'startupTick') value = await startup.tick(message, params);
+        else if (method === 'startupPrepare' && Object.keys(params).length === 0) value = startup.prepare();
+        else if (method === 'startupBind' && Object.keys(params).sort().join(',') === 'activityId,token') value = startup.bind(params);
+        else if (method === 'startupDisable' && Object.keys(params).length === 0) value = startup.disable();
+        else if (method === 'start' && Object.keys(params).length === 0) { startup.manualStart(); value = await startInput(); }
+        else if (method === 'stop' && Object.keys(params).length === 0) { startup.disable(); value = await helper('stop', params); }
+        else if (method === 'drain' && Object.keys(params).length === 0) value = await helper('stop', params);
+        else if (['status', 'configure'].includes(method)) value = await helper(method, params);
+        else throw Error('Invalid request');
+        if (method === 'status') { value.startup = startup.summary(); value.automaticStartupRegistered = value.startup.registered; }
         respond(message, value); trace('responded');
       } catch (_) { respond(message, {returnValue: false, status: 'request-rejected'}); }
     };

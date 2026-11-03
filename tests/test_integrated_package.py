@@ -141,7 +141,9 @@ for field,value in [('remoteAddress','aa:bb:cc:dd:ee:30'),('adapterAddress','aa:
             # Runtime packaging is not a claim of activation or device validation.
             self.assertTrue(first['runtimeActivationAvailable'])
             self.assertFalse(first['hardwareValidated'])
-            self.assertFalse(first['registersAutomaticStartup'])
+            self.assertTrue(first['registersAutomaticStartup'])
+            for info in (service / 'services.json', base / 'unpacked/usr/palm/applications' / runtime_bundle.APP / 'appinfo.json'):
+                self.assertTrue({'activity.operation', 'configurator.callbacks'} <= set(json.loads(info.read_text())['requiredACG']))
 
 
 if __name__ == '__main__':

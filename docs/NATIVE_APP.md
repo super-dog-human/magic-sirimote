@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.5.7_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.2_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -23,16 +23,34 @@ startup apps. Their input processes and startup registration must be stopped
 and verified before starting the integrated runtime.
 
 The settings window provides **Start remote control** and **Stop remote control**.
-Start closes the window while the connection is prepared. Opening the app again
-shows its settings. Stop and wait for cleanup before programming infrared or
-updating the package. **Automatic startup after a TV restart is not yet included.**
+Start registers and enables automatic startup, then closes the window while the
+connection is prepared. Opening the app again shows its settings. Stop disables
+automatic startup and stops input; it remains disabled across TV restarts until
+you choose Start again. Stop and wait for cleanup before programming infrared or
+updating the package.
+
+Automatic startup uses one persistent webOS Activity owned by this same app.
+No separate startup app or running Mac is needed. The bundled service watches the
+TV's power state, stops input for standby, and starts it after power returns.
+Turning off only the screen keeps input available so the microphone button can
+restore the picture. After a complete TV restart, allow up to about a minute for
+the scheduled service to run, followed by the Bluetooth connection time. A
+sleeping remote may need a button press to wake it. Developer Mode expiry remains
+your responsibility; automatic startup does not extend it.
+
+The service keeps a durable record of each automatic start attempt. If startup
+fails or a previous sensor session cannot be safely recovered, it retains the
+records and does not repeatedly launch new input processes. The saved settings
+and recovery records should not be deleted as a troubleshooting shortcut.
 
 The integrated window displays the last battery percentage reported by the remote,
 with the age of the reading. It reads once while preparing an authenticated
 connection, without pairing, reconnecting or changing remote settings. A missing,
 invalid or timed-out reading shows **unavailable** and does not prevent input.
 Older readings are explicitly marked as potentially changed; the value is not a
-live battery monitor or a charging indicator.
+live battery monitor or a charging indicator. Opening the settings window does
+not issue another battery read. The next connection setup replaces the reading;
+there is no periodic battery polling while the same connection remains active.
 
 On the tested TV, this build supports swipe navigation, surface clicks, gyro
 pointing, MENU for Back, the TV button for Home, playback controls, and releasing

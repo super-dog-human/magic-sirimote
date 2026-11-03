@@ -132,7 +132,25 @@ class NativeBus:
             yield self.queue.popleft()
 
     def request(self, method, params, timeout=8):
-        if method not in ('status', 'configure', 'start', 'stop') or type(params) is not dict or type(timeout) not in (int, float) or not 0 < timeout <= 10:
+        if method not in ('status', 'configure', 'start', 'stop', 'drain', 'startupPrepare', 'startupBind', 'startupDisable'):
+            raise ValueError('Unsupported application request')
+        return self._request_uri('luna://' + APP + '.service/' + method, params, timeout)
+
+    def create_startup(self, token):
+        import re
+        if type(token) is not str or not re.fullmatch('[a-f0-9]{48}', token):
+            raise ValueError('Invalid startup token')
+        from datetime import datetime, timezone, timedelta
+        start = (datetime.now(timezone.utc) + timedelta(seconds=30)).strftime('%Y-%m-%d %H:%M:%SZ')
+        return self._request_uri('luna://com.webos.service.activitymanager/create', {
+            'activity': {'name': APP + '.startup', 'description': 'Magic Sirimote automatic startup',
+                         'type': {'foreground': True, 'persist': True, 'explicit': False, 'continuous': False},
+                         'schedule': {'start': start},
+                         'callback': {'method': 'luna://' + APP + '.service/startupTick', 'params': {'token': token}}},
+            'start': True, 'subscribe': False, 'replace': False}, 8)
+
+    def _request_uri(self, uri, params, timeout):
+        if type(params) is not dict or type(timeout) not in (int, float) or not 0 < timeout <= 10:
             raise ValueError('Unsupported application request')
         if self.failed or not self.handle.value:
             raise RuntimeError('Native application bus unavailable')
@@ -149,7 +167,7 @@ class NativeBus:
             return True
         self.callbacks.append(receive)
         token = C.c_ulong()
-        self.check(self.once(self.handle, ('luna://' + APP + '.service/' + method).encode(), raw,
+        self.check(self.once(self.handle, uri.encode(), raw,
                              receive, None, C.byref(token), C.byref(self.error)))
         deadline = time.monotonic() + timeout
         while not replies and time.monotonic() < deadline:

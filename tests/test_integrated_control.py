@@ -19,6 +19,18 @@ def found(**changes):
 
 
 class ControlTests(unittest.TestCase):
+    def test_start_does_not_run_after_unknown_activity_creation(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock()
+            bus.request.side_effect = [{'returnValue': True}, {'returnValue': True, 'status': 'create-required', 'token': 'a' * 48}]
+            bus.create_startup.side_effect = RuntimeError('unknown create outcome')
+            app = RuntimeSetup(Path(d), bus)
+            values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
+            with patch('native_manager.settings.save'), self.assertRaises(RuntimeError): app.apply(values, True)
+            self.assertEqual([call.args[0] for call in bus.request.call_args_list], ['configure', 'startupPrepare'])
+            self.assertFalse(app.done)
+
     def test_archive_before_input_requires_empty_journal_and_no_receiver(self):
         import orphan_reconcile as recovery
         from unittest.mock import Mock
@@ -124,14 +136,14 @@ class ControlTests(unittest.TestCase):
     def test_gui_start_closes_only_after_service_accepts_configuration_and_start(self):
         class Bus:
             def __init__(self): self.calls = []
-            def request(self, method, params): self.calls.append(method); return {'returnValue': True}
+            def request(self, method, params): self.calls.append(method); return {'returnValue': True, 'status': 'registered'}
         with tempfile.TemporaryDirectory() as d:
             bus = Bus(); app = RuntimeSetup(Path(d), bus)
             values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
             with patch('native_manager.settings.save'):
                 app.apply(values, True)
             self.assertTrue(app.done)
-            self.assertEqual(bus.calls, ['configure', 'start'])
+            self.assertEqual(bus.calls, ['configure', 'startupPrepare', 'start'])
 
     def test_installer_unknown_result_cannot_be_replayed(self):
         with tempfile.TemporaryDirectory() as d:
