@@ -79,7 +79,7 @@ If Dev Mode Status is already on, leave it on. LG documents this process in its 
 
 ### 3. Install the Mac tools
 
-Open **Terminal** on the Mac. You can find it with Spotlight: press Command–Space, type `Terminal`, and press Return.
+Open **Terminal** on the Mac.
 
 Run these commands to check whether Node.js and npm are installed:
 
