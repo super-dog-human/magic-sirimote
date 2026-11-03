@@ -67,3 +67,14 @@ def configure_cursor(*, enabled=True, sensitivity=3):
 
 def cursor_preferences():
     return _cursor
+
+
+def registered_name_matches(row, expected):
+    """Names are optional in webOS LE registrations; the paired address is primary.
+
+    Callers must still check the exact address, adapter, pairing and blocked state.
+    A nonempty conflicting name is rejected. The saved serial is independently
+    read over GATT during setup and checked again before IR programming.
+    """
+    return (type(row) is dict and row.get('paired') is True
+            and (row.get('name') == expected or row.get('name') in ('', None)))

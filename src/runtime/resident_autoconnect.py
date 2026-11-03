@@ -4,6 +4,7 @@ A request never establishes input ownership. The existing independent profile
 pump must observe a fresh connected pair before normal receiver admission.
 No discovery, pairing, disconnect, settings, sensor or input operation exists.
 """
+from runtime_device import registered_name_matches
 from runtime_device import identity as device_identity
 import threading,time,subprocess
 from borrowed_gatt_view import TARGET,ADAPTER
@@ -61,7 +62,7 @@ class AutoConnect:
    matches=[d for d in known['devices'] if type(d) is dict and str(d.get('address','')).lower()==TARGET]
    if len(matches)!=1:return False
    d=matches[0]
-   if d.get('name')!=NAME or d.get('paired') is not True or any(k in d and d[k] is not False for k in ('pairing','blocked')) :
+   if not registered_name_matches(d,NAME) or d.get('paired') is not True or any(k in d and d[k] is not False for k in ('pairing','blocked')) :
     self.outcome='bond-or-idle-unverified';return False
    # Recheck fresh idle profiles after metadata I/O. A transition invalidates
    # dispatch; continuing subscription/poll threads detect active requests.

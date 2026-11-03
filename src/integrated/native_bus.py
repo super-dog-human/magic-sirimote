@@ -141,9 +141,9 @@ class NativeBus:
         from settings import read_tv_address
         return read_tv_address()
 
-    def remote_name(self, remote, adapter):
+    def remote_name(self, remote, adapter, verified_name=None):
         from settings import read_remote_name
-        return read_remote_name(remote, adapter)
+        return read_remote_name(remote, adapter, verified_name)
 
     def cancel_startup(self, activity_id):
         if type(activity_id) is not int or activity_id <= 0: raise ValueError('Invalid activity ID')

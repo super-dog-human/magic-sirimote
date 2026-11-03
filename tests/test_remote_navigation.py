@@ -64,7 +64,7 @@ class RemoteNavigationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             app=RuntimeSetup(Path(d),Mock());canvas=Mock()
             for event in decode([(1073741905,0),(1073741905,0),(1073741906,0)]):app.handle(event,canvas)
-            self.assertEqual(app.focus,3)
+            self.assertEqual(app.focus,4)
             app.infrared=InfraredScreen(Path(d))
             for event in decode([(1073741905,0),(1073741903,0),(13,0)]):app.handle(event,canvas)
             self.assertEqual(app.infrared.button,1);self.assertEqual(app.infrared.delay,2)

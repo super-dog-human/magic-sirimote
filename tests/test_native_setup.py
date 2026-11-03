@@ -117,5 +117,15 @@ class NativeSettingsTest(unittest.TestCase):
             self.assertEqual(app.values['remoteAddress'], '02:AA:BB:CC:DD:01')
 
 
+class NamelessRegistrationTests(unittest.TestCase):
+    def test_verified_saved_serial_only_for_exact_paired_registration(self):
+        remote='02:aa:bb:cc:dd:01'; adapter='02:aa:bb:cc:dd:02'
+        reply={'returnValue':True,'devices':[{'address':remote,'paired':True,'name':''}]}
+        self.assertEqual(settings.remote_name_from_reply(reply,remote,adapter,'VERIFIED_SERIAL'),'VERIFIED_SERIAL')
+        with self.assertRaises(RuntimeError): settings.remote_name_from_reply(reply,remote,adapter)
+        reply['devices'][0]['paired']=False
+        with self.assertRaises(RuntimeError): settings.remote_name_from_reply(reply,remote,adapter,'VERIFIED_SERIAL')
+
+
 if __name__ == '__main__':
     unittest.main()

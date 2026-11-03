@@ -4,6 +4,7 @@ Candidate only: no device calls occur on import. A 106 or missing response is
 unknown, never evidence of a connected or disconnected GATT link. Device and
 both profiles must be freshly confirmed before the supervisor may start.
 """
+from runtime_device import registered_name_matches
 import math,time
 from borrowed_gatt_view import TARGET
 from connected_status_watch import ConnectedStatusWatch
@@ -31,7 +32,7 @@ def wait_connected(*,client,lease,stop,clock=time.monotonic,wait=None,interval=5
    now();d=client('device/getStatus',{'subscribe':False},timeout=4);inventory_time=now()
    rows=d.get('devices') if type(d) is dict and d.get('returnValue') is True else None
    targets=[r for r in rows if type(r) is dict and str(r.get('address','')).lower()==TARGET] if type(rows) is list else []
-   if len(targets)!=1 or targets[0].get('name')!=NAME or targets[0].get('paired') is not True or targets[0].get('blocked') is not False or targets[0].get('pairing') is not False:
+   if len(targets)!=1 or not registered_name_matches(targets[0],NAME) or targets[0].get('paired') is not True or targets[0].get('blocked') is not False or targets[0].get('pairing') is not False:
     state('target-unconfirmed')
    else:
     hid=client('hid/getStatus',{'address':TARGET},timeout=1);hid_time=now()

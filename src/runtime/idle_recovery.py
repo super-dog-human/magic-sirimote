@@ -2,6 +2,7 @@
 
 This module performs no work until explicitly called by the lease owner.
 """
+from runtime_device import registered_name_matches
 from runtime_device import connect_intent
 import math,os,stat,time,uuid
 from pathlib import Path
@@ -59,7 +60,7 @@ def recover_idle(*,lease,stop,client,deadline,clock=time.monotonic,wait=None,sca
   d=client('device/getStatus',{'subscribe':False},timeout=4)
   rows=d.get('devices') if type(d) is dict and d.get('returnValue') is True else None
   rows=[r for r in rows if type(r) is dict and str(r.get('address','')).lower()==TARGET] if type(rows) is list else []
-  return len(rows)==1 and rows[0].get('name')==NAME and rows[0].get('paired') is True and rows[0].get('blocked') is False and rows[0].get('pairing') is False
+  return len(rows)==1 and registered_name_matches(rows[0],NAME) and rows[0].get('paired') is True and rows[0].get('blocked') is False and rows[0].get('pairing') is False
  def idle():
   p=client('hid/getStatus',{'address':TARGET},timeout=1)
   return ConnectedStatusWatch.valid(p) and all(p.get(k) is False for k in ('connected','connecting','connectRequest'))

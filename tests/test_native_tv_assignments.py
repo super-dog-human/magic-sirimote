@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src/native'), str(ROOT / 'src')]
 import tv_assignments as tv
-from ir_screen import InfraredScreen, PRESETS
+from ir_screen import InfraredScreen, PRESETS, CHOICES
 
 
 class TVAssignmentsTest(unittest.TestCase):
@@ -46,7 +46,8 @@ class TVAssignmentsTest(unittest.TestCase):
             def program(*args):
                 calls.append(args)
                 return {'status':'submitted','connectionPreserved':True,'receiptSaved':True}
-            app=InfraredScreen(Path(folder));app.choose(4);app.choose(4)
+            app=InfraredScreen(Path(folder));app.choose(4)
+            app.choose(next(i for i, item in enumerate(CHOICES) if item[1]=='screen-toggle'))
             self.assertEqual(calls,[]);self.assertEqual(app.drafts,{'10:00':'screen-toggle'})
             self.assertFalse((Path(folder)/tv.FILE).exists())
             tv.execute(folder,'assign',16,2,'none')

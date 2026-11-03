@@ -1,4 +1,5 @@
 """Read-only prelaunch Bluetooth snapshot for a TV-local coordinator."""
+from runtime_device import registered_name_matches
 from runtime_device import identity as device_identity
 import subprocess
 from interactive_status_read import read_status
@@ -19,7 +20,7 @@ def profiles(invoke=subprocess.Popen):
  return out
 def preflight(invoke=subprocess.Popen):
  d=_call('device/getStatus',{'subscribe':False},invoke);lst=d.get('devices') if isinstance(d,dict) and d.get('returnValue') is True else None
- items=[x for x in lst if isinstance(x,dict) and str(x.get('address','')).lower()==TARGET and x.get('name')==NAME] if isinstance(lst,list) else []
+ items=[x for x in lst if isinstance(x,dict) and str(x.get('address','')).lower()==TARGET and registered_name_matches(x,NAME)] if isinstance(lst,list) else []
  if len(items)!=1:return False
  x=items[0]
  if x.get('paired') is not True or x.get('blocked') is not False or x.get('pairing') is not False or x.get('connectedProfiles')!=['gatt']:return False

@@ -3,6 +3,7 @@
 Uses existing bounded inventory and identity checks. No calls are made on
 import. This does not initiate a connection or send an input/sensor command.
 """
+from runtime_device import registered_name_matches
 import os,stat,subprocess,time
 import tv_bluetooth
 from hid_input import scan_devices,identity
@@ -11,7 +12,7 @@ from hid_orphan import unregistered
 def paired_target(invoke=subprocess.Popen):
  reply=tv_bluetooth._call('device/getStatus',{'subscribe':False},invoke)
  if type(reply) is not dict or reply.get('returnValue') is not True or type(reply.get('devices')) is not list:return False
- found=[item for item in reply['devices'] if type(item) is dict and str(item.get('address','')).lower()==tv_bluetooth.TARGET and item.get('name')==tv_bluetooth.NAME]
+ found=[item for item in reply['devices'] if type(item) is dict and str(item.get('address','')).lower()==tv_bluetooth.TARGET and registered_name_matches(item,tv_bluetooth.NAME)]
  return len(found)==1 and found[0].get('paired') is True and found[0].get('blocked') is False and found[0].get('pairing') is False
 
 def transient_disappeared(inv):

@@ -253,7 +253,7 @@ class ControlTests(unittest.TestCase):
         class Bus:
             def __init__(self): self.calls = []
             def tv_address(self): return 'aa:bb:cc:dd:ee:20'
-            def remote_name(self, remote, adapter): return 'Remote'
+            def remote_name(self, remote, adapter, verified_name=None): return 'Remote'
             def request(self, method, params): self.calls.append(method); return {'returnValue': True, 'status': 'registered'}
         with tempfile.TemporaryDirectory() as d:
             bus = Bus(); app = RuntimeSetup(Path(d), bus)

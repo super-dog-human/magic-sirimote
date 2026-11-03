@@ -6,7 +6,7 @@ Thank you to the open-source Siri Remote and LG webOS communities—especially [
 
 The repository contains the TV runtime, package builder, configuration reference, and setup guide.
 
-> **Setup status:** **following this README from top to bottom does not yet reproduce a fresh installation**, even on the same remote and TV models. The [single-app runtime preview](docs/NATIVE_APP.md#integrated-runtime-build) has been tested for input, battery display and automatic startup on the configuration below. It requires an already paired remote. Saving verified device settings enables TV-local automatic reception; there is no Start/Stop control. Fresh-pairing and installation automation remain unfinished. The architecture and setup guide below describe the separate-package runtime; do not combine the two installations.
+> **Compatibility:** the integrated app includes cable-free pairing, settings, input reception and automatic startup in one IPK. This has been tested on the A1513/LG G3 configuration below, including removal and recreation of its Bluetooth pairing. Other hardware and a factory-fresh installation are not yet independently validated.
 
 - [1. Tested Configuration](#1-tested-configuration)
 - [2. What you can do](#2-what-you-can-do)
@@ -25,7 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.27** (integrated preview) |
+| Integrated TV app | Magic Sirimote **0.6.35** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -37,7 +37,7 @@ The webOS platform version and TV firmware version are separate values. The plat
 - Press the touch surface to click at the pointer position or select the highlighted item.
 - Move the on-screen pointer with the remote's motion sensors, with your finger off the touch surface.
 
-**MENU and the microphone button go Back**, and a **short press of the TV-picture button opens Home**. Voice input is not implemented.
+Button actions are configurable on the TV, including Back, Home, Settings, playback, screen off/restore and LG infrared codes. Voice input is not implemented. Pairing preserves the IR assignments already stored in the remote.
 
 Normal TV off/on and automatic input resumption are verified on this configuration.
 
@@ -73,7 +73,7 @@ flowchart TD
 
 The two low-level mechanisms are different: Bluetooth setup uses internal webOS service methods; sending keys and pointer movement uses direct Linux input-device access (`/dev/input/...`). The running input programs use non-root app accounts with no effective Linux capabilities. The tested native-app environment provides the necessary device access. This is not a guarantee that an ordinary web-app service, another TV, or a future firmware grants the same access.
 
-Inside the TV, three packages divide the work:
+Inside the single installed package, three components divide the work:
 
 ```mermaid
 flowchart TD
@@ -150,10 +150,14 @@ The implementation uses a persistent webOS **Activity**, roughly a recurring sys
 ```text
 src/
   check.py              # Host-only test runner
-  build.py              # Configured three-package builder; no TV contact
+  build_integrated.py   # Current single-app IPK builder
+  build_pairing.py      # Separate native pairing experiment
+  build.py              # Older configured three-package builder
   build_support.py      # Deterministic IPK archives and tiny ARM launchers
   runtime-files.json    # Explicit list of source modules allowed in packages
   ir_packets.py         # Pure IR configuration packet encoder; never transmits
+  pairing/              # Cable-free pairing and bounded Bluetooth transport
+  integrated/           # Native settings, first-run routing and bundled service
   runtime/              # Controller, receiver, decoding, lifecycle
   scheduler/            # Startup, standby, expiry service
   tv_inventory.py       # Read-only environment metadata on a TV
@@ -201,310 +205,79 @@ Links credit research and tooling; they do not imply endorsement or identical co
 
 ## 4. Setup guide
 
-The [integrated native app](docs/NATIVE_APP.md) combines settings, input reception and automatic startup in one IPK. Its **Button Assignments** screen shows six rows with separate **Press** and **Hold** actions, including **Do nothing** and custom LG infrared codes. Changes are saved together with **Save and restart** on the first screen, without a separate confirmation. The TV detects its own Bluetooth address and the paired remote identifier internally; only the remote address is entered manually. The app requires an already paired remote and verified setup; the legacy source-build procedure below still uses explicit device identities. The assignment editor has offline coverage; each IR change must still be tested with the physical remote.
-
-The steps below describe the intended setup sequence. **They are not yet a complete executable installation guide.** “Missing tool” means the reader would currently have to write or adapt code; it does not mean running the next command will fill in the gap.
-
-| Stage | What is available | What is still missing |
-| --- | --- | --- |
-| 1. Developer access | Official CLI registration and key setup, outlined below | Target TV access must be verified |
-| 2. Pairing | History of the successful DCSD-assisted repair | A supported first-pairing tool and fresh-pairing validation |
-| 3. Target preparation | Required facts and a limited metadata reader | Identity collection, inert app installation to discover runtime UIDs, native access checks |
-| 4. Package build | Runnable, tested builder | Verified target values from stage 3 |
-| 5. Install and launch | Conditional installation/launch commands and runtime code | Installed-file/status verification and usable stop/resume/startup-registration tools |
-| 6. Infrared | Native Set/Delete screen, tested command entries and packet encoder | On-TV validation of the new screen and runtime pause/resume integration; full-table readback is unavailable |
-
-The [setup audit](reviews/setup-audit.md) lists the remaining implementation and validation work. Each TV and remote needs its own pairing, IR configuration, and measured app account IDs, including units of the same model.
-
 ### Before you begin
 
-You need:
+Have the tested first-generation Siri Remote, a compatible LG TV, the LG remote for setup, and a Mac or other computer on the same network as the TV. The TV needs Developer Mode and the Python/SDL libraries described in the [native app guide](docs/NATIVE_APP.md). A diagnostic cable is **not required for the tested pairing procedure**. Do not pair Siri Remote to the Mac first.
 
-- An A1513 Siri Remote and a charged battery.
-- A compatible LG webOS TV. Only the G3 configuration above has been validated here.
-- The original LG remote.
-- A computer for preparation, on the same network as the TV.
-- For the diagnostic setup path: an **A1513-compatible DCSD Lightning diagnostic cable** providing access to the remote’s serial console. A normal USB-to-Lightning charging cable cannot substitute for it. See the distinction below before obtaining hardware.
-- A macOS or Linux development environment, Python 3.10+, Node.js 18+, and Git. The exported workflow was tested on macOS; Linux/WSL host setup has not been independently verified.
-- The [webOS CLI](https://webostv.developer.lge.com/develop/tools/cli-installation) for the commands below. A GUI developer tool alone does not provide the `ares-*` commands.
-- Clang with an ARM target to build the small native launchers. The builder defaults to `clang`; set `CLANG` if yours is elsewhere.
-- Developer access to your own TV and an understanding of the [porting checkpoints](docs/PORTING.md).
+### Step 1: Connect your Mac to the TV
 
-The source targets a **32-bit ARM Linux input layout** and uses Python 3.10 or newer, Node, and webOS libraries already present on the tested TV. The Python requirement applies on the TV as well as when importing the runtime on the computer; the packages do not bundle Python, Node, `palmbus`, or the native libraries. Having a newer or more expensive LG TV is not sufficient to establish compatibility.
-
-#### When is the diagnostic cable needed?
-
-| Situation | Cable requirement / evidence |
-| --- | --- |
-| Everyday operation after setup | No cable; the remote talks directly to the TV |
-| Reusing an already working TV pairing and IR configuration | The input program has no cable dependency; existing settings may be preserved |
-| Diagnostic pairing repair | DCSD access is verified for TV peer selection and stored-peer checks |
-| Restoring known IR codes or checking sensor shutdown when Bluetooth is unavailable | Diagnostic-console access was used in development; complete IR-table readback is not available |
-| Setting up a different, previously unpaired remote from scratch | A cable-free procedure has **not** been validated; this public release does not yet provide a complete first-time pairing/programming tool |
-
-The verified console used **115200 baud, 8 data bits, no parity, 1 stop bit, no flow control**. A serial port appearing on the computer is not enough: the remote must actually answer with its `DIAG>` prompt and correct identity/version. Compatibility of other cables sold as “DCSD” is not established by this project. Buying a cable alone does not complete the missing setup tooling.
-
-Clone or download this repository and open a terminal in its directory before following the steps below.
-
-### Step 1: Set up developer access
-
-Install the CLI using [LG's installation guide](https://webostv.developer.lge.com/develop/tools/cli-installation), then confirm it is available:
-
-```sh
-npm install -g @webos-tools/cli
-ares -V
-```
-
-Follow [LG's Developer Mode guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app) to install the TV app, sign in, enable Developer Mode, and complete the reboot. On the computer, run:
-
-```sh
-ares-setup-device
-```
-
-Choose **add**, name the device `my-tv`, enter the TV's current IP address, use port **9922** and user **prisoner**. Then enable **Key Server** in the TV's Developer Mode app and run:
+Install LG's [webOS CLI](https://webostv.developer.lge.com/develop/tools/cli-installation). Enable **Dev Mode Status** and **Key Server** in the TV's Developer Mode app. Run `ares-setup-device`, add the TV as `my-tv`, and enter its network IP address, port `9922` and user `prisoner`.
 
 ```sh
 ares-novacom --device my-tv --getkey
+ares-device --system-info --device my-tv
 ```
 
-Enter the passphrase displayed by the TV when prompted. Confirm access:
+Enter the passphrase shown on the TV when prompted. If you already have a working CLI connection, use its device name instead. [Detailed connection steps](docs/NATIVE_APP.md#install-from-a-mac).
+
+### Step 2: Install the single app
+
+From the repository root:
 
 ```sh
-ares-device --device my-tv --system-info
-ares-install --device my-tv --list
+ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.35_arm.ipk
+ares-launch --device my-tv org.magicsirimote.app
 ```
 
-These are LG's developer-connection steps; they do not pair the Siri Remote. Keep credentials and keys out of this repository. The CLI has its own host-tool compatibility requirements; consult its installation guide if it conflicts with an existing CLI installation.
+Only this IPK is needed. The separate pairing-test app is a development tool, not a dependency. Stop any older Magic Sirimote runtime and its automatic startup before replacing it; do not run competing receivers.
 
-**Developer access does not prove native app access.** The receiver needs the TV's input nodes and internal services under its own app identity. This repository does not grant those permissions or install TV language runtimes. Those checks belong in Step 3.
+### Step 3: Pair Siri Remote on the TV
 
-### Step 2: Establish Bluetooth pairing
+If the remote is already paired to this TV, Magic Sirimote opens its settings screen. Otherwise:
 
-**Pairing belongs here: after developer access, before building and starting the input programs. Installing the three packages does not pair the remote.** Pairing tells the remote and TV that they belong together; reconnecting to a previously paired remote is a separate operation performed by the controller.
-
-If this exact remote already has a working pairing with this exact TV, preserve it and verify the identities in Step 3. Pairing with an Apple TV or a Mac does not satisfy this requirement.
-
-For an unpaired remote, this is currently a **missing general setup procedure**, not a step that can be completed by running an included installer. The verified registration-repair sequence for the tested A1513 and G3 is:
-
-1. Collect the model, firmware, remote address/name and TV adapter address listed in Step 3 **before changing pairing**. Connect the diagnostic cable and verify the remote's model, firmware, Bluetooth identity, and saved peer; independently verify the TV's Bluetooth adapter and the intended remote registration.
-2. If the TV has a stale or mismatched registration for this remote, remove that registration. Leave working pairings intact.
-3. Start the TV's outgoing pairing request for that remote while using the remote's diagnostic console to select the measured TV adapter as its peer.
-4. Establish the HID connection and initialize input.
-5. Wait at least one minute, then confirm that the TV still lists the remote as paired and the remote still stores the correct TV adapter as its peer.
-
-This repair sequence is verified for the tested A1513/G3 configuration. **First-time pairing on an unprepared remote and TV is not yet validated.** A general pairing tool is not included. A new setup needs that tool adapted and validated before proceeding. Do not assume that choosing the remote in an ordinary Bluetooth menu completes all these steps.
+1. Use the LG remote to choose **Start pairing**.
+2. Once searching begins, hold **MENU + Volume Up** on Siri Remote for about five seconds, then release both. Keep the remote near the TV.
+3. Select the matching candidate if prompted. A previously known remote is selected by its saved identity.
+4. Keep the remote awake with occasional surface presses during the approximately 70-second connection check.
+5. The app saves the verified connection information and starts reception. Check swipe, surface click and pointer movement. Reopen Magic Sirimote for settings.
 
 ```mermaid
-flowchart LR
-    C["Computer + diagnostic cable"] --> R["Remote: select the TV peer"]
-    T["TV: pair with the intended remote"] <--> R
-    T --> H["Establish HID and initialize input"]
-    H --> V["Verify both sides after more than a minute"]
-    V --> N["Proceed to device checks and package setup"]
+sequenceDiagram
+    participant User as You
+    participant App as Magic Sirimote on TV
+    participant Remote as Siri Remote
+    User->>App: Start pairing
+    App->>App: Stop any old input session safely
+    User->>Remote: Hold MENU + Volume Up
+    Remote-->>App: Bluetooth advertisement
+    App->>Remote: Pair, connect HID, initialize input
+    App->>App: Verify registration and connection for 70 seconds
+    App->>App: Save device identity and start input
 ```
 
-### Step 3: Identify and check your devices
+There are no Bluetooth address or device-name fields to fill out. Pairing does not change the remote's IR assignments. This cable-free path has been verified by deleting and recreating the tested remote's TV registration; a completely new remote/TV combination still needs compatibility testing.
 
-**Check the remaining device-specific requirements here.** If you cannot establish these facts, stop here and use the source as a reference while investigating your model.
+### Step 4: Choose button actions and cursor sensitivity
 
-Collect the identity rows below before pairing in Step 2; then verify the paired input and app-access requirements here. A successful build cannot establish these facts for you.
+Open **Button Assignments**. Each of the six buttons has a **Press** and **Hold** cell. Choose named actions, **Do nothing**, or **Custom code (IR)**. Return with Back and choose **Save and restart** on the first screen. Controls dim while saving. Changes are applied together, including every concrete displayed assignment; unknown IR entries are left alone.
 
-Record the following locally:
+For LG infrared control, useful selections are **Home (IR)** for TV / Control Center Press, **Power on/off (IR)** for its Hold, and **Volume + (IR)** / **Volume - (IR)** for the volume buttons. The delayed IR power entry requires an immediate IR entry on the same button. The app checks this combination before writing. Test the actual response after saving. See [IR.md](docs/IR.md) for custom codes and limitations.
 
-| Fact | Why it matters |
-| --- | --- |
-| Remote model and firmware | Different generations can send different data |
-| Remote Bluetooth address | Prevents controlling an unintended nearby device |
-| TV Bluetooth adapter address | Confirms the connection belongs to the expected TV |
-| Exact remote name/serial exposed by Bluetooth | Additional identity check |
-| Developer, controller, and receiver numeric user IDs | The runtime checks file/process ownership; these are not passwords |
-| `LGE RCU` and `ClickableMouse` input devices | These provide the tested key and pointer output paths |
-| A readable matching `hidraw` device and the expected report layout | This provides the remote's input stream |
-| Native app access to the relevant webOS services | SSH access and app permissions are different things |
+The main screen also provides **Gyro cursor**, a five-step sensitivity slider, and **Reset cursor orientation**. Sensitivity changes travel distance without changing response timing. [Settings and recovery details](docs/NATIVE_APP.md#settings).
 
-The read-only `src/tv_inventory.py` can report the current process account, executable presence, and selected input-node metadata when transferred to and run on the TV. It does not discover Bluetooth identities, determine app runtime UIDs, check interpreter versions, or prove native app permissions.
+### Everyday use
 
-**There is an unresolved first-install dependency here:** Step 4 requires the controller and receiver's runtime user IDs, but those apps have not yet been installed in Step 5. The missing bootstrap tool must install inert versions under the final app IDs, observe their actual process identities and access, then rebuild and update without changing those identities. The package files' owner and the SSH user's ID are not substitutes. No inert bootstrap package or tool is included; do not guess the IDs or install an example build as a probe.
+The Mac can be off. A surface press wakes a sleeping Siri Remote. Swiping switches to directional selection; lift your finger and make a deliberate larger movement to return to pointer control. IR volume and power work independently of the running app once configured.
 
-See [PORTING.md](docs/PORTING.md) for the precise ownership and access requirements. Those checks must also establish the TV's Python/Node/library compatibility, access to `hidraw`, `LGE RCU` and `ClickableMouse`, and required internal service calls under the native app identities. There is no general permission-setup tool in this release.
+Automatic startup is included. A full TV reboot may need about a minute for the scheduled startup check plus Bluetooth connection time. Developer Mode expiry must still be managed using LG's usual tools; automatic startup does not extend it.
 
-```mermaid
-flowchart TD
-    A["Step 1: developer access works"] --> B["Step 2: TV pairing verified; identities known"]
-    B --> C["Native app access and input devices verified"]
-    C --> D{"All target assumptions match?"}
-    D -->|Yes| E["Configure and build"]
-    D -->|No or unknown| F["Investigate the port before installing/running"]
-```
+### If something does not work
 
-### Step 4: Build packages for your setup
+- **IR works but swipe/cursor does not:** wake the remote and check pairing/reception. IR and Bluetooth are independent.
+- **No remote appears during pairing:** keep it near the TV and perform MENU + Volume Up while searching is active. A listed candidate alone is not a completed pairing.
+- **Pairing fails:** keep the displayed result. The app stops an uncertain attempt instead of repeating writes. The pairing guide distinguishes discovery, pairing, HID initialization and retention.
+- **Cursor directions feel rotated:** place the remote flat, top up and tip toward the TV, then use the LG remote to select Reset cursor orientation.
+- **A save is incomplete:** completed assignments may already be saved. Inspect the result using the LG remote before trying again.
+- **Bluetooth or sensor cleanup fails:** preserve the runtime records. Do not delete state or repeatedly reset connections to bypass a refusal. Some development recovery cases may still need a diagnostic cable.
 
-Copy the example configuration:
-
-```sh
-cp config.example.json config.local.json
-```
-
-Edit `config.local.json` with the values you actually measured:
-
-| Field | Meaning |
-| --- | --- |
-| `remoteAddress` | Siri Remote Bluetooth address, lowercase colon-separated hex |
-| `adapterAddress` | TV Bluetooth adapter address in the same format |
-| `remoteName` | Exact observed remote name/serial; the current configuration validator accepts ASCII letters, digits, `_` and `-` |
-| `developerUid` | Numeric account ID for the developer connection |
-| `controllerUid` | Numeric account ID assigned to the controller app |
-| `receiverUid` | Numeric account ID assigned to the receiver app |
-| `devmodeMaintenance` | `disabled`, `check-only`, or `extend`; explained below |
-
-The numeric IDs in the example are **example values**, not defaults that are safe to assume on your TV. The builder checks their format, not their correctness on a real device. Other fixed platform assumptions remain; this file is not a universal compatibility switch.
-
-Build using your local configuration:
-
-```sh
-python3 src/build.py --config config.local.json --out build/my-tv
-```
-
-Choose a new output directory for each build. The builder refuses to overwrite an existing one. For a non-example build it also refuses unchanged placeholder device identities.
-
-The output contains:
-
-| Package | Role |
-| --- | --- |
-| `org.codex.siriremote.autocoord20261029v_0.9.106_arm.ipk` | Connection controller |
-| `org.codex.siriremote.hidgattrouterb20261029u_0.9.106_arm.ipk` | Input receiver |
-| `org.codex.siriremote.v20scheduler20261031a_0.0.99_arm.ipk` | Startup app and service |
-
-The long internal package names are retained for compatibility with the tested implementation. Do not rename just one package: the components verify one another's identities and file hashes.
-
-The builder regenerates those hashes from the configured source. This is why editing a file inside an installed package afterward can cause startup to be refused.
-
-### Step 5: Install and start on a verified setup
-
-**This is an advanced, conditional stage, not an unattended installer.** Continue only after the checks in Step 3 and [PORTING.md](docs/PORTING.md) are satisfied. A clean-TV installation has not been independently reproduced from this public checkout.
-
-Before updating an existing installation, stop its input session cooperatively and verify the receiver's sensor-stop result. Keep its packages and state records. Do not overwrite a running receiver or delete its state to get past a refusal.
-
-On a prepared, verified TV, the package installation commands are:
-
-```sh
-ares-install --device my-tv build/my-tv/org.codex.siriremote.autocoord20261029v_0.9.106_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.hidgattrouterb20261029u_0.9.106_arm.ipk
-ares-install --device my-tv build/my-tv/org.codex.siriremote.v20scheduler20261031a_0.0.99_arm.ipk
-```
-
-Then:
-
-1. Compare the installed files with `build/my-tv/manifest.json`, including package metadata and the startup service. Re-check app user IDs and state-directory ownership after installation.
-2. Put the TV on its home screen. Disconnect the remote's diagnostic cable, if one is attached.
-3. Press the touch surface to wake the remote.
-4. Launch the **controller**, not the receiver directly:
-
-   ```sh
-   ares-launch --device my-tv org.codex.siriremote.autocoord20261029v
-   ```
-
-5. Verify the current run’s `receiver-ready-<run>.json` in the receiver’s `state` directory against the live receiver PID/start ticks and current session. The file contains `sensorModeVerified: 1`. An old ready file or a launch acknowledgement is insufficient. A supported status command that performs these checks is still missing.
-6. Stop pressing the surface, lift your finger, and move the remote to check the pointer. No stationary calibration step is required.
-
-The controller obtains the receiver's current file hashes from the startup service. Installing that service is therefore required even for manual controller launch. **Installing it does not automatically register startup.** Startup provisioning is a separate operation described in [PORTING.md](docs/PORTING.md#startup-provisioning).
-
-#### Stop and resume before programming IR
-
-Step 6 requires a cleanly stopped input session. The stop protocol exists in `src/runtime/stop_request.py`, but this checkout has no supported command that finds the live instance, requests stop, verifies sensor shutdown/process exit, and reconciles the completed stop records for later resume. [PORTING.md](docs/PORTING.md#stopping-updating-and-removing) describes that contract. Repeating `ares-launch` while a completed stop veto remains is not a substitute for the missing resume operation.
-
-#### Register automatic startup
-
-Installation and a successful manual launch do not register the persistent Activity. The [startup provisioning contract](docs/PORTING.md#startup-provisioning) requires a fresh request, launch under the scheduler's own identity, verification of creation/binding/callback, and archival of the completed request. Its handlers exist, but a supported operator command is still missing. Complete and verify that operation to enable automatic startup. Choosing `devmodeMaintenance` does not perform this registration.
-
-### Step 6: Set up infrared separately
-
-The program that handles Bluetooth input does not, by itself, teach the remote infrared commands. Volume and power require the corresponding IR entries to be stored in the remote.
-
-Use these IR entries for the tested configuration:
-
-| Remote button | Entry | LG NEC bytes |
-| --- | --- | --- |
-| Volume + | Immediate | `20 DF 40 BF` |
-| Volume − | Immediate | `20 DF C0 3F` |
-| TV-picture | Immediate Home | `20 DF 3E C1` |
-| TV-picture | Delayed Power, firmware delay selector `2` | `20 DF 10 EF` |
-
-These bytes describe the tested remote's stored configuration. They are **not** ready-to-send shell commands. The delay selector is not a number of seconds; selector `2` produced the approximately 0.716-second behavior on this firmware.
-
-A Bluetooth Home event and the stored IR Home entry can coexist. This release does not claim hardware-level short/long-press suppression across both routes; holding the TV button may produce Home before Power. A long press is therefore not guaranteed to emit only Power.
-
-If your remote already controls volume and power correctly, you can leave those settings alone. To set or delete an assignment, use the [native app's Infrared screen](docs/IR.md). Its Bluetooth integration still needs on-TV validation. It changes only the selected button and press type, without requiring a diagnostic cable. It requires existing pairing and a stopped input runtime.
-
-For packet inspection only, run:
-
-```sh
-python3 src/ir_packets.py
-```
-
-Confirm IR independently with the TV input program cleanly stopped: point the remote at the TV, press Volume + once and Volume − once, and check that the volume rises and returns. Test power separately. Do not infer IR success from a Bluetooth-delivered key.
-
-Running the encoder above only prints bytes; **it does not save these settings to your remote**. The integrated app sends all concrete displayed assignments after **Save and restart**. There is no verified full-table readback: deleting an entry does not restore an overwritten value, and a sent request must be tested physically. After IR checks, the stop/resume procedure from Step 5 must reconcile the clean stop and allow the controller to start again.
-
-### Developer Mode expiry
-
-Developer Mode still has an expiry. LG documents that expiry can disable Developer Mode and remove development apps. Follow [LG's current guidance](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app); do not treat this repository as an expiry bypass.
-
-Public builds default to **`devmodeMaintenance: "disabled"`**:
-
-| Setting | Behavior |
-| --- | --- |
-| `disabled` | No session-token read or LG session query by the maintenance module; manage expiry yourself |
-| `check-only` | Read the TV's existing Developer Mode session token locally and query LG's official server; do not extend |
-| `extend` | Also attempt official app-based extension when at most 14 days remain, normally checking daily |
-
-The query uses HTTPS to `developer.lge.com`. The extension route launches LG's Developer Mode app with an extension request; its UI may appear. The source avoids printing or storing the raw token. An uncertain extension is retained as uncertain rather than immediately retried. These are implementation details of the experiment, not a documented guarantee from LG.
-
-Changing `devmodeMaintenance` requires rebuilding and updating the package. Select the policy explicitly; automatic extension is disabled by default.
-
-### Troubleshooting
-
-| Symptom | Check first |
-| --- | --- |
-| Volume works, but swipes do nothing | IR and Bluetooth are separate. Check controller/receiver readiness and the paired target |
-| Pointer stops when my finger touches the surface | Expected in this version; lift your finger |
-| Pointer does not appear after a swipe | Finger off; deliberate larger movement. Small hand tremors deliberately keep selection mode |
-| Pointer never starts after connection | Wake the remote, lift your finger off the surface, and move it; inspect receiver readiness and valid orientation reports if the pointer does not start |
-| Click works with the pointer but not after swiping | Confirm the matching receiver build; selection mode must emit Enter, not a mouse click |
-| Settings works but microphone does not go back | Confirm the final button mapping and supported packet shape; no voice processing is needed |
-| Play/Pause does nothing in one app | Media state may be missing or stale; the implementation does not blindly guess a toggle |
-| Power seems slower than 0.7 seconds | Release after the threshold; screen startup time is separate from button hold time |
-| `ares-launch` succeeds but there is no response | Check the per-run ready/result records; a launch acknowledgement is not receiver readiness |
-| A package hash/ownership check fails | Verify the installed build and target account IDs. Do not disable checks or recursively chmod system directories |
-| It works until an ordinary TV off/on | Inspect startup binding, power-state evidence, and retained stop requests |
-| Diagnostics stop updating after a couple of minutes | Startup progress snapshots are intentionally bounded; a stale snapshot alone does not prove a stopped receiver |
-| Bluetooth reports an error or stops replying | Preserve the result and session records. Do not repeatedly restart Bluetooth, re-pair, or resend sensor commands without understanding the current state |
-
-The runtime favors stopping on an uncertain state over repeatedly issuing device commands. A retained record may be the reason it refuses to start, but it may also be the evidence needed to stop a previous sensor session correctly.
-
-### Backup, updates, and removal
-
-Before changing a working setup, keep:
-
-- The exact three packages and their `SHA256SUMS`.
-- Your local configuration, stored privately.
-- A private copy of the relevant runtime/startup records, with ownership information.
-- Any known IR codes and operation receipts. Full-table readback is unavailable; these records are not a backup of unknown assignments.
-- A short list of physical tests that passed.
-
-```mermaid
-flowchart LR
-    A["Working setup"] --> B["Save packages, settings, and evidence"]
-    B --> C["Stop input and verify sensor stop"]
-    C --> D["Install matching candidate packages"]
-    D --> E{"Physical tests pass?"}
-    E -->|Yes| F["Keep the candidate and its backup"]
-    E -->|No| G["Stop candidate; restore matching prior packages"]
-    G --> H["Reconcile session/startup records before restarting"]
-```
-
-A backup of application packages is not a full TV-firmware or remote-EEPROM backup. Do not restore old runtime state over a live session, and do not copy another TV's private state.
-
-For removal, first disable/cancel the exact startup Activity through its creator, then request a cooperative controller stop and verify the receiver reports `sensorStopVerified: true`. Preserve any uncertain result for diagnosis. After no related process remains, remove the three app packages with your developer tooling. The IR settings live in the remote and survive removal of the TV apps; restore them separately if desired. See the [lifecycle notes](docs/PORTING.md#stopping-updating-and-removing).
-
-The stop/cancel/restore protocols are engineering contracts, not a complete rollback command in this release. Pairing changes and IR writes also affect the remote itself; saving TV packages alone does not back up those settings.
+Keep the exact IPK, its checksum and your known IR assignments before updating. A package backup is not a full backup of the remote's memory. Removing the TV app does not remove IR codes stored in Siri Remote. Read the [native app guide](docs/NATIVE_APP.md) and [porting notes](docs/PORTING.md) before deploying on different hardware.

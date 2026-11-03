@@ -169,12 +169,12 @@ class InfraredTest(unittest.TestCase):
     def test_reselecting_saved_choice_clears_pending_edit(self):
         import tv_assignments
         with tempfile.TemporaryDirectory() as d:
-            tv_assignments.execute(d,'assign',32,0,'back')
+            tv_assignments.execute(d,'assign',32,0,'playpause')
             app=InfraredScreen(Path(d));app.choose(0);app.choose(0)
             self.assertTrue(app.drafts)
-            app.choose(0);app.choose(1)
+            app.choose(0);app.choose(next(i for i, item in enumerate(CHOICES) if item[1]=='playpause'))
             self.assertFalse(app.drafts)
-            self.assertEqual(tv_assignments.load(d)['bindings'],{'20:00':'back'})
+            self.assertEqual(tv_assignments.load(d)['bindings'],{'20:00':'playpause'})
 
 
 if __name__ == '__main__':

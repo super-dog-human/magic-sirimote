@@ -11,7 +11,7 @@ This document describes the platform requirements, configuration, and deployment
 
 ## What is not a completed public workflow
 
-A clean-TV installation has not been re-run from this export. The [setup audit](../reviews/setup-audit.md) lists each missing operation and the first-install dependency cycle. First pairing, discovering app runtime UIDs without starting input, permission validation, an operator-friendly provisioning/status tool, and on-TV validation of the native IR programmer are still missing. Full IR-table readback is unavailable; the Set/Delete workflow does not depend on it. These are real deployment prerequisites, not optional documentation details.
+A clean-TV installation has not been re-run from this export. The [setup audit](../reviews/setup-audit.md) lists each missing operation and the first-install dependency cycle. For the older three-package export, runtime UID discovery and operator-friendly provisioning remain incomplete. The current integrated app includes cable-free pairing, native IR programming and automatic startup; see [NATIVE_APP.md](NATIVE_APP.md) for its tested scope. Full IR-table readback is unavailable; the Set/Delete workflow does not depend on it. These are real deployment prerequisites, not optional documentation details.
 
 The three IPKs are useful build artifacts for a developer completing those checks. They are not a universal consumer release. The source can also be reused independently—for example, the decoder, button mapping, navigation state machine, and output framing.
 
@@ -63,7 +63,7 @@ The public builder preserves these declared access-control groups:
 
 These declarations do not guarantee access to every internal operation on every firmware. A command that works in a developer SSH session may fail in an app, and the reverse can also happen. Validate under the actual native app identity. Do not impersonate a system service.
 
-The runtime uses the existing Bluetooth service for status, connection management, notification configuration, input activation and sensor-mode reads/writes. Pairing is a prerequisite; this export does not call a generic pairing wizard. See [README Step 2](../README.md#step-2-establish-bluetooth-pairing) for the observed DCSD-assisted registration repair and its limits. This work used an outgoing TV pairing request, remote-side peer selection through the diagnostic console, an HID connection, and input initialization; it was not just a Bluetooth menu selection. A fresh pairing workflow and a cable-free first-time setup remain unvalidated.
+The runtime uses the existing Bluetooth service for status, connection management, notification configuration, input activation and sensor-mode reads/writes. The older three-package export requires existing pairing. The integrated app now provides a cable-free pairing screen using the TV Bluetooth service and MENU + Volume Up, followed by HID initialization and a 70-second retention check. This was tested by deleting and recreating the A1513/G3 registration without the diagnostic cable; factory-fresh and other-device compatibility remains unverified. See [the current pairing guide](NATIVE_APP.md#pair-on-the-tv).
 
 ### Initial account and device inventory
 

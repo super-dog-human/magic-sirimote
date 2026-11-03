@@ -16,3 +16,4 @@ node_modules/
 # Generic, explicitly labelled native setup preview (no device configuration).
 !/releases/native-preview/*.ipk
 !/releases/integrated-preview/*.ipk
+!/releases/pairing-test/*.ipk

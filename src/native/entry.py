@@ -16,6 +16,11 @@ BACK = (27, 461, 1073742094)
 
 class Setup:
     save_label = 'Save'
+    show_device_fields = True
+
+    @property
+    def main_focus(self):
+        return settings.MAIN_FOCUS if self.show_device_fields else tuple(i for i in settings.MAIN_FOCUS if i != 0)
 
     def __init__(self, state):
         self.state = state
@@ -66,6 +71,7 @@ class Setup:
                 self.values[field] += key
             return
         if index == 0:
+            if not self.show_device_fields: return
             self.editing = index
             alphabet = '0123456789abcdef:' if index != 1 else 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-'
             self.keys = list(alphabet) + (['Case'] if index == 1 else []) + ['Delete', 'Clear', 'Done']
@@ -134,7 +140,7 @@ class Setup:
                 if self.editing is None and self.focus == 4 and value in (1073741904, 1073741903):
                     self.values['gyroSensitivity'] = max(1, min(5, self.values['gyroSensitivity'] + ARROWS[value]))
                 elif self.editing is None:
-                    self.focus = settings.MAIN_FOCUS[(settings.MAIN_FOCUS.index(self.focus) + ARROWS[value]) % len(settings.MAIN_FOCUS)]
+                    self.focus = self.main_focus[(self.main_focus.index(self.focus) + ARROWS[value]) % len(self.main_focus)]
                 else:
                     step = ARROWS[value] * (10 if value in (1073741906, 1073741905) else 1)
                     self.key_focus = (self.key_focus + step) % len(self.keys)
@@ -154,7 +160,7 @@ class Setup:
             return
         canvas.clear()
         canvas.text('Magic Sirimote', 64, 42, 40)
-        canvas.text('Device setup and button assignments', 66, 94, 23, (114, 191, 227))
+        canvas.text('Remote settings and button assignments', 66, 94, 23, (114, 191, 227))
         self.boxes = []
         if self.editing is not None:
             canvas.text(settings.LABELS[self.editing], 66, 160, 27)
@@ -172,41 +178,42 @@ class Setup:
             disabled = self.controls_disabled
             fill = lambda selected: (27, 34, 44) if disabled else (30, 113, 156) if selected else (36, 48, 65)
             ink = (105, 115, 130) if disabled else (226, 234, 243)
-            for index, field in enumerate(settings.EDITABLE_FIELDS):
+            shift = 0 if self.show_device_fields else -94
+            for index, field in enumerate(settings.EDITABLE_FIELDS if self.show_device_fields else ()):
                 y = 150 + index * 76
                 box = (64, y, 1152, 62)
                 canvas.rectangle(box, fill(self.focus == index))
                 canvas.text(settings.LABELS[index], 82, y + 19, 22, ink, max_width=340)
                 canvas.text(self.values[field] or 'Select to enter', 448, y + 17, 25, ink, max_width=742)
                 if not disabled: self.boxes.append((index, box))
-            box = (64, 244, 1152, 54)
+            box = (64, 244 + shift, 1152, 54)
             canvas.rectangle(box, fill(self.focus == 3))
-            canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 258, 25, ink)
+            canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 258 + shift, 25, ink)
             if not disabled: self.boxes.append((3, box))
-            box = (64, 312, 742, 82)
+            box = (64, 312 + shift, 742, 82)
             canvas.rectangle(box, fill(self.focus == 4))
-            canvas.text('Cursor sensitivity: ' + str(self.values['gyroSensitivity']) + ' / 5', 82, 322, 23, ink)
-            canvas.rectangle((100, 372, 640, 3), ink)
+            canvas.text('Cursor sensitivity: ' + str(self.values['gyroSensitivity']) + ' / 5', 82, 322 + shift, 23, ink)
+            canvas.rectangle((100, 372 + shift, 640, 3), ink)
             for step in range(1, 6):
                 x = 100 + (step - 1) * 160
-                canvas.rectangle((x - 7, 365, 14, 17), ink)
+                canvas.rectangle((x - 7, 365 + shift, 14, 17), ink)
             x = 100 + (self.values['gyroSensitivity'] - 1) * 160
-            canvas.rectangle((x - 11, 361, 22, 25), (105, 115, 130) if disabled else (114, 191, 227))
+            canvas.rectangle((x - 11, 361 + shift, 22, 25), (105, 115, 130) if disabled else (114, 191, 227))
             if not disabled: self.boxes.append((4, box))
-            box = (826, 312, 390, 82)
+            box = (826, 312 + shift, 390, 82)
             canvas.rectangle(box, fill(self.focus == 8))
-            canvas.text('Reset cursor orientation', 842, 337, 23, ink, max_width=358)
+            canvas.text('Reset cursor orientation', 842, 337 + shift, 23, ink, max_width=358)
             if not disabled: self.boxes.append((8, box))
-            for index, title, box in ((6, 'Button Assignments', (64, 418, 1152, 61)),
-                                      (5, self.save_label, (454, 500, 372, 61)),
-                                      (7, 'Close', (844, 500, 372, 61))):
+            for index, title, box in ((6, 'Button Assignments', (64, 418 + shift, 1152, 61)),
+                                      (5, self.save_label, (454, 500 + shift, 372, 61)),
+                                      (7, 'Close', (844, 500 + shift, 372, 61))):
                 canvas.rectangle(box, fill(self.focus == index))
                 canvas.text(title, box[0] + 25, box[1] + 17, 25, ink, max_width=322)
                 if not disabled: self.boxes.append((index, box))
             if self.message:
-                canvas.text(self.message, 66, 590, 22, max_width=1148)
+                canvas.text(self.message, 66, 590 + shift, 22, max_width=1148)
             if self.button_drafts and not disabled:
-                canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose ' + self.save_label + ' to apply.', 66, 628, 21, (114, 191, 227))
+                canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose ' + self.save_label + ' to apply.', 66, 628 + shift, 21, (114, 191, 227))
             self.draw_footer(canvas)
         canvas.present()
 

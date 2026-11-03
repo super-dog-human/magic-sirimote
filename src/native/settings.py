@@ -126,7 +126,7 @@ def read_tv_address():
         return tv_address_from_reply(call('adapter/getStatus', {'subscribe': False}, 5))
 
 
-def remote_name_from_reply(reply, remote, adapter):
+def remote_name_from_reply(reply, remote, adapter, verified_name=None):
     if (type(remote) is not str or not ADDRESS.fullmatch(remote.lower()) or
             type(adapter) is not str or not ADDRESS.fullmatch(adapter.lower())):
         raise ValueError('Enter the remote Bluetooth address first.')
@@ -142,14 +142,16 @@ def remote_name_from_reply(reply, remote, adapter):
     if 'adapterAddress' in row and (type(row['adapterAddress']) is not str or row['adapterAddress'].lower() != adapter.lower()):
         raise RuntimeError('The remote registration belongs to a different TV adapter.')
     name = row.get('name')
+    if name in ('', None) and type(verified_name) is str and NAME.fullmatch(verified_name):
+        name = verified_name
     if type(name) is not str or not NAME.fullmatch(name):
         raise RuntimeError('The paired remote has no supported device identifier.')
     return name
 
 
-def read_remote_name(remote, adapter):
+def read_remote_name(remote, adapter, verified_name=None):
     if type(remote) is not str or not ADDRESS.fullmatch(remote.lower()):
         raise ValueError('Enter the remote Bluetooth address first.')
     from native_luna import Luna
     with Luna() as call:
-        return remote_name_from_reply(call('device/getStatus', {'subscribe': False}, 5), remote, adapter)
+        return remote_name_from_reply(call('device/getStatus', {'subscribe': False}, 5), remote, adapter, verified_name)

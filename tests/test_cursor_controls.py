@@ -20,7 +20,8 @@ class CursorControlsTests(unittest.TestCase):
             self.assertEqual(app.values['gyroSensitivity'],5)
             for _ in range(8):app.handle(('key',1073741904),canvas)
             self.assertEqual(app.values['gyroSensitivity'],1)
-            app.handle(('click',(420,372)),canvas)
+            slider=dict(app.boxes)[4]
+            app.handle(('click',(420,slider[1]+40)),canvas)
             self.assertEqual(app.values['gyroSensitivity'],3)
             app.bus.request.assert_not_called();self.assertEqual(list(Path(d).iterdir()),[])
             app.handle(('key',1073741905),canvas);self.assertEqual(app.focus,8)

@@ -3,6 +3,7 @@
 GATT 106 is unknown, never a connected/disconnected proof. An uncertain
 durable intent remains until both target profiles are independently confirmed.
 """
+from runtime_device import registered_name_matches
 from runtime_device import connect_intent
 import math,os,stat,time,uuid
 from connected_status_watch import ConnectedStatusWatch
@@ -115,7 +116,7 @@ intent remains unresolved. The caller starts the status pump after success.
   matches=[x for x in d['devices'] if type(x) is dict and str(x.get('address','')).lower()==TARGET]
   if len(matches)!=1:mark('bootstrap-target-not-unique');return False
   target=matches[0]
-  if target.get('name')!=NAME or target.get('paired') is not True or target.get('blocked') is not False or target.get('pairing') is not False:mark('bootstrap-target-ineligible');return False
+  if not registered_name_matches(target,NAME) or target.get('paired') is not True or target.get('blocked') is not False or target.get('pairing') is not False:mark('bootstrap-target-ineligible');return False
   hid=read('hid');gatt=read('gatt')
   if not guard():mark('bootstrap-guard-unavailable');return False
   if connected(hid) and connected(gatt):mark('bootstrap-already-connected');return resolved()

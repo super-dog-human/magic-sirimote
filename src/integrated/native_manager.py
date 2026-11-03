@@ -78,10 +78,13 @@ def consume_installer(params, apply, stop=None):
 
 class RuntimeSetup(Setup):
     save_label = 'Save and restart'
+    show_device_fields = False
 
     def __init__(self, state, bus):
         super().__init__(state)
         self.bus = bus
+        self.pairing = None
+        self.focus = 3
         self.stop_requested = False
         self.worker = None
         self.pending_settings = None
@@ -100,6 +103,15 @@ class RuntimeSetup(Setup):
         if self.message in ('Saved identities loaded. This preview does not start remote control.',
                             'Enter the paired Siri Remote Bluetooth address. Other identities are detected.'):
             self.message = ''
+
+    def refresh_pairing(self):
+        if self.controls_disabled or self.infrared is not None or self.editing is not None:
+            return
+        if self.pairing is not None:
+            if self.pairing.visible: return
+            self.pairing.close()
+        from pairing_screen import PairingScreen
+        self.pairing = PairingScreen(self)
 
     def enable_startup(self):
         reply = accepted(self.bus.request('startupPrepare', {}))
@@ -135,7 +147,10 @@ class RuntimeSetup(Setup):
         if type(remote) is not str:
             raise ValueError('Enter the remote Bluetooth address first.')
         remote = remote.strip().lower()
-        name = self.bus.remote_name(remote, adapter)
+        # A verified saved serial remains usable when webOS omits the LE display name.
+        prior = self.saved_values if remote == self.saved_values.get('remoteAddress') and adapter == self.saved_values.get('adapterAddress') else {}
+        verified = getattr(self, 'paired_serial', None) or prior.get('remoteName')
+        name = self.bus.remote_name(remote, adapter, verified)
         return settings.validate({**values, 'remoteAddress': remote, 'adapterAddress': adapter, 'remoteName': name})
 
     def apply(self, values, start=True):
@@ -341,6 +356,8 @@ class RuntimeSetup(Setup):
             self.message = str(error)[:160]
 
     def draw(self, canvas):
+        if self.pairing is not None and self.pairing.visible:
+            return self.pairing.draw(canvas)
         if self.confirm_action is None:
             return super().draw(canvas)
         canvas.clear()
@@ -358,6 +375,8 @@ class RuntimeSetup(Setup):
         canvas.present()
 
     def handle(self, event, canvas):
+        if self.pairing is not None and self.pairing.visible:
+            return self.pairing.handle(event)
         if self.controls_disabled:
             return
         if self.confirm_action is not None:
@@ -409,7 +428,7 @@ def pending_worker():
 
 
 def main():
-    worker = None; canvas = None; closing = False; log = None; logged = 0
+    worker = None; canvas = None; app = None; closing = False; log = None; logged = 0
     stop_signal = [False]
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: stop_signal.__setitem__(0, True))
@@ -420,6 +439,7 @@ def main():
                 handoff = pending_worker()
             except (OSError, ValueError, RuntimeError):
                 handoff = False; app.message = 'Input handoff needs attention. Existing recovery records were retained.'
+            if not handoff: app.refresh_pairing()
             canvas = Canvas(APP); app.draw(canvas)
             if handoff:
                 worker = subprocess.Popen(['/usr/bin/python3', '-I', '-B', str(SERVICE / 'roles/receiver/native_probe.py')],
@@ -435,7 +455,9 @@ def main():
                     if event == 'relaunch':
                         canvas.restore()
                         app.battery.refresh(worker)
-                        try: consume_installer(params, app.apply, stop=app.stop_runtime)
+                        try:
+                            consumed = consume_installer(params, app.apply, stop=app.stop_runtime)
+                            if not consumed: app.refresh_pairing()
                         except (OSError, ValueError, RuntimeError) as error: app.message = str(error)[:160]
                         app.draw(canvas)
                     elif event == 'close':
@@ -472,6 +494,7 @@ def main():
                             break  # Next connection requires a fresh native jail.
                         app.message = 'Finishing input cleanup before opening settings.'
                         app.draw(canvas)
+                if app.pairing is not None and app.pairing.tick(): app.draw(canvas)
                 if app.assignments_tick(): app.draw(canvas)
                 if app.settings_tick(canvas): app.draw(canvas)
                 if app.infrared is not None and app.infrared.tick(): app.draw(canvas)
@@ -494,4 +517,5 @@ def main():
                 pass
         if worker is not None and worker.stdin is not None: worker.stdin.close()
         if log is not None: os.close(log)
+        if app is not None and app.pairing is not None: app.pairing.close()
         if canvas is not None: canvas.close()
