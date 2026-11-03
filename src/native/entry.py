@@ -170,13 +170,20 @@ class Setup:
         canvas.present()
 
 
-def main(state=None):
+def main(state=None, bus=None):
     state = ROOT / 'state' if state is None else Path(state)
     app = Setup(state)
     canvas = Canvas(APP_ID)
     try:
         app.draw(canvas)
         while not app.done:
+            if bus is not None:
+                for event, _params in bus.events():
+                    if event == 'relaunch':
+                        canvas.restore()
+                        app.draw(canvas)
+                    elif event == 'close':
+                        app.handle(('close', None), canvas)
             if app.infrared is not None and app.infrared.tick():
                 app.draw(canvas)
             for event in canvas.events():

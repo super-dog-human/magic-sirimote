@@ -9,7 +9,7 @@ import build_support
 
 ROOT = Path(__file__).resolve().parent
 APP = build_native.APP
-VERSION = '0.3.2'
+VERSION = '0.4.2'
 ROLES = ('controller', 'receiver')
 
 
@@ -24,6 +24,7 @@ def build(output):
     service = {'runtime/' + name: (ROOT / 'runtime' / name).read_bytes() for name in names}
     # One copy of the native sources is visible to both native and service UIDs.
     service.update({'native/' + name: (ROOT / 'native' / name).read_bytes() for name in build_native.SOURCES})
+    service['native/native_bus.py'] = (ROOT / 'integrated/native_bus.py').read_bytes()
     service['native/ir_packets.py'] = (ROOT / 'ir_packets.py').read_bytes()
     service['runtime/bundle_boot.py'] = (ROOT / 'integrated/bundle_boot.py').read_bytes()
     service['service.js'] = (ROOT / 'integrated/service.js').read_bytes()
@@ -50,7 +51,7 @@ def build(output):
         'import sys\nfrom pathlib import Path\n'
         "root=Path('/media/developer/apps/usr/palm/services/" + APP + ".service')\n"
         "sys.path.insert(0,str(root/'native'))\n"
-        "from entry import main\nmain(Path('/media/developer/apps/usr/palm/applications/" + APP + "/state'))\n")
+        "from entry import main\nfrom native_bus import NativeBus\nwith NativeBus() as bus:\n main(Path('/media/developer/apps/usr/palm/applications/" + APP + "/state'),bus=bus)\n")
     files = {'native_probe.py': wrapper.encode(), 'entry': packaging.launcher(output, APP),
              'icon.png': build_support.icon_png(),
              'appinfo.json': packaging.js({'id': APP, 'version': VERSION, 'type': 'native', 'main': 'entry',

@@ -125,6 +125,18 @@ class Canvas:
                 yield ('click', (int.from_bytes(raw[20:24], 'little', signed=True),
                                  int.from_bytes(raw[24:28], 'little', signed=True)))
 
+    def minimize(self):
+        if not self.window:
+            raise RuntimeError('Window is unavailable')
+        self.bind(self.sdl, 'SDL_MinimizeWindow', None, [C.c_void_p])(self.window)
+
+    def restore(self):
+        if not self.window:
+            raise RuntimeError('Window is unavailable')
+        # Raising a minimized webOS window alone does not restore it.
+        for name in ('SDL_RestoreWindow', 'SDL_ShowWindow', 'SDL_RaiseWindow'):
+            self.bind(self.sdl, name, None, [C.c_void_p])(self.window)
+
     def present(self):
         self.present_frame(self.renderer)
 
