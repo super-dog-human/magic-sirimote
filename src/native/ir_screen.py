@@ -19,21 +19,24 @@ def label(action):
     # Saved TV actions still need readable labels after removal from the picker.
     if action == 'back': return 'Back'
     if action == 'settings': return 'Settings'
+    if action == 'play': return 'Play'
+    if action == 'pause': return 'Pause'
     return next((name for name, value in CHOICES if value == action),
                 'Code ' + action[3:] + ' (IR)' if action.startswith('ir:') else action)
 
 
 
 class InfraredScreen:
-    def __init__(self, state, drafts=None):
+    def __init__(self, state, drafts=None, save_label='Save'):
         self.state = state
+        self.save_label = save_label
         self.drafts = {} if drafts is None else drafts
         self.button = self.delay = self.focus = self.cell = 0
         self.code = ''
         self.editing = self.picking = self.busy = self.done = False
         self.draft = ''
         self.boxes = []
-        self.message = 'Changes stay pending until Save on the first screen.'
+        self.message = 'Changes stay pending until ' + self.save_label + ' on the first screen.'
         self.detail = 'Existing IR entries are unknown until changed here. Browsing does not change them.'
         self.refresh_saved_tv()
 
@@ -97,7 +100,7 @@ class InfraredScreen:
             self.drafts[key] = self.code
         self.picking = self.editing = False
         self.focus = self.cell
-        self.message = 'Change kept in this session. Back returns to the first screen to save.'
+        self.message = 'Change kept in this session. Choose ' + self.save_label + ' on the first screen to apply.'
 
     def handle(self, event):
         if self.busy: return
@@ -129,7 +132,7 @@ class InfraredScreen:
 
     def draw(self, canvas):
         canvas.clear(); canvas.text('Button assignments',64,42,38)
-        canvas.text('Choose actions, then save together on the first screen',66,96,23,(114,191,227))
+        canvas.text('Choose actions, then ' + self.save_label + ' on the first screen',66,96,23,(114,191,227))
         self.boxes=[]
         def button(index,title,bounds,size=23):
             canvas.rectangle(bounds,(30,113,156) if self.focus==index else (36,48,65))

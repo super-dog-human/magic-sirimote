@@ -74,7 +74,7 @@ class Setup:
             return  # Device identifiers are detected, never edited.
         elif index == 3:
             self.values['gyroEnabled'] = not self.values['gyroEnabled']
-            self.message = 'Gyro preference changed. Choose Save settings; runtime integration is pending.'
+            self.message = 'Gyro preference changed. Choose ' + self.save_label + '; runtime integration is pending.'
         elif index == 4:
             self.values['gyroSensitivity'] = self.values['gyroSensitivity'] % 5 + 1
         elif index == 8:
@@ -92,7 +92,7 @@ class Setup:
                 self.message = str(error) if isinstance(error, (ValueError, RuntimeError)) else 'Could not save settings.'
         elif index == 6:
             from ir_screen import InfraredScreen
-            self.infrared = InfraredScreen(self.state, drafts=self.button_drafts)
+            self.infrared = InfraredScreen(self.state, drafts=self.button_drafts, save_label=self.save_label)
         else:
             self.done = True
 
@@ -167,7 +167,7 @@ class Setup:
                 canvas.text(key, box[0] + 13, box[1] + 13, 23, max_width=82)
                 self.boxes.append((index, box))
             canvas.text('Select characters with arrows and OK, or use a USB keyboard.', 66, 632, 22)
-            canvas.text('Back closes the keyboard. Choose Save settings on the previous screen.', 66, 665, 20, (155, 170, 190))
+            canvas.text('Back closes the keyboard. Choose ' + self.save_label + ' on the previous screen.', 66, 665, 20, (155, 170, 190))
         else:
             disabled = self.controls_disabled
             fill = lambda selected: (27, 34, 44) if disabled else (30, 113, 156) if selected else (36, 48, 65)

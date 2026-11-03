@@ -299,7 +299,7 @@ class RuntimeSetup(Setup):
                 self.infrared.detail = 'Both remotes can browse. No change is sent until Save and restart.'
             elif index == 8:
                 if self.has_unsaved():
-                    self.message = 'Save or discard pending changes before resetting cursor orientation.'
+                    self.message = 'Choose Save and restart, or discard pending changes, before resetting cursor orientation.'
                     return
                 self.confirm_action = 'recenter'
                 self.confirm_focus = 0
