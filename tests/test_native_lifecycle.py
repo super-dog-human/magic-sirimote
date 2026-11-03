@@ -67,6 +67,15 @@ class NativeLifecycleTests(unittest.TestCase):
             bus.request('start', {})
         self.assertEqual(len(calls), 1)
 
+    def test_failed_startup_cancel_uses_one_exact_activity_id(self):
+        import json
+        bus, calls = self.bus(); bus.cancel_startup(271)
+        self.assertEqual(calls[0][0], b'luna://com.webos.service.activitymanager/cancel')
+        self.assertEqual(json.loads(calls[0][1]), {'activityId':271})
+        for invalid in (0, -1, True, '271'):
+            with self.assertRaises(ValueError): bus.cancel_startup(invalid)
+        self.assertEqual(len(calls), 1)
+
     def test_startup_activity_is_persistent_and_calls_only_own_service(self):
         import json
         bus, calls = self.bus()

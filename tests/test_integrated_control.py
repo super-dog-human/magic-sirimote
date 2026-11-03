@@ -59,23 +59,57 @@ class ControlTests(unittest.TestCase):
                 apply.assert_not_called()
             self.assertIn('not confirmed', app.message)
 
-    def test_buttons_close_resumes_without_exposing_a_start_button(self):
+    def test_buttons_browsing_keeps_input_and_ir_confirmation_waits_for_cleanup(self):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as d:
-            bus = Mock(); bus.request.return_value = {'returnValue': True, 'cleanStop': True, 'processes': found()}
-            app = RuntimeSetup(Path(d), bus)
-            app.choose(6, Mock()); app.settings_tick(Mock())
-            self.assertIsNotNone(app.infrared)
-            app.infrared.done = True
-            app.handle(('key', 27), Mock())
+            bus = Mock(); bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found(controller=[{'pid': 1}])}
+            app = RuntimeSetup(Path(d), bus); canvas = Mock()
+            app.choose(6, canvas)
+            bus.request.assert_not_called()
+            app.infrared.choose(4)  # Review delete, without writing.
+            bus.request.assert_not_called()
+            app.infrared.choose(0)  # Cancel review.
+            app.handle(('key', 27), canvas)
             self.assertIsNone(app.infrared)
+            self.assertFalse(app.done)
+            bus.request.assert_not_called()
+            app.choose(6, canvas); app.infrared.choose(4); app.infrared.choose(1)
+            self.assertEqual(bus.request.call_args.args[0], 'drain')
+            self.assertTrue(app.infrared.busy)
+            with patch.object(app.infrared, 'start_submission') as submit:
+                app.settings_tick(canvas); submit.assert_not_called()
+                app.next_settings_check = 0
+                bus.request.return_value = {'returnValue': True, 'cleanStop': True, 'processes': found()}
+                app.settings_tick(canvas); submit.assert_called_once()
+            app.infrared.busy = False; app.infrared.review = None
+            app.handle(('key', 27), canvas)
             self.assertTrue(app.done)
             self.assertEqual(bus.request.call_args.args[0], 'resume')
             app = RuntimeSetup(Path(d), bus)
-            app.focus = 7; app.handle(('key', 1073741903), Mock())
+            app.focus = 7; app.handle(('key', 1073741903), canvas)
             self.assertEqual(app.focus, 0)
-            canvas = Mock(); app.draw(canvas)
+            app.draw(canvas)
             self.assertEqual([index for index, box in app.boxes], list(range(8)))
+
+    def test_installer_cannot_interrupt_an_infrared_write(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); app = RuntimeSetup(Path(d), bus); app.choose(6, Mock())
+            app.infrared.busy = True
+            with self.assertRaisesRegex(RuntimeError, 'finish before updating'):
+                app.stop_runtime()
+            bus.request.assert_not_called()
+
+    def test_ir_cleanup_failure_does_not_write_and_returns_to_editable_screen(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); bus.request.return_value = {'returnValue': True, 'cleanStop': False, 'processes': found()}
+            app = RuntimeSetup(Path(d), bus); app.choose(6, Mock())
+            app.infrared.busy = True; app.pending_settings = ('ir', (), 0)
+            with patch.object(app.infrared, 'start_submission') as submit:
+                self.assertTrue(app.settings_tick(Mock())); submit.assert_not_called()
+            self.assertFalse(app.infrared.busy)
+            self.assertIn('not confirmed', app.infrared.message)
 
     def test_installer_configuration_always_activates_but_stop_stays_internal(self):
         from unittest.mock import Mock
@@ -93,6 +127,16 @@ class ControlTests(unittest.TestCase):
             self.assertFalse(app.resume_after_settings)
             self.assertIsNone(app.pending_settings)
             self.assertEqual(bus.request.call_args.args[0], 'stop')
+
+    def test_configuration_repairs_verified_startup_state_before_enabling(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); bus.request.side_effect = [
+                {'returnValue': True, 'status': 'repair-required'},
+                {'returnValue': True, 'status': 'scheduled'},
+                {'returnValue': True, 'status': 'registered'}]
+            app = RuntimeSetup(Path(d), bus); app.enable_startup()
+            self.assertEqual([call.args[0] for call in bus.request.call_args_list], ['startupPrepare','startupRepair','startupPrepare'])
 
     def test_archive_before_input_requires_empty_journal_and_no_receiver(self):
         import orphan_reconcile as recovery

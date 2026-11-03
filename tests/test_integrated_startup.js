@@ -6,14 +6,14 @@ function fixture(saved = null) {
   let state = saved, bootId = BOOT1, count = 0;
   const calls = [];
   const store = {read: () => state && JSON.parse(JSON.stringify(state)), write: value => { state = JSON.parse(JSON.stringify(value)); }};
-  let failComplete = false, wrongCreator = false;
+  let failComplete = false, wrongCreator = false, detailsState = 'expired', committed = false, inUse = false;
   const activity = async (method, params) => {
     calls.push([method, params]);
-    if (method === 'getDetails') return {value: {returnValue: true, activity: {activityId: state.activityId, name: APP + '.startup', creator: {serviceId: wrongCreator ? 'other.app' : APP}, callback: {method: 'luna://' + APP + '.service/startupTick', params: {token: state.token}}, state: 'expired', adopters: [], subscribers: []}}};
+    if (method === 'getDetails') return {value: {returnValue: true, activity: {activityId: state.activityId, name: APP + '.startup', creator: {serviceId: wrongCreator ? 'other.app' : APP}, callback: {method: 'luna://' + APP + '.service/startupTick', params: {token: committed ? state.nextToken : state.token}}, state: detailsState, adopters: inUse ? [{}] : [], subscribers: []}}};
     return {value: method === 'complete' && failComplete ? null : {returnValue: true, adopted: true}, request: {cancel() {}}};
   };
   const instance = () => createStartup({store, activity, boot: () => bootId, now: () => 100000, token: () => (++count).toString(16).padStart(48, '0')});
-  return {instance, calls, state: () => store.read(), boot: value => { bootId = value; }, fail: () => { failComplete = true; }, wrongCreator: () => { wrongCreator = true; }};
+  return {instance, calls, state: () => store.read(), boot: value => { bootId = value; }, fail: () => { failComplete = true; }, wrongCreator: () => { wrongCreator = true; }, repairable: (kind = 'failed', next = false, busy = false) => { failComplete = false; detailsState = kind; committed = next; inUse = busy; }};
 }
 function bind(s) { const prep = s.prepare(); s.bind({token: prep.token, activityId: 17}); }
 const empty = () => ({returnValue: true, processes: {controller: [], receiver: [], ui: [], legacy: []}});
@@ -77,7 +77,7 @@ async function main() {
   g.fail(); const current = {token: g.state().token, $activity: {activityId: 17}};
   assert.equal((await t.tick(message, current)).returnValue, false);
   assert.equal(g.state().phase, 'attention');
-  assert.throws(() => t.prepare(), /needs attention/);
+  assert.equal(t.prepare().status, 'repair-required');
   const n = g.calls.length; await t.tick(message, current); assert.equal(g.calls.length, n, 'Never repeat uncertain completion');
   const repairFixture = fixture(), repaired = repairFixture.instance(); bind(repaired);
   assert.equal((await repaired.repair()).returnValue, true);
@@ -85,6 +85,38 @@ async function main() {
   const other = fixture(), refused = other.instance(); bind(refused); other.wrongCreator();
   assert.equal((await refused.repair()).returnValue, false);
   assert.deepEqual(other.calls.map(x => x[0]), ['getDetails'], 'Never adopt a different creator');
+  for (const mode of ['failed', 'committed', 'uncertain', 'in-use']) {
+    const f = fixture(), r = f.instance(); bind(r); f.fail();
+    const m = {senderServiceName: () => 'com.webos.service.activitymanager', applicationID: () => APP};
+    await r.tick(m, {token: f.state().token, $activity: {activityId: 17}});
+    assert.equal(f.state().phase, 'attention');
+    const next = f.state().nextToken;
+    f.repairable(mode === 'committed' || mode === 'uncertain' ? 'waiting' : 'failed', mode === 'committed', mode === 'in-use');
+    const before = f.calls.length;
+    if (mode === 'uncertain' || mode === 'in-use') {
+      await assert.rejects(r.repair());
+      assert.equal(f.state().phase, 'attention');
+      assert.equal(f.calls.length, before + 1, 'Uncertain/in-use activity is read only');
+    } else {
+      const repaired = await r.repair();
+      assert.equal(repaired.returnValue, true);
+      assert.deepEqual(f.calls.slice(before).map(x => x[0]), ['getDetails']);
+      if (mode === 'committed') {
+        assert.equal(f.state().phase, 'ready'); assert.equal(f.state().token, next);
+      } else {
+        assert.equal(repaired.status, 'cancel-required');
+        assert.equal(f.state().phase, 'cancel-pending');
+        assert.throws(() => r.cancelled({activityId: 99, resetToken: repaired.resetToken}));
+        assert.throws(() => r.cancelled({activityId: 17, resetToken: 'wrong'}));
+        assert.throws(() => r.prepare(), /needs attention/);
+        r.cancelled({activityId: 17, resetToken: repaired.resetToken});
+        assert.throws(() => r.cancelled({activityId: 17, resetToken: repaired.resetToken}));
+        const fresh = r.prepare(); assert.equal(fresh.status, 'create-required');
+        r.bind({token: fresh.token, activityId: 18});
+        assert.equal(f.state().phase, 'ready'); assert.equal(f.state().previousActivityId, 17);
+      }
+    }
+  }
   const h = fixture(), early = h.instance(); const p = early.prepare();
   assert.equal((await early.tick(message, {token: p.token, $activity: {activityId: 19}})).returnValue, true, 'Genuine callback recovers lost create acknowledgement');
   assert.equal(early.summary().registered, true);

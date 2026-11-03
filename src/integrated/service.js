@@ -80,7 +80,7 @@ function createService({Handle = require('palmbus').Handle, timers = globalThis,
     }, 2000);
   }
   schedulePower();
-  const methods = ['status', 'configure', 'start', 'stop', 'drain', 'resume', 'startupPrepare', 'startupBind', 'startupDisable', 'startupRepair', 'startupTick'];
+  const methods = ['status', 'configure', 'start', 'stop', 'drain', 'resume', 'startupPrepare', 'startupBind', 'startupDisable', 'startupRepair', 'startupCancelled', 'startupTick'];
   for (const method of methods) handle.registerMethod('/', method);
   handle.addListener('request', message => {
     trace('request-received');
@@ -97,6 +97,7 @@ function createService({Handle = require('palmbus').Handle, timers = globalThis,
         else if (method === 'startupPrepare' && Object.keys(params).length === 0) value = startup.prepare();
         else if (method === 'startupBind' && Object.keys(params).sort().join(',') === 'activityId,token') value = startup.bind(params);
         else if (method === 'startupRepair' && Object.keys(params).length === 0) value = await startup.repair();
+        else if (method === 'startupCancelled' && Object.keys(params).sort().join(',') === 'activityId,resetToken') value = startup.cancelled(params);
         else if (method === 'startupDisable' && Object.keys(params).length === 0) value = startup.disable();
         else if (method === 'start' && Object.keys(params).length === 0) { startup.manualStart(); value = await startInput(); }
         else if (method === 'stop' && Object.keys(params).length === 0) { startup.disable(); value = await helper('stop', params); }

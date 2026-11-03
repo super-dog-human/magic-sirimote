@@ -132,9 +132,13 @@ class NativeBus:
             yield self.queue.popleft()
 
     def request(self, method, params, timeout=8):
-        if method not in ('status', 'configure', 'start', 'stop', 'drain', 'resume', 'startupPrepare', 'startupBind', 'startupDisable', 'startupRepair'):
+        if method not in ('status', 'configure', 'start', 'stop', 'drain', 'resume', 'startupPrepare', 'startupBind', 'startupDisable', 'startupRepair', 'startupCancelled'):
             raise ValueError('Unsupported application request')
         return self._request_uri('luna://' + APP + '.service/' + method, params, timeout)
+
+    def cancel_startup(self, activity_id):
+        if type(activity_id) is not int or activity_id <= 0: raise ValueError('Invalid activity ID')
+        return self._request_uri('luna://com.webos.service.activitymanager/cancel', {'activityId': activity_id}, 8)
 
     def create_startup(self, token):
         import re

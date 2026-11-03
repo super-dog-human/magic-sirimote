@@ -23,7 +23,7 @@ function disk(directory) {
         if (!s.isFile() || s.uid !== process.getuid() || s.nlink !== 1 || ![0o600, 0o775].includes(s.mode & 0o777) || s.size > 4096) throw Error('Startup state unavailable');
         if ((s.mode & 0o777) === 0o775) fs.fchmodSync(fd, 0o600);
         const value = JSON.parse(fs.readFileSync(fd, 'utf8'));
-        if (value.schema !== 1 || !HEX.test(value.token) || typeof value.enabled !== 'boolean' || !['prepared', 'ready', 'completing', 'attention'].includes(value.phase)) throw Error('Startup state invalid');
+        if (value.schema !== 1 || !HEX.test(value.token) || typeof value.enabled !== 'boolean' || !['prepared', 'ready', 'completing', 'attention', 'cancel-pending'].includes(value.phase)) throw Error('Startup state invalid');
         return value;
       } finally { fs.closeSync(fd); }
     },
@@ -74,6 +74,7 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
       // always uses the same unique name with replace:false, so an uncertain
       // prior create cannot be overwritten or create a second Activity.
       if (s.phase === 'prepared') return {returnValue: true, status: 'create-required', token: s.token, activityName: NAME};
+      if (['attention', 'completing'].includes(s.phase)) return {returnValue: true, status: 'repair-required'};
       if (s.phase !== 'ready') throw Error('Automatic startup registration needs attention');
       s.enabled = true; store.write(s);
       return {returnValue: true, status: 'registered', activityId: s.activityId};
@@ -105,6 +106,13 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     s.attempt = null; s.lastOutcome = 'waiting-for-window-close'; store.write(s);
     return {returnValue: true, status: 'resume-pending'};
   }
+  function cancelled(params) {
+    const s = load();
+    if (!s || s.phase !== 'cancel-pending' || params.activityId !== s.activityId || params.resetToken !== s.resetToken) throw Error('Cancellation acknowledgement differs');
+    store.write({schema: 1, token: token(), phase: 'prepared', enabled: true, activityId: null,
+      previousActivityId: s.activityId, power: s.power, attempt: s.attempt});
+    return {returnValue: true, status: 'cancelled'};
+  }
   async function tick(message, params) {
     let s = load();
     if (!s || !['prepared', 'ready'].includes(s.phase) || message.senderServiceName() !== 'com.webos.service.activitymanager' || message.applicationID() !== APP
@@ -114,36 +122,55 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     // A genuine callback can finish binding a create whose acknowledgement was lost.
     s.activityId = params.$activity.activityId;
     const next = token(); s.phase = 'completing'; s.nextToken = next; store.write(s);
-    let lease;
+    let lease, failedStage = 'adopt', errorCode = null;
     try {
       const adopted = await activity('adopt', {activityId: s.activityId, subscribe: true, wait: false}, true);
       lease = adopted.request;
+      errorCode = adopted.value && adopted.value.errorCode;
       if (!adopted.value || adopted.value.returnValue !== true || adopted.value.adopted !== true) throw Error('Adoption unconfirmed');
+      failedStage = 'complete'; errorCode = null;
       const schedule = {start: new Date(now() + 60000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, 'Z')};
       const complete = await activity('complete', {activityId: s.activityId, restart: true, schedule,
         callback: {method: 'luna://' + APP + '.service/startupTick', params: {token: next}}});
+      errorCode = complete.value && complete.value.errorCode;
       if (!complete.value || complete.value.returnValue !== true) throw Error('Completion unconfirmed');
       s.token = next; delete s.nextToken; s.phase = 'ready'; store.write(s);
       return {returnValue: true, status: 'scheduled'};
     } catch (_) {
       s.phase = 'attention'; store.write(s);
-      return {returnValue: false, status: 'registration-needs-attention'};
+      return {returnValue: false, status: 'registration-needs-attention-' + failedStage,
+        errorText: failedStage + ' unconfirmed (' + (Number.isSafeInteger(errorCode) ? errorCode : 'no reply') + ')'};
     } finally { if (lease) { try { lease.cancel(); } catch (_) {} } }
   }
   async function repair() {
     const s = load();
-    if (!s || s.phase !== 'ready') throw Error('Startup is not ready');
+    if (!s || !['ready', 'attention', 'completing'].includes(s.phase)) throw Error('Startup is not ready');
     const read = await activity('getDetails', {activityId: s.activityId, internal: false, current: false});
     const a = read.value && read.value.activity;
     if (!read.value || read.value.returnValue !== true || !a) return {returnValue: false, status: 'startup-query-' + (read.value ? String(read.value.errorCode || 'invalid-response') : 'no-response'), errorText: read.value && typeof read.value.errorText === 'string' ? read.value.errorText.slice(0, 160) : undefined};
+    const observedToken = a.callback && a.callback.params && a.callback.params.token;
+    const committed = HEX.test(s.nextToken || '') && observedToken === s.nextToken;
     const checks = {id: a.activityId === s.activityId, name: a.name === NAME,
       creator: !!a.creator && a.creator.serviceId === APP,
       method: !!a.callback && a.callback.method === 'luna://' + APP + '.service/startupTick',
-      token: !!a.callback && !!a.callback.params && a.callback.params.token === s.token};
+      token: observedToken === s.token || committed};
     const mismatch = Object.keys(checks).filter(k => !checks[k]);
     if (mismatch.length) return {returnValue: false, status: 'startup-mismatch-' + mismatch.join('-')};
-    if (a.state !== 'expired') return {returnValue: true, status: 'registered'};
+    const terminal = ['expired', 'failed'].includes(a.state);
+    if (s.phase !== 'ready' && !committed && !terminal) throw Error('Startup outcome is still uncertain');
+    if (!terminal) {
+      if (committed) { s.token = s.nextToken; delete s.nextToken; s.phase = 'ready'; store.write(s); }
+      return {returnValue: true, status: 'registered'};
+    }
     if (!Array.isArray(a.adopters) || a.adopters.length || !Array.isArray(a.subscribers) || a.subscribers.length) throw Error('Startup activity is in use');
+    if (a.state === 'failed') {
+      // Activity Manager cannot complete/restart a failed activity. Its creator
+      // must cancel this exact verified activity before registering a new one.
+      s.phase = 'cancel-pending'; s.resetToken = token(); store.write(s);
+      return {returnValue: true, status: 'cancel-required', activityId: s.activityId, resetToken: s.resetToken};
+    }
+    if (committed) s.token = s.nextToken;
+    delete s.nextToken; s.phase = 'ready'; store.write(s);
     return tick({senderServiceName: () => 'com.webos.service.activitymanager', applicationID: () => APP},
       {token: s.token, $activity: {activityId: s.activityId}});
   }
@@ -177,6 +204,6 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     const result = await start();
     s.lastOutcome = result && result.returnValue === true ? result.status : 'start-needs-attention'; store.write(s);
   }
-  return {summary, prepare, bind, disable, manualStart, resume, tick, repair, poll};
+  return {summary, prepare, bind, disable, manualStart, resume, cancelled, tick, repair, poll};
 }
 module.exports = {APP, NAME, disk, activityCall, createStartup};

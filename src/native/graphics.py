@@ -4,6 +4,23 @@ import os
 from pathlib import Path
 
 
+# System SDL on webOS adds inputSource after windowID, unlike upstream SDL2.
+# https://github.com/webosbrew/meta-lg-webos-ndk/blob/512094af995b352461b3b066d83c3ebc8141a560/recipes/libsdl2/libsdl2/webos-input-structs.patch
+class Keysym(C.Structure):
+    _fields_ = [('scancode', C.c_int), ('sym', C.c_int), ('mod', C.c_uint16), ('unused', C.c_uint32)]
+
+
+class KeyboardEvent(C.Structure):
+    _fields_ = [('type', C.c_uint32), ('timestamp', C.c_uint32), ('windowID', C.c_uint32),
+                ('inputSource', C.c_uint32), ('state', C.c_uint8), ('repeat', C.c_uint8),
+                ('padding2', C.c_uint8), ('padding3', C.c_uint8), ('keysym', Keysym)]
+
+
+class TextInputEvent(C.Structure):
+    _fields_ = [('type', C.c_uint32), ('timestamp', C.c_uint32), ('windowID', C.c_uint32),
+                ('inputSource', C.c_uint32), ('text', C.c_char * 32)]
+
+
 class Rect(C.Structure):
     _fields_ = [('x', C.c_int), ('y', C.c_int), ('w', C.c_int), ('h', C.c_int)]
 
@@ -114,13 +131,14 @@ class Canvas:
             kind = int.from_bytes(raw[:4], 'little')
             if kind == 0x100 or (kind == 0x200 and raw[12] == 14):
                 yield ('close', None)
-            elif kind == 0x300:  # SDL_KeyboardEvent: keysym.sym is at byte 20.
-                key = int.from_bytes(raw[20:24], 'little', signed=True)
+            elif kind == 0x300:
+                keyboard = KeyboardEvent.from_buffer_copy(raw)
+                key = keyboard.keysym.sym
                 # A held OK/Back must not activate controls repeatedly.
-                if not raw[13] or key in (1073741906, 1073741905, 1073741904, 1073741903):
+                if not keyboard.repeat or key in (1073741906, 1073741905, 1073741904, 1073741903):
                     yield ('key', key)
             elif kind == 0x303:
-                yield ('text', raw[12:44].split(b'\0', 1)[0].decode('utf-8', 'replace'))
+                yield ('text', TextInputEvent.from_buffer_copy(raw).text.decode('utf-8', 'replace'))
             elif kind == 0x402 and raw[16] == 1:  # Left mouse button release.
                 yield ('click', (int.from_bytes(raw[20:24], 'little', signed=True),
                                  int.from_bytes(raw[24:28], 'little', signed=True)))

@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.11_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.16_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -28,12 +28,14 @@ automatic startup and starts input, then closes the window so the receiver can
 open with the current input devices. Opening the app again displays its settings
 without stopping the running receiver.
 
-**Buttons** temporarily pauses input and waits for confirmed cleanup before
-opening. Use the original LG remote there. Leaving that screen closes the window
-and allows reception to resume automatically. Saving device settings also pauses
-and resumes input automatically. If cleanup cannot be confirmed, the operation
-shows an error without changing settings. Package updates still use a separate
-installer maintenance stop; closing a window cannot undo that stop.
+**Buttons** keeps input running while you browse buttons, press types and actions,
+so either the LG remote or Siri Remote can navigate the settings. Only confirming
+an IR Set/Delete pauses reception and waits for verified cleanup before writing.
+After the result appears, use the LG remote to leave that screen; the window
+closes and Siri Remote reception resumes. Saving device settings also pauses and
+resumes input automatically. If cleanup cannot be confirmed, no write is sent.
+Package updates still use a separate installer maintenance stop; closing a
+window cannot undo that stop.
 
 Automatic startup uses one persistent webOS Activity owned by this same app.
 No separate startup app or running Mac is needed. The bundled service watches the

@@ -61,7 +61,7 @@ class ReviewTests(unittest.TestCase):
         frames = []
         for key, repeat in ((13, 0), (13, 1), (27, 1), (1073741905, 1)):
             event = bytearray(64); event[:4] = (0x300).to_bytes(4, 'little')
-            event[13] = repeat; event[20:24] = key.to_bytes(4, 'little', signed=True)
+            event[17] = repeat; event[24:28] = key.to_bytes(4, 'little', signed=True)
             frames.append(bytes(event))
         canvas = Canvas.__new__(Canvas)
         def poll(buffer):

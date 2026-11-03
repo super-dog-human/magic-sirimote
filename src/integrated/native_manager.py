@@ -87,13 +87,26 @@ class RuntimeSetup(Setup):
 
     def enable_startup(self):
         reply = accepted(self.bus.request('startupPrepare', {}))
+        if reply.get('status') == 'repair-required':
+            self.repair_startup()
+            reply = accepted(self.bus.request('startupPrepare', {}))
+            if reply.get('status') == 'registered': return
         if reply.get('status') == 'registered':
-            accepted(self.bus.request('startupRepair', {})); return
+            repaired = self.repair_startup()
+            if not repaired: return
+            reply = accepted(self.bus.request('startupPrepare', {}))
         if reply.get('status') != 'create-required': raise RuntimeError('Automatic startup is unavailable')
         created = accepted(self.bus.create_startup(reply['token']))
         activity_id = created.get('activityId')
         if type(activity_id) is not int or activity_id <= 0: raise RuntimeError('Automatic startup registration is unconfirmed')
         accepted(self.bus.request('startupBind', {'token': reply['token'], 'activityId': activity_id}))
+
+    def repair_startup(self):
+        reply = accepted(self.bus.request('startupRepair', {}))
+        if reply.get('status') != 'cancel-required': return False
+        accepted(self.bus.cancel_startup(reply['activityId']))
+        accepted(self.bus.request('startupCancelled', {'activityId': reply['activityId'], 'resetToken': reply['resetToken']}))
+        return True
 
     def apply(self, values, start=True):
         if self.infrared is not None:
@@ -111,6 +124,8 @@ class RuntimeSetup(Setup):
 
     def stop_runtime(self):
         """Installer maintenance only; never exposed as a settings choice."""
+        if self.infrared is not None and self.infrared.busy:
+            raise RuntimeError('Wait for the infrared operation to finish before updating.')
         self.pending_settings = None
         self.resume_after_settings = False
         self.stop_requested = True
@@ -142,12 +157,25 @@ class RuntimeSetup(Setup):
             if action == 'save':
                 self.apply(values)
             else:
-                super().choose(6, canvas)
-                self.infrared.submit = self.program_ir
+                self.infrared.start_submission(values)
         except (OSError, ValueError, RuntimeError) as error:
             self.pending_settings = None
             self.message = str(error)[:160]
+            if action == 'ir' and self.infrared is not None:
+                self.infrared.busy = False; self.infrared.review = None
+                self.infrared.message = self.message
+                self.infrared.detail = 'No infrared request was sent. Leave this screen to resume input.'
         return True
+
+    def prepare_ir(self, args):
+        try:
+            self.prepare_settings('ir', args)
+            self.infrared.busy = True
+            self.infrared.message = 'Pausing input before writing this infrared assignment.'
+            self.infrared.detail = 'Wait for completion, then use the LG remote to leave and resume input.'
+        except (OSError, ValueError, RuntimeError) as error:
+            self.infrared.message = str(error)[:160]
+            self.infrared.detail = 'No infrared request was sent.'
 
     def resume_settings(self):
         if self.resume_after_settings:
@@ -173,7 +201,10 @@ class RuntimeSetup(Setup):
             if index == 5:
                 self.prepare_settings('save', settings.validate({'schema': 1, **self.values}))
             elif index == 6:
-                self.prepare_settings('buttons')
+                super().choose(index, canvas)
+                self.infrared.submit = self.program_ir
+                self.infrared.before_submit = self.prepare_ir
+                self.infrared.detail = 'Browse with either remote. Input pauses only when you confirm an IR write.'
             elif index == 3:
                 self.values['gyroEnabled'] = not self.values['gyroEnabled']
                 self.message = 'Choose Save settings to save this preference.'
@@ -188,7 +219,7 @@ class RuntimeSetup(Setup):
         if self.pending_settings is not None:
             return  # Wait for cooperative cleanup; never edit a live session.
         super().handle(event, canvas)
-        if self.done or (was_infrared and self.infrared is None):
+        if self.done or (was_infrared and self.infrared is None and self.resume_after_settings):
             try:
                 self.resume_settings()
             except (OSError, ValueError, RuntimeError) as error:

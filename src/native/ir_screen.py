@@ -19,9 +19,10 @@ def action_label(code):
 
 
 class InfraredScreen:
-    def __init__(self, state, submit=execute, submit_tv=tv_assignments.execute):
+    def __init__(self, state, submit=execute, submit_tv=tv_assignments.execute, before_submit=None):
         self.state, self.submit = state, submit
         self.submit_tv = submit_tv
+        self.before_submit = before_submit
         self.route = 'ir'
         self.button = self.delay = self.focus = 0
         self.code = ''
@@ -90,17 +91,10 @@ class InfraredScreen:
                 return
             action = self.review
             args = (self.state, action, BUTTONS[self.button][1], self.delay, self.code)
-            self.busy = True
-            submit = self.submit_tv if self.route == 'tv' else self.submit
-            self.message = 'Saving the TV assignment. Please wait.' if self.route == 'tv' else 'Checking the remote and sending one request. Please wait.'
-            self.detail = 'Use the original LG remote for this screen.'
-            def work():
-                try:
-                    value = submit(*args)
-                except Exception:
-                    value = {'status': 'tv-save-failed' if self.route == 'tv' else 'uncertain'}
-                self.results.put(value)
-            threading.Thread(target=work, name='infrared-configuration', daemon=False).start()
+            if self.route != 'tv' and self.before_submit is not None:
+                self.before_submit(args)
+            else:
+                self.start_submission(args)
             return
         if self.selecting:
             options = BUTTONS if self.selecting == 'button' else PRESS_TYPES
@@ -167,6 +161,20 @@ class InfraredScreen:
             self.review = action; self.focus = 0
         else:
             self.done = True
+
+    def start_submission(self, args):
+        self.busy = True
+        tv = self.route == 'tv'
+        submit = self.submit_tv if tv else self.submit
+        self.message = 'Saving the TV assignment. Please wait.' if tv else 'Checking the remote and sending one request. Please wait.'
+        self.detail = 'Use the LG remote to leave after writing; Siri Remote reception then resumes.' if self.before_submit and not tv else 'Use the original LG remote for this screen.'
+        def work():
+            try:
+                value = submit(*args)
+            except Exception:
+                value = {'status': 'tv-save-failed' if tv else 'uncertain'}
+            self.results.put(value)
+        threading.Thread(target=work, name='infrared-configuration', daemon=False).start()
 
     def handle(self, event):
         if self.busy:
