@@ -51,7 +51,7 @@ def recover_retained_if_connected(*,lease,pin,stop,timeout=90,clock=time.monoton
  else:raise RuntimeError('prior receiver exit unavailable')
  # Existing bootstrap reserves a durable one-shot HID connect intent and
  # independently checks the bonded target. A failure is not retried here.
- connected=bootstrap(lease=lease,stop=stop,deadline=clock()+45,trace=trace)
+ connected=bootstrap(lease=lease,stop=stop,deadline=clock()+45,trace=trace,wait_for_ready=True)
  trace('bootstrap-takeover-connected' if connected else 'bootstrap-takeover-not-connected')
  pump=PersistentConnectedStatusPump();pump.start()
  try:
@@ -94,7 +94,7 @@ def main():
     try:trace.publish(lease.dirfd,instance)
     except (OSError,RuntimeError,ValueError):pass
     return 2
-  connected=bootstrap(lease=lease,stop=stop,deadline=time.monotonic()+120,trace=trace.add)
+  connected=bootstrap(lease=lease,stop=stop,deadline=time.monotonic()+120,trace=trace.add,wait_for_ready=True)
   try:trace.publish(lease.dirfd,instance)
   except (OSError,RuntimeError,ValueError):pass
   if not connected:

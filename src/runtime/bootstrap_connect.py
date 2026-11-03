@@ -78,18 +78,22 @@ def confirm_and_retire(*,client,lease,stop,clock=time.monotonic,retire=retire_co
   retire(lease);return True
  except (OSError,RuntimeError,ValueError,AttributeError):return False
 
-def bootstrap(*,lease,stop,deadline,clock=time.monotonic,client_factory=BootstrapClient,reserve=reserve_intent,retire=retire_confirmed_intent,recover=recover_idle,wait=None,trace=lambda _event:None):
+def bootstrap(*,lease,stop,deadline,clock=time.monotonic,client_factory=BootstrapClient,reserve=reserve_intent,retire=retire_confirmed_intent,recover=recover_idle,wait=None,trace=lambda _event:None,wait_for_ready=False):
  """Return proof only after real HID+GATT status; otherwise fail closed.
 
 No retry on rejection, timeout, spawn failure, or process restart while the
 intent remains unresolved. The caller starts the status pump after success.
+With wait_for_ready, read-only preflight waits until stop/lease loss; the
+original remaining connection budget starts only once preflight succeeds.
 """
- if type(deadline) not in (int,float) or not math.isfinite(deadline) or not callable(trace):raise ValueError('deadline required')
+ if type(deadline) not in (int,float) or not math.isfinite(deadline) or not callable(trace) or type(wait_for_ready) is not bool:raise ValueError('invalid bootstrap configuration')
+ budget=max(0,deadline-clock());preparing=True
+ if budget<=0:return False
  def mark(event):
   try:trace(event)
   except Exception:pass
  wait=stop.wait if wait is None else wait
- def guard():return not stop.is_set() and clock()<deadline and lease.held() is True
+ def guard():return not stop.is_set() and lease.held() is True and ((wait_for_ready and preparing) or clock()<deadline)
  def read(role):return status_client(role+'/getStatus',{'address':TARGET},timeout=1)
  def idle(p):return ConnectedStatusWatch.valid(p) and all(p[k] is False for k in ('connected','connecting','connectRequest'))
  def connected(p):return ConnectedStatusWatch.valid(p) and ConnectedStatusWatch.connected(p)
@@ -104,25 +108,42 @@ intent remains unresolved. The caller starts the status pump after success.
   # Fresh HID read immediately before Popen; GATT is not used as idle proof.
   started=clock();p=read('hid')
   return guard() and 0<=clock()-started<=2 and idle(p)
+ def preflight():
+  d=status_client('device/getStatus',{'subscribe':False},timeout=4)
+  if not guard():return 'bootstrap-guard-unavailable'
+  result=inventory_result(d)
+  if result!='ok':return 'bootstrap-inventory-'+result
+  matches=[x for x in d['devices'] if type(x) is dict and str(x.get('address','')).lower()==TARGET]
+  if len(matches)!=1:return 'bootstrap-target-not-unique'
+  target=matches[0]
+  if not registered_name_matches(target,NAME) or target.get('paired') is not True or target.get('blocked') is not False or target.get('pairing') is not False:return 'bootstrap-target-ineligible'
+  hid=read('hid');gatt=read('gatt')
+  if not guard():return 'bootstrap-guard-unavailable'
+  if connected(hid) and connected(gatt):return 'connected'
+  if not idle(hid):return 'bootstrap-hid-not-idle'
+  if not (ConnectedStatusWatch.valid(gatt) or unknown(gatt)):return 'bootstrap-gatt-invalid'
+  return 'ready'
  status_client=client_factory(pump=lambda:None,guard=guard,clock=clock,native_app=True)
  client=client_factory(pump=lambda:None,guard=guard,clock=clock,native_app=True,pre_dispatch=dispatch_ready)
  try:
   mark('bootstrap-start')
   if not guard():mark('bootstrap-guard-unavailable');return False
-  d=client('device/getStatus',{'subscribe':False},timeout=4)
-  # A deadline/stop/lease transition is not evidence of inventory failure.
-  if not guard():mark('bootstrap-guard-unavailable');return False
-  result=inventory_result(d)
-  if result!='ok':mark('bootstrap-inventory-'+result);return False
-  matches=[x for x in d['devices'] if type(x) is dict and str(x.get('address','')).lower()==TARGET]
-  if len(matches)!=1:mark('bootstrap-target-not-unique');return False
-  target=matches[0]
-  if not registered_name_matches(target,NAME) or target.get('paired') is not True or target.get('blocked') is not False or target.get('pairing') is not False:mark('bootstrap-target-ineligible');return False
-  hid=read('hid');gatt=read('gatt')
-  if not guard():mark('bootstrap-guard-unavailable');return False
-  if connected(hid) and connected(gatt):mark('bootstrap-already-connected');return resolved()
-  if not idle(hid):mark('bootstrap-hid-not-idle');return False
-  if not (ConnectedStatusWatch.valid(gatt) or unknown(gatt)):mark('bootstrap-gatt-invalid');return False
+  previous=None
+  while guard():
+   # No intent is reserved and no connection request can be dispatched here.
+   # Every retry rechecks the exact bonded target, not just service availability.
+   try:reason=preflight()
+   except LunaCallError:reason='bootstrap-call-error'
+   except (OSError,RuntimeError,ValueError,TypeError,AttributeError) as exc:reason='bootstrap-error-'+type(exc).__name__
+   if not guard():mark('bootstrap-guard-unavailable');return False
+   if reason=='connected':mark('bootstrap-already-connected');return resolved()
+   if reason=='ready':break
+   if reason!=previous:mark(reason);previous=reason
+   if not wait_for_ready:return False
+   wait(5)
+  else:mark('bootstrap-guard-unavailable');return False
+  preparing=False
+  if wait_for_ready:deadline=clock()+budget
   # A prior ambiguous request is never resent until a bounded series of
   # exact-target idle observations and a complete process scan permit archival.
   try:reserve(lease);mark('bootstrap-reserved')
