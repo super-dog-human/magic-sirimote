@@ -106,6 +106,12 @@ def main():
         if set(params) != {'settings'}:
             raise ValueError('Settings are required')
         return configure(params['settings'])
+    if command == 'reset':
+        from reset_state import reset_service
+        def idle():
+            require_no_other_input()
+            if not clean_state(): raise RuntimeError('Input cleanup is not confirmed')
+        return reset_service(bundle.ROOT, params, idle)
     if params:
         raise ValueError('Unexpected request fields')
     if command == 'status': return status()

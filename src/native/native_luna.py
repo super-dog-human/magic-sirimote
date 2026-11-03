@@ -62,7 +62,7 @@ class Luna:
         from ir_programmer import BASE
         if self.failed:
             raise RuntimeError('Bluetooth communication stopped after an uncertain response.')
-        if method not in ('adapter/getStatus', 'device/getStatus', 'hid/getStatus', 'gatt/getStatus', 'gatt/connect', 'gatt/discoverServices',
+        if method not in ('adapter/getStatus', 'adapter/unpair', 'device/getStatus', 'hid/getStatus', 'gatt/getStatus', 'gatt/connect', 'gatt/discoverServices',
                           'gatt/readCharacteristicValues', 'gatt/readDescriptorValues',
                           'hid/internal/setReport', 'gatt/disconnect') or not 0 < timeout <= 12:
             raise ValueError('Unsupported configuration request.')

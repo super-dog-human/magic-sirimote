@@ -2,7 +2,7 @@
 
 ## Integrated runtime build
 
-[Download Magic Sirimote 0.6.41](../releases/integrated-preview/org.magicsirimote.app_0.6.41_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
+[Download Magic Sirimote 0.6.42](../releases/integrated-preview/org.magicsirimote.app_0.6.42_arm.ipk) and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 
 One IPK contains the native settings window, input receiver, connection controller and startup service. No computer stays in the input path after installation. The app uses the TV's existing Python 3.10+, SDL2 and SDL_ttf libraries and a TV-provided font; these dependencies are not bundled. The tested configuration is the A1513 Siri Remote and LG G3 listed in the [README](../README.md#1-tested-configuration). Other models and factory-fresh installations remain unverified.
 
@@ -21,7 +21,7 @@ One IPK contains the native settings window, input receiver, connection controll
 5. From this repository, install and open the integrated package:
 
    ```sh
-   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.41_arm.ipk
+   ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.42_arm.ipk
    ares-launch --device my-tv org.magicsirimote.app
    ```
 
@@ -69,7 +69,7 @@ A failed or uncertain request stops the attempt instead of repeatedly issuing wr
 
 Without saved button assignments, all six buttons show **IR unknown** for both Press and Hold. Unknown slots are omitted from Save and emit no TV-side button action. Existing IR codes in the remote are left untouched, and explicit saved assignments remain visible. Configuring Press does not implicitly configure Hold.
 
-The main screen contains **Gyro cursor**, a five-step **Cursor sensitivity** slider, **Reset cursor orientation**, and **Button Assignments**. **Save and restart** sits to the left of **Close** on its own row. Bluetooth addresses and device names are internal connection data, not editable settings. Reception is automatic; there is no Start/Stop button.
+The main screen contains **Gyro cursor**, a five-step **Cursor sensitivity** slider, **Reset cursor orientation**, **Button Assignments**, and **Reset app**. **Save and restart** sits to the left of **Close** on its own row. Bluetooth addresses and device names are internal connection data, not editable settings. Reception is automatic; there is no Start/Stop button.
 
 **Button Assignments** has six rows: **Menu**, **TV / Control Center**, **Siri**, **Play/Pause**, **Volume Up**, and **Volume Down**, each with **Press** and **Hold (~0.7 s)**. Select a cell to choose an action. Choices marked **(IR)** are sent directly from the remote. Other choices run in the TV. **Do nothing** removes the slot's IR entry and disables its TV action. **Custom code (IR)** accepts a two-digit LG command code. Surface clicks and swipes are separate from this editor.
 
@@ -92,6 +92,16 @@ One persistent webOS Activity starts the bundled service. It checks TV power and
 Stopping only the picture is distinct from TV standby. The **Screen off / restore** action suppresses input that would immediately wake the picture while allowing the assigned button to restore it.
 
 The service retains uncertain launch or sensor-stop records rather than repeatedly starting new processes. Do not delete those records to bypass a failed recovery. The diagnostic cable remains useful for development and some recovery investigations; this release does not promise cable-free recovery from every firmware or Bluetooth failure.
+
+### Reset and unpair
+
+Use **Reset app** on the main screen, then read the confirmation and choose **Reset everything**. Keep the LG remote available: this operation stops Siri Remote input and removes its infrared controls too. Cancel leaves everything unchanged.
+
+The reset first stops input and confirms sensor cleanup. It then deletes both short- and long-press infrared assignments for all seven physical buttons, including the surface click, removes only this Siri Remote’s Bluetooth pairing from the TV, and clears the app’s saved device, button, cursor and battery settings. Other Bluetooth devices and TV settings are unaffected. The app returns to **Start pairing**; pair again and configure button assignments to resume use. This is not a factory reset of Siri Remote firmware.
+
+Deletion uses the same firmware-checked programming path as button assignments. The tested A1513 firmware is supported; A1962 infrared programming and full reset have not been validated. Acknowledgements confirm that requests were accepted, not a readback of the remote’s nonvolatile memory. Unsupported firmware or an uncertain operation stops the reset before pairing and app settings are removed.
+
+If the reset is interrupted, reopen the app and choose **Continue reset**. The app retains progress and skips acknowledged deletions. If input could not stop before any IR operation began, **Resume remote control** lets you wake the remote and try again. Once deletion has begun, some IR controls may already be gone. Old app records are kept in inactive local reset archives for recovery; they are no longer used as settings. Full reset is not secure erasure of diagnostic history.
 
 ## Build from source
 

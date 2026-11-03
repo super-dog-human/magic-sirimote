@@ -48,7 +48,7 @@ class SaveTests(unittest.TestCase):
                 canvas.present.assert_called_once()
                 self.assertEqual(app.boxes,[])
                 fills=[call.args[1] for call in canvas.rectangle.call_args_list]
-                self.assertEqual(len(fills),13)
+                self.assertEqual(len(fills),14)
                 self.assertNotIn((30,113,156),fills)
                 app.handle(('key',13),canvas);app.choose(6,canvas)
                 self.assertIsNone(app.confirm_action);self.assertIsNone(app.infrared)

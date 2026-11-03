@@ -83,11 +83,13 @@ def consume_installer(params, start, stop=None):
 class RuntimeSetup(Setup):
     save_label = 'Save and restart'
     show_device_fields = False
+    show_reset = True
 
     def __init__(self, state, bus):
         super().__init__(state)
         self.bus = bus
         self.pairing = None
+        self.reset = None
         self.focus = 3
         self.stop_requested = False
         self.worker = None
@@ -109,6 +111,11 @@ class RuntimeSetup(Setup):
             self.message = ''
 
     def refresh_pairing(self):
+        if self.reset is not None and self.reset.visible: return
+        if (self.state / 'reset-pending.json').exists():
+            from reset_screen import ResetScreen
+            self.reset = ResetScreen(self)
+            return
         if self.controls_disabled or self.infrared is not None or self.editing is not None:
             return
         if self.pairing is not None:
@@ -158,6 +165,8 @@ class RuntimeSetup(Setup):
         return settings.validate({**values, 'remoteAddress': remote, 'adapterAddress': adapter, 'remoteName': name})
 
     def apply(self, values):
+        if self.reset is not None and self.reset.visible:
+            raise RuntimeError('Finish or cancel the pending reset first.')
         if self.saving_assignments or self.pending_settings is not None:
             raise RuntimeError("Wait for settings to finish before updating.")
         if self.infrared is not None:
@@ -183,7 +192,9 @@ class RuntimeSetup(Setup):
         self.apply({'schema': 1, **self.saved_values})
 
     def stop_runtime(self):
-        """Installer maintenance only; never exposed as a settings choice."""
+        """Stop for installer maintenance or an explicitly confirmed app reset."""
+        if self.reset is not None and self.reset.busy:
+            raise RuntimeError('Wait for reset to finish before updating.')
         if self.saving_assignments or self.infrared is not None and self.infrared.busy:
             raise RuntimeError('Wait for the infrared operation to finish before updating.')
         self.pending_settings = None
@@ -194,7 +205,7 @@ class RuntimeSetup(Setup):
 
     @property
     def controls_disabled(self):
-        return self.save_in_progress or self.saving_assignments or self.pending_settings is not None or self.done
+        return (self.reset is not None and self.reset.busy) or self.save_in_progress or self.saving_assignments or self.pending_settings is not None or self.done
 
     def prepare_settings(self, action, values=None):
         if self.pending_settings is not None:
@@ -310,7 +321,10 @@ class RuntimeSetup(Setup):
         if self.editing is not None:
             return super().choose(index, canvas)
         try:
-            if index == 5:
+            if index == 9:
+                from reset_screen import ResetScreen
+                self.reset = ResetScreen(self)
+            elif index == 5:
                 self.confirm_action = 'save'
                 self.confirm_restart(canvas)
             elif index == 7:
@@ -362,6 +376,8 @@ class RuntimeSetup(Setup):
             self.message = str(error)[:160]
 
     def draw(self, canvas):
+        if self.reset is not None and self.reset.visible:
+            return self.reset.draw(canvas)
         if self.pairing is not None and self.pairing.visible:
             return self.pairing.draw(canvas)
         if self.confirm_action is None:
@@ -381,6 +397,8 @@ class RuntimeSetup(Setup):
         canvas.present()
 
     def handle(self, event, canvas):
+        if self.reset is not None and self.reset.visible:
+            return self.reset.handle(event)
         if self.pairing is not None and self.pairing.visible:
             return self.pairing.handle(event)
         if self.controls_disabled:
@@ -471,7 +489,7 @@ def main():
                 current_battery = app.battery.text(app.values['remoteAddress'], app.values['adapterAddress'])
                 if current_battery != battery_text:
                     battery_text = current_battery; app.draw(canvas)
-                programming = app.saving_assignments or app.infrared is not None and app.infrared.busy
+                programming = (app.reset is not None and app.reset.busy) or app.saving_assignments or app.infrared is not None and app.infrared.busy
                 if stop_signal[0] and not closing and not programming:
                     closing = True
                     # A system close may terminate the native receiver window.
@@ -500,7 +518,8 @@ def main():
                             break  # Next connection requires a fresh native jail.
                         app.message = 'Finishing input cleanup before opening settings.'
                         app.draw(canvas)
-                if app.pairing is not None and app.pairing.tick(): app.draw(canvas)
+                if app.reset is not None and app.reset.tick(): app.draw(canvas)
+                if app.reset is None and app.pairing is not None and app.pairing.tick(): app.draw(canvas)
                 if app.assignments_tick(): app.draw(canvas)
                 if app.settings_tick(canvas): app.draw(canvas)
                 if app.infrared is not None and app.infrared.tick(): app.draw(canvas)

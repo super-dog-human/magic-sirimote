@@ -35,7 +35,7 @@ class SettingsRenderTests(unittest.TestCase):
                 self.assertGreater(boxes[5][1], boxes[6][1] + boxes[6][3])
                 self.assertEqual(boxes[5][1], boxes[7][1])
                 self.assertFalse(any('input startup is separate' in text for text in canvas.frames[-1]))
-                self.assertEqual([i for i, _ in app.boxes], [3,4,8,6,5,7])
+                self.assertEqual([i for i, _ in app.boxes], [3,4,8,6,5,7,9])
 
     def test_keyboard_and_button_editor_still_present_one_complete_frame(self):
         with tempfile.TemporaryDirectory() as d:

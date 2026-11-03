@@ -17,10 +17,12 @@ BACK = (27, 461, 1073742094)
 class Setup:
     save_label = 'Save'
     show_device_fields = True
+    show_reset = False
 
     @property
     def main_focus(self):
-        return settings.MAIN_FOCUS if self.show_device_fields else tuple(i for i in settings.MAIN_FOCUS if i != 0)
+        focus = settings.MAIN_FOCUS if self.show_device_fields else tuple(i for i in settings.MAIN_FOCUS if i != 0)
+        return focus[:-2] + (9,) + focus[-2:] if self.show_reset else focus
 
     def __init__(self, state):
         self.state = state
@@ -210,6 +212,11 @@ class Setup:
                 canvas.rectangle(box, fill(self.focus == index))
                 canvas.text(title, box[0] + 25, box[1] + 17, 25, ink, max_width=322)
                 if not disabled: self.boxes.append((index, box))
+            if self.show_reset:
+                box = (64, 500 + shift, 372, 61)
+                canvas.rectangle(box, fill(self.focus == 9))
+                canvas.text('Reset app', box[0]+25, box[1]+17, 25, ink, max_width=322)
+                if not disabled: self.boxes.append((9, box))
             if self.message:
                 canvas.text(self.message, 66, 590 + shift, 22, max_width=1148)
             if self.button_drafts and not disabled:

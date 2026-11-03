@@ -25,7 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.41** (integrated preview) |
+| Integrated TV app | Magic Sirimote **0.6.42** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -224,7 +224,7 @@ Enter the passphrase shown on the TV when prompted. If you already have a workin
 From the repository root:
 
 ```sh
-ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.41_arm.ipk
+ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.42_arm.ipk
 ares-launch --device my-tv org.magicsirimote.app
 ```
 
@@ -274,6 +274,8 @@ The main screen also provides **Gyro cursor**, a five-step sensitivity slider, a
 The Mac can be off. A surface press wakes a sleeping Siri Remote. Swiping switches to directional selection; lift your finger and make a deliberate larger movement to return to pointer control. IR volume and power work independently of the running app once configured.
 
 Automatic startup is included. A full TV reboot may need about a minute for the scheduled startup check plus Bluetooth connection time. Developer Mode expiry must still be managed using LG's usual tools; automatic startup does not extend it.
+
+To remove this remote and start over, choose **Reset app** and confirm **Reset everything**. This also deletes all of the remote’s infrared button assignments, including power and volume. Use the LG remote during reset. [Reset and unpair details](docs/NATIVE_APP.md#reset-and-unpair).
 
 ### If something does not work
 
