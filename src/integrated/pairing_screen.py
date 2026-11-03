@@ -24,7 +24,7 @@ class PairingScreen:
 
     @property
     def busy(self):
-        return self.route == 'stopping' or self.flow.phase in ('pair-preflight', 'pairing', 'connecting', 'initializing', 'identity')
+        return self.route == 'stopping' or self.flow.phase in ('pair-preflight', 'pairing', 'connecting', 'initializing', 'identity', 'rejecting')
 
     def record(self, value):
         value.update(session=self.session, purpose='integrated-pairing')
@@ -45,8 +45,17 @@ class PairingScreen:
             self.route = 'start'
             self.flow.message = 'No paired Siri Remote was found. Use the LG remote to begin.'
             return
+        # Saved identities are checked again by the receiver's exact HID
+        # vendor/product/address guard. Never adopt an unknown paired device
+        # on its advertisement alone.
+        if not self.app.values.get('remoteAddress') and self.flow.phase != 'existing-verified':
+            self.flow.target = address(selected['address'])
+            self.flow.was_paired = True
+            self.flow.verify_identity(existing=True)
+            return
         self.app.values.update(remoteAddress=address(selected['address']),
                                adapterAddress=self.flow.adapter, remoteName=selected.get('name') or self.app.values.get('remoteName', ''))
+        self.app.paired_serial = self.flow.serial
         self.route = 'settings'; self.close()
 
     def start(self):
@@ -61,7 +70,7 @@ class PairingScreen:
         before = (self.route, self.flow.phase, self.flow.message, len(self.flow.candidates))
         try:
             self.flow.tick()
-            if self.route == 'checking' and self.flow.phase == 'ready': self.route_existing()
+            if self.route == 'checking' and self.flow.phase in ('ready', 'existing-verified'): self.route_existing()
             if self.route == 'stopping' and time.monotonic() >= self.next_check:
                 self.next_check = time.monotonic() + 1
                 value = self.app.bus.request('status', {})

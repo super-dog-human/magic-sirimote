@@ -29,3 +29,15 @@ This verifies cable-free re-pairing of the current remote after TV-side registra
 ## Cleanup release verification
 
 Version 0.6.37 passed 303 host Python tests, the integrated/scheduler JavaScript suites and 10 scheduler Python tests. The strengthened saved-settings start regression also passed with the other 22 control tests. All 175 installed files matched the IPK. A start request containing no device settings was accepted; input reception and cursor calibration resumed with the existing pairing. The immediate pairing handoff was tested with simulated replies, without deleting and recreating the live pairing again.
+
+## Product admission (0.6.40)
+
+New pairing requires first-generation manufacturer product information plus the HID service. Names, Apple vendor information alone, and a saved address do not bypass this filter. After bonding, PnP vendor namespace, Apple vendor ID and product ID must match A1513 (`0266`) or A1962 (`026D`); the selected advertisement and connected product must agree. Serial and firmware are read before input initialization. Previously unknown paired candidates also undergo this verification before opening settings. Saved targets retain their normal route and the receiver independently checks vendor, product and address.
+
+A1513 retains its exact validated firmware gate. A1962 admission and basic unlock are based on the upstream open-appleremote protocol, with synthetic host tests only. No physical A1962 or LG-side A1962 test was available. Its advertisement layout, gyro operation, reconnect behavior and IR programming are not claimed hardware-validated. The persistent IR writer still refuses unvalidated firmware.
+
+On pre-input verification failure, only a bond newly created by this attempt is eligible for removal. Removal is checked once, with uncertain results reported rather than retried. Pre-existing bonds are preserved. Tests cover name-only devices, other Apple products, malformed advertisements, wrong vendor namespace, mismatched products, unexpected peers/adapters and cleanup ownership.
+
+The A1513's live Device Information PnP value was `01 4c 00 66 02 00 00`; the new read-only identity flow completed with `existing-verified`. No fresh pairing or deliberate wrong-product pairing was performed during this update.
+
+The final build passed 323 host Python tests, the integrated/scheduler JavaScript suites and 10 scheduler Python tests. All 175 installed files matched the IPK. The existing A1513 receiver resumed with a live ready marker, completed gyro calibration and 2,504 processed reports. Existing pairing and button assignments were retained.

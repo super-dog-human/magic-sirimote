@@ -6,7 +6,7 @@ Thank you to the open-source Siri Remote and LG webOS communities—especially [
 
 The repository contains the TV runtime, package builder, configuration reference, and setup guide.
 
-> **Compatibility:** the integrated app includes cable-free pairing, settings, input reception and automatic startup in one IPK. This has been tested on the A1513/LG G3 configuration below, including removal and recreation of its Bluetooth pairing. Other hardware and a factory-fresh installation are not yet independently validated.
+> **Compatibility:** the integrated app includes cable-free pairing, settings, input reception and automatic startup in one IPK. This has been tested on the A1513/LG G3 configuration below, including removal and recreation of its Bluetooth pairing. A1962 is also admitted for pairing and HID reception, but its operation on LG webOS has not been hardware-tested. Other hardware and a factory-fresh installation are not yet independently validated.
 
 - [1. Tested Configuration](#1-tested-configuration)
 - [2. What you can do](#2-what-you-can-do)
@@ -25,7 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.38** (integrated preview) |
+| Integrated TV app | Magic Sirimote **0.6.40** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -224,7 +224,7 @@ Enter the passphrase shown on the TV when prompted. If you already have a workin
 From the repository root:
 
 ```sh
-ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.38_arm.ipk
+ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.40_arm.ipk
 ares-launch --device my-tv org.magicsirimote.app
 ```
 
@@ -237,7 +237,7 @@ If the remote is already paired to this TV, Magic Sirimote opens its settings sc
 1. Use the LG remote to choose **Start pairing**.
 2. Once searching begins, hold **MENU + Volume Up** on Siri Remote for about five seconds, then release both. Keep the remote near the TV.
 3. Select the matching candidate if prompted. A previously known remote is selected by its saved identity.
-4. The app checks the connection, serial number and supported firmware, then proceeds directly to setup completion. There is no fixed waiting period.
+4. The app checks the product ID, serial number and supported firmware before initializing input, then proceeds directly to setup completion. There is no fixed waiting period.
 5. The app saves the verified connection information and starts reception. Check swipe, surface click and pointer movement. Reopen Magic Sirimote for settings.
 
 ```mermaid
@@ -249,10 +249,15 @@ sequenceDiagram
     App->>App: Stop any old input session safely
     User->>Remote: Hold MENU + Volume Up
     Remote-->>App: Bluetooth advertisement
-    App->>Remote: Pair, connect HID, initialize input
-    App->>App: Verify registration, connection and remote identity
+    App->>Remote: Pair and read product ID, serial and firmware
+    App->>App: Verify allowed product and firmware information
+    App->>Remote: Connect HID and initialize input
     App->>App: Save device identity and start input
 ```
+
+Discovery requires first-generation Siri Remote product information and the HID service, rather than a name or Apple manufacturer ID alone. The connected remote must report Apple vendor ID `004C` and product ID `0266` (A1513) or `026D` (A1962). A1513 retains its validated firmware check. A1962 firmware is read for identification; accepting it does not establish compatibility of gyro operation or IR programming. Later Siri Remote generations are not supported. If verification fails, the app attempts to remove only the new pairing created by that attempt; existing registrations are preserved. These identifiers select compatible hardware, not cryptographic proof of authenticity.
+
+A1962 pairing and basic input activation are based on [open-appleremote’s A1962 observations](https://github.com/a-funk/open-appleremote/blob/main/docs/PROTOCOL.md). The A1962 advertisement layout and this app’s full receiver still need a hardware test on LG webOS. IR programming continues to reject firmware outside the separately validated profile.
 
 There are no Bluetooth address or device-name fields to fill out. Pairing does not change the remote's IR assignments. This cable-free path has been verified by deleting and recreating the tested remote's TV registration; a completely new remote/TV combination still needs compatibility testing.
 

@@ -1,6 +1,8 @@
 """TV pairing flow; validates identity before handing off to normal reception."""
 import re
 
+PRODUCTS = {0x0266: 'A1513', 0x026D: 'A1962'}
+
 
 def address(value):
     if type(value) is not str or not re.fullmatch(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}', value):
@@ -9,7 +11,7 @@ def address(value):
 
 
 def advertising(device):
-    """Decode only the public BLE AD fields needed to label a remote candidate."""
+    """Decode only the public BLE AD fields needed to identify a first-generation Siri Remote candidate."""
     raw = device.get('scanRecord', [])
     if type(raw) is not list or len(raw) > 512 or any(type(x) is not int or not 0 <= x <= 255 for x in raw):
         return {}
@@ -22,23 +24,25 @@ def advertising(device):
         if kind in (8, 9): result['name'] = data.decode('utf-8', 'replace')[:48]
         elif kind in (2, 3) and len(data) % 2 == 0:
             result['hid'] = result.get('hid', False) or b'\x12\x18' in [data[i:i+2] for i in range(0, len(data), 2)]
-        elif kind == 255 and len(data) >= 2:
+        elif kind == 255:
+            # Use the first-generation advertisement layout, not a name
+            # or Apple company ID alone. Reject ambiguous manufacturer records.
+            if 'manufacturer' in result: return {}
+            result['manufacturer'] = data
             result['apple'] = data[:2] == b'\x4c\x00'
+            if len(data) == 14 and data[:4] == b'\x4c\x00\x8a\x07' and data[6] == 2:
+                result['product'] = int.from_bytes(data[4:6], 'little')
     return result
 
 
 def plausible(device):
     ad = advertising(device)
-    name = str(device.get('name') or ad.get('name', '')).lower()
-    # The serial name is a hint, not authentication. Exact model checks remain
-    # the receiver's responsibility before it enables sensors.
-    return ('siri remote' in name or 'apple tv remote' in name
-            or bool(re.fullmatch(r'dl[a-z0-9]{10}', name))
-            or (ad.get('apple') is True and ad.get('hid') is True))
+    return ad.get('product') in PRODUCTS and ad.get('hid') is True
+
 
 
 def paired_route(devices, saved):
-    candidates = [d for d in devices if d.get('paired') is True and not d.get('blocked') and (plausible(d) or (str(d.get('address', '')).lower() == saved and d.get('name') in ('', None)))]
+    candidates = [d for d in devices if d.get('paired') is True and not d.get('blocked') and (plausible(d) or (bool(saved) and str(d.get('address', '')).lower() == saved))]
     exact = [d for d in candidates if str(d.get('address', '')).lower() == saved]
     if len(exact) == 1: return exact[0]
     # Do not silently switch an existing configuration to another remote.
@@ -53,11 +57,13 @@ class PairingFlow:
         self.adapter = None; self.target = None; self.known = {}; self.candidates = {}
         self.selected = 0; self.evidence = []; self.was_paired = False
         self.auto_pair = False; self.serial = None; self.confirmed = False; self.pair_ended = False
+        self.product = None; self.advertised_product = None
+        self.existing_only = False; self.owned_pair = False; self.input_sent = False; self.pair_requested = False
         self.save()
 
     def save(self):
         self.record({'phase': self.phase, 'message': self.message, 'adapter': self.adapter,
-                     'target': self.target, 'serialVerified': self.serial is not None, 'wasPaired': self.was_paired,
+                     'target': self.target, 'model': PRODUCTS.get(self.product), 'serialVerified': self.serial is not None, 'wasPaired': self.was_paired,
                      'candidates': list(self.candidates.values()), 'evidence': self.evidence})
 
     def note(self, kind, value):
@@ -69,6 +75,22 @@ class PairingFlow:
         self.bus.request(tag, method, params, **kw)
 
     def fail(self, message):
+        # Remove only a new bond made by this attempt, before any input-start
+        # write. Never remove a saved/existing bond or retry uncertain writes.
+        if self.owned_pair and not self.input_sent and self.phase != 'rejecting':
+            for tag in list(self.bus.jobs):
+                try: self.bus.cancel(tag)
+                except Exception: pass
+            self.failure = str(message)[:100]
+            self.phase = 'rejecting'; self.message = 'Unsupported or unverified remote. Removing this new pairing...'
+            self.owned_pair = False
+            try:
+                self.send('reject-unpair', 'adapter/unpair', {'address': self.target})
+                return
+            except Exception:
+                message = self.failure + '; removal could not be confirmed'
+        elif self.phase == 'rejecting':
+            message = self.failure + '; removal could not be confirmed'
         self.phase = 'failed'; self.message = str(message)[:160]
         self.save()
         for tag in list(self.bus.jobs):
@@ -98,6 +120,7 @@ class PairingFlow:
         chosen = list(self.candidates.values())[self.selected]
         if self.target and chosen['address'] != self.target: raise ValueError('Unexpected remote')
         self.target = chosen['address']
+        self.advertised_product = chosen.get('product')
         if chosen.get('paired'): raise ValueError('This remote is already paired. Reopen settings.')
         self.phase = 'pair-preflight'; self.message = 'Checking that the main app remains stopped...'
         self.send('pair-idle', 'main/status', {})
@@ -121,6 +144,8 @@ class PairingFlow:
             if 'timed out' in value.get('errorText', ''): self.stop_scan(); return
         if value.get('returnValue') is not True:
             raise RuntimeError(value.get('errorText', 'TV rejected ' + tag))
+        if tag != 'adapter' and value.get('adapterAddress') and address(value['adapterAddress']) != self.adapter:
+            raise ValueError('Wrong TV adapter')
         if tag == 'adapter':
             adapters = [a for a in value.get('adapters', []) if a.get('powered') is True]
             if len(adapters) != 1 or adapters[0].get('pairing'): raise ValueError('TV adapter is not idle')
@@ -130,14 +155,21 @@ class PairingFlow:
             self.known = {address(d['address']): d for d in value.get('devices', [])}
             self.candidates = {a: {'address': a, 'name': str(d.get('name', 'Unnamed remote'))[:48],
                                    'paired': d.get('paired', False)}
-                               for a, d in self.known.items() if a == self.target or (not self.target and plausible(d))}
+                               for a, d in self.known.items() if plausible(d) and (not self.target or a == self.target)}
             self.phase = 'ready'; self.message = 'Ready to pair.'
             if self.target:
                 self.was_paired = self.known.get(self.target, {}).get('paired') is True
         elif tag == 'pair-idle':
             if value.get('cleanStop') is not True or value.get('startup', {}).get('enabled') is not False:
                 raise RuntimeError('Stop the main app and its automatic startup before pairing')
+            self.send('pair-fresh', 'device/getStatus', {'subscribe': False})
+        elif tag == 'pair-fresh':
+            matches = [d for d in value.get('devices', []) if address(d['address']) == self.target]
+            if len(matches) != 1 or matches[0].get('paired') is not False or matches[0].get('pairing') is True or matches[0].get('blocked'):
+                raise ValueError('Selected remote must be unpaired and idle')
             self.phase = 'pairing'; self.message = 'Pairing with the selected remote...'
+            self.was_paired = False
+            self.pair_requested = True
             self.send('pair', 'adapter/pair', {'address': self.target, 'subscribe': True},
                       timeout=45, subscription=True)
         elif tag == 'scan':
@@ -150,10 +182,10 @@ class PairingFlow:
             for device, provenance in rows:
                 if not device.get('address'): continue
                 addr = address(device['address'])
-                if (self.target == addr) or (not self.target and plausible(device)):
-                    candidate = {'address': addr, 'name': str(device.get('name') or advertising(device).get('name') or 'Apple HID device')[:48],
+                if plausible(device) and not device.get('blocked') and (not self.target or self.target == addr):
+                    candidate = {'address': addr, 'name': str(device.get('name') or advertising(device).get('name') or ('Siri Remote (' + PRODUCTS[advertising(device)['product']] + ')'))[:48],
                                  'paired': device.get('paired', False), 'rssi': device.get('rssi'),
-                                 'source': provenance}
+                                 'source': provenance, 'product': advertising(device)['product']}
                     if self.candidates.get(addr) != candidate:
                         self.candidates[addr] = candidate
                         self.note('candidate', candidate)
@@ -178,8 +210,8 @@ class PairingFlow:
             if len(matches) != 1 or matches[0].get('paired') is not True or matches[0].get('pairing') is True:
                 raise ValueError('Remote pairing was not confirmed')
             self.known[self.target] = matches[0]
-            self.phase = 'connecting'; self.message = 'Pairing complete. Establishing HID input...'
-            self.send('hid-check', 'hid/getStatus', {'address': self.target})
+            self.owned_pair = self.pair_requested and self.pair_ended and not self.was_paired
+            self.verify_identity()
         elif tag == 'hid-check':
             if self.profile_ok(value): self.initialize()
             else: self.send('connect', 'hid/connect', {'address': self.target}, timeout=35)
@@ -188,9 +220,15 @@ class PairingFlow:
             if not self.profile_ok(value): raise ValueError('HID connection not confirmed')
             self.initialize()
         elif tag == 'initialize':
-            self.phase = 'identity'
-            self.message = 'Reading the paired remote identity...'
-            self.send('identity-client', 'gatt/connect', {'address': self.target, 'subscribe': False})
+            self.phase = 'success'; self.message = 'Pairing verified. Starting remote control...'
+        elif tag == 'reject-unpair':
+            self.send('reject-check', 'device/getStatus', {'subscribe': False})
+        elif tag == 'reject-check':
+            if type(value.get('devices')) is not list:
+                raise ValueError('Pairing removal status is incomplete')
+            if any(address(d['address']) == self.target and d.get('paired') is not False for d in value.get('devices', [])):
+                raise ValueError('Pairing removal not confirmed')
+            self.phase = 'failed'; self.message = self.failure + '; new pairing removed'
         elif tag == 'identity-client':
             if address(value.get('address', '')) != self.target or address(value.get('adapterAddress', '')) != self.adapter:
                 raise ValueError('Wrong identity connection')
@@ -207,12 +245,10 @@ class PairingFlow:
             services = [s for s in value.get('services', []) if s.get('service') == '0000180a-0000-1000-8000-00805f9b34fb']
             if len(services) != 1: raise ValueError('Device Information service missing')
             chars = [c.get('characteristic') for c in services[0].get('characteristics', [])]
-            for uuid in ('00002a25-0000-1000-8000-00805f9b34fb', '00002a26-0000-1000-8000-00805f9b34fb'):
+            for uuid in ('00002a50-0000-1000-8000-00805f9b34fb', '00002a25-0000-1000-8000-00805f9b34fb', '00002a26-0000-1000-8000-00805f9b34fb'):
                 if chars.count(uuid) != 1: raise ValueError('Remote identity is incomplete')
-            self.send('identity-serial', 'gatt/readCharacteristicValues', {
-                'clientId': self.identity_client, 'service': '0000180a-0000-1000-8000-00805f9b34fb',
-                'characteristics': ['00002a25-0000-1000-8000-00805f9b34fb']})
-        elif tag in ('identity-serial', 'identity-firmware'):
+            self.read_identity('product', '2a50')
+        elif tag in ('identity-product', 'identity-serial', 'identity-firmware'):
             if address(value.get('address', '')) != self.target or address(value.get('adapterAddress', '')) != self.adapter:
                 raise ValueError('Wrong identity response')
             if value.get('service') != '0000180a-0000-1000-8000-00805f9b34fb': raise ValueError('Wrong identity service')
@@ -222,7 +258,16 @@ class PairingFlow:
                 if len(found) != 1 or type(found[0]) is not list or any(type(b) is not int or not 0 <= b <= 255 for b in found[0]):
                     raise ValueError('Incomplete remote identity')
                 return bytes(found[0])
-            if tag == 'identity-serial':
+            if tag == 'identity-product':
+                pnp = read('00002a50-0000-1000-8000-00805f9b34fb')
+                # Bluetooth SIG vendor namespace and the two gen-1 products.
+                if len(pnp) != 7 or pnp[:3] != b'\x01\x4c\x00' or int.from_bytes(pnp[3:5], 'little') not in PRODUCTS:
+                    raise ValueError('Only Siri Remote A1513 and A1962 are supported')
+                self.product = int.from_bytes(pnp[3:5], 'little')
+                if self.advertised_product is not None and self.advertised_product != self.product:
+                    raise ValueError('Product identity differs from the selected advertisement')
+                self.read_identity('serial', '2a25')
+            elif tag == 'identity-serial':
                 serial = read('00002a25-0000-1000-8000-00805f9b34fb').decode('ascii')
                 if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', serial): raise ValueError('Invalid remote serial')
                 self.pending_serial = serial
@@ -231,13 +276,35 @@ class PairingFlow:
                     'characteristics': ['00002a26-0000-1000-8000-00805f9b34fb']})
             else:
                 firmware = read('00002a26-0000-1000-8000-00805f9b34fb')
-                if firmware != b'01004102200070033000070131001800B000410240001508':
+                if self.product not in PRODUCTS:
+                    raise ValueError('Product identity must be checked before firmware')
+                if not 1 <= len(firmware) <= 128 or any(b < 32 or b > 126 for b in firmware):
+                    raise ValueError('Invalid firmware identification')
+                # A1962 pairing/basic unlock is supported by upstream evidence;
+                # its firmware is read, not falsely marked hardware-validated.
+                # Persistent IR programming retains its separate exact-FW gate.
+                if self.product == 0x0266 and firmware != b'01004102200070033000070131001800B000410240001508':
                     raise ValueError('This remote firmware has not been validated')
                 self.serial = self.pending_serial
-                self.phase = 'success'; self.message = 'Pairing verified. Starting remote control...'
+                if self.existing_only:
+                    self.phase = 'existing-verified'; self.message = 'Siri Remote verified.'
+                else:
+                    self.phase = 'connecting'; self.message = 'Product verified. Establishing HID input...'
+                    self.send('hid-check', 'hid/getStatus', {'address': self.target})
         self.save()
 
+    def read_identity(self, name, characteristic):
+        self.send('identity-' + name, 'gatt/readCharacteristicValues', {
+            'clientId': self.identity_client, 'service': '0000180a-0000-1000-8000-00805f9b34fb',
+            'characteristics': ['0000' + characteristic + '-0000-1000-8000-00805f9b34fb']})
+
+    def verify_identity(self, existing=False):
+        self.existing_only = existing
+        self.phase = 'identity'; self.message = 'Checking Siri Remote model and firmware. Wake it if asleep...'
+        self.send('identity-client', 'gatt/connect', {'address': self.target, 'subscribe': False})
+
     def initialize(self):
+        self.input_sent = True
         self.phase = 'initializing'; self.message = 'Sending the input-start request (no IR or sensor changes)...'
         self.send('initialize', 'hid/internal/setReport',
                   {'address': self.target, 'reportType': 'feature', 'reportData': [240, 175]})

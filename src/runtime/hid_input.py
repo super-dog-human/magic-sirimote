@@ -21,7 +21,7 @@ def ordinary():
 def identity(fd):
  info=ioctl(fd,(2<<30)|(8<<16)|(ord('H')<<8)|3,bytearray(8));bus,vid,pid=struct.unpack('=IHH',info)
  name=ioctl(fd,(2<<30)|(256<<16)|(ord('H')<<8)|4,bytearray(256));uniq=ioctl(fd,(2<<30)|(256<<16)|(ord('H')<<8)|8,bytearray(256))
- return {'matches':(bus,vid,pid)==(5,0x004c,0x0266) and cstr(name) in ('', NAME) and cstr(uniq).lower()==TARGET,'bus':bus,'vendor':vid,'product':pid,'name':cstr(name),'uniq':cstr(uniq).lower()}
+ return {'matches':(bus,vid)==(5,0x004c) and pid in (0x0266,0x026d) and cstr(name) in ('', NAME) and cstr(uniq).lower()==TARGET,'bus':bus,'vendor':vid,'product':pid,'name':cstr(name),'uniq':cstr(uniq).lower()}
 
 def scan_devices(root='/dev',lstat_fn=None,open_fn=None,fstat_fn=None,identity_fn=None,close_fn=None,clock=time.monotonic,timeout=10):
  lstat_fn=os.lstat if lstat_fn is None else lstat_fn;open_fn=os.open if open_fn is None else open_fn;fstat_fn=os.fstat if fstat_fn is None else fstat_fn;identity_fn=identity if identity_fn is None else identity_fn;close_fn=os.close if close_fn is None else close_fn

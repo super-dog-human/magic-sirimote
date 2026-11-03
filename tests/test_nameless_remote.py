@@ -19,6 +19,8 @@ class NamelessRemoteTests(unittest.TestCase):
         self.assertTrue(check(hid_input.NAME,hid_input.TARGET))
         self.assertFalse(check('OTHER',hid_input.TARGET))
         self.assertFalse(check('','02:aa:bb:cc:dd:ee'))
+        self.assertTrue(check('',hid_input.TARGET,0x026d))
+        self.assertFalse(check('','02:aa:bb:cc:dd:ee',0x026d))
         self.assertFalse(check('',hid_input.TARGET,0x0267))
 
 

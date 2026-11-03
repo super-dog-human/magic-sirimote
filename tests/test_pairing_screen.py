@@ -59,5 +59,22 @@ class ScreenTests(unittest.TestCase):
         self.assertEqual(self.app.apply.call_args.args[0]['remoteAddress'],REMOTE)
         self.assertFalse(self.screen.visible)
 
+    def test_unknown_paired_candidate_is_verified_before_settings(self):
+        self.app.values['remoteAddress'] = ''
+        self.screen.flow.adapter = TV
+        ad = [3,2,18,24,15,255,76,0,138,7,102,2,2,170,187,204,221,238,255,8]
+        self.screen.flow.on_reply('devices', {'returnValue': True, 'devices': [
+            {'address':REMOTE,'paired':True,'scanRecord':ad}]})
+        self.screen.tick()
+        self.assertTrue(self.screen.visible)
+        self.assertEqual(self.screen.flow.phase, 'identity')
+        self.assertEqual(self.bus.sent[-1][1], 'gatt/connect')
+        self.app.apply.assert_not_called()
+        self.screen.flow.phase='existing-verified'; self.screen.flow.serial='DL0000000000'
+        self.screen.tick()
+        self.assertFalse(self.screen.visible)
+        self.assertEqual(self.app.values['remoteAddress'],REMOTE)
+        self.assertEqual(self.app.paired_serial,'DL0000000000')
+
 
 if __name__ == '__main__': unittest.main()

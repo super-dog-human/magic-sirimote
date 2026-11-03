@@ -7,7 +7,7 @@ from native_luna import Error
 
 BASE = 'luna://com.webos.service.bluetooth2/'
 METHODS = {'adapter/getStatus', 'device/getStatus', 'le/startScan',
-           'adapter/pair', 'adapter/supplyPasskeyConfirmation', 'hid/getStatus',
+           'adapter/pair', 'adapter/unpair', 'adapter/supplyPasskeyConfirmation', 'hid/getStatus',
            'hid/connect', 'gatt/connect', 'hid/internal/setReport', 'gatt/discoverServices', 'gatt/getServices', 'gatt/readCharacteristicValues'}
 
 
