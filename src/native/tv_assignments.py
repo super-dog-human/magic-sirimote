@@ -126,7 +126,7 @@ def assign(directory, action, button, delay, code, *, program):
     result = program(directory, 'set' if ir else 'delete', button, delay, code[3:] if ir else '')
     if result.get('status') != 'submitted':
         return result
-    if result.get('clientReleased') is not True or result.get('receiptSaved') is not True:
+    if result.get('connectionPreserved') is not True or result.get('receiptSaved') is not True:
         return {**result, 'status': 'partial', 'mappingSaved': False}
     try:
         execute(directory, 'assign', button, delay, code)

@@ -55,8 +55,14 @@ def runtime_idle(proc=Path('/proc'), *, allow_idle_service=False):
             if path.stat().st_uid >= 5000:
                 raise RuntimeError('Cannot check whether another input app is running.')
             continue
-        if allow_idle_service and command.rstrip(b'\0').split(b'\0') == [(APP + '.service').encode()]:
-            continue  # The caller separately checks workers and unfinished state.
+        if allow_idle_service:
+            argv = command.rstrip(b'\0').split(b'\0')
+            service = '/media/developer/apps/usr/palm/services/' + APP + '.service/'
+            readonly = [[b'/usr/bin/python3', b'-I', b'-B', (service + name).encode()]
+                        for name in ('power-read.py', 'activity-read.py')]
+            readonly.append([b'/usr/bin/python3', b'-I', b'-B', (service + 'control.py').encode(), b'status'])
+            if argv == [(APP + '.service').encode()] or argv in readonly:
+                continue  # Caller separately checks input workers and unfinished state.
         if b'org.codex.siriremote.' in command or b'org.magicsirimote.' in command:
             raise RuntimeError('Stop the other Magic Sirimote apps before changing infrared settings.')
 
@@ -146,15 +152,10 @@ def program(values, action, button, delay, code, call, record, idle=runtime_idle
         result['message'] = (str(error) if isinstance(error, (RuntimeError, ValueError))
                              else 'The operation could not finish.')
     finally:
-        if client is not None:
-            try:
-                # Release only our client even if another runtime has since started.
-                reply = invoke('gatt/disconnect', {'clientId': client}, 8, identity=False, check_idle=False)
-                if 'clientId' in reply and reply['clientId'] != client:
-                    raise RuntimeError('Configuration connection release was not confirmed.')
-                result['clientReleased'] = True
-            except Exception:
-                result['clientReleased'] = False
+        # Both profiles were already connected before lookup. webOS may return
+        # the receiver's existing client: this is not ownership of a new link.
+        # Closing it can disrupt HID and later assignments in the same batch.
+        result['connectionPreserved'] = client is not None
         try:
             record(dict(result))
             result['receiptSaved'] = True

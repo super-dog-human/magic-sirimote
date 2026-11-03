@@ -27,6 +27,17 @@ class SaveTests(unittest.TestCase):
             self.assertEqual(app.button_drafts,{'10:00':'screen-toggle','20:00':'back'})
             self.assertIn('1 of 3',app.message);self.assertFalse(app.done)
 
+    def test_batch_explains_unsent_failure_and_retains_drafts(self):
+        with tempfile.TemporaryDirectory() as d:
+            app=RuntimeSetup(Path(d),Mock());app.button_drafts={'10:00':'ir:09'}
+            app.program_ir=Mock(return_value={'status':'not-sent','message':'Wake the paired remote first.'})
+            app.start_assignment_batch(dict(app.button_drafts))
+            result=app.assignment_results.get(timeout=2);app.assignment_results.put(result)
+            app.assignments_tick()
+            self.assertIn('Wake the paired remote first.',app.message)
+            self.assertEqual(app.button_drafts,{'10:00':'ir:09'})
+            self.assertEqual(app.program_ir.call_count,1)
+
     def test_batch_blocks_repeated_input_and_installer_until_complete(self):
         with tempfile.TemporaryDirectory() as d:
             app=RuntimeSetup(Path(d),Mock());entered=threading.Event();release=threading.Event()

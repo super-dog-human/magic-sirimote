@@ -131,7 +131,8 @@ These formats and timings describe this A1513 firmware, not every Siri Remote. D
 
 The app calls the TV Bluetooth service as its own native app account, without
 root or a system-service identity. It obtains a GATT client for identity and
-sensor-state reads and releases that client afterwards. It never disconnects
+sensor-state reads. Because webOS may return the existing input client, it keeps
+that connection open for subsequent assignments and input resumption. It never disconnects
 the whole HID link or changes pairing. On uncertain communication, cleanup may
 also be unconfirmed; the result reports that separately. If the final operation
 record cannot be saved, the app preserves the delivery result and reports the
@@ -140,7 +141,7 @@ recording failure without retrying the remote write.
 The configuration path and bytes were used in earlier targeted Bluetooth
 procedures. Their integration into this generic app still needs an on-TV test,
 including service permissions, settings persistence, receipt storage and
-connection cleanup. There is no automatic runtime pause/resume integration yet.
+retention of the existing Bluetooth connection. There is no automatic runtime pause/resume integration yet.
 A configuration transport error does not trigger a permission change, a UART
 fallback, a sensor stop, or a repeated IR write.
 

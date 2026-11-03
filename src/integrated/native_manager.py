@@ -228,7 +228,8 @@ class RuntimeSetup(Setup):
             try: self.activate_settings()
             except (OSError, ValueError, RuntimeError) as error: self.message = str(error)[:160]
         else:
-            self.message = '%d of %d assignments saved; the remaining changes were not confirmed.' % (len(completed), len(changes))
+            self.message = '%d of %d assignments saved. ' % (len(completed), len(changes))
+            self.message += result.get('message') or 'The remaining changes were not confirmed.'
             if result.get('status') in ('uncertain', 'partial'):
                 self.message += ' Check the remote before retrying.'
         return True
@@ -247,7 +248,10 @@ class RuntimeSetup(Setup):
             if not clean_state():
                 raise RuntimeError('Input cleanup must finish before programming infrared.')
             runtime_idle(allow_idle_service=True)
-        idle()
+        try:
+            idle()
+        except (OSError, ValueError, RuntimeError) as error:
+            return {'status': 'not-sent', 'message': str(error)[:160]}
         from tv_assignments import assign
         return assign(*args, program=lambda *request: execute(*request, idle=idle))
 

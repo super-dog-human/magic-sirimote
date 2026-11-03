@@ -27,7 +27,7 @@ class AssignmentMatrixTests(unittest.TestCase):
     def test_none_deletes_ir_and_disables_tv_but_retains_other_slots(self):
         with tempfile.TemporaryDirectory() as d:
             table.execute(d,'assign',1,2,'ir:08')
-            program=Mock(return_value={'status':'submitted','clientReleased':True,'receiptSaved':True})
+            program=Mock(return_value={'status':'submitted','connectionPreserved':True,'receiptSaved':True})
             self.assertEqual(table.assign(d,'assign',32,0,'none',program=program)['status'],'saved')
             program.assert_called_once_with(d,'delete',32,0,'')
             self.assertEqual(table.load(d)['bindings'],{'01:02':'ir:08','20:00':'none'})
@@ -42,7 +42,7 @@ class AssignmentMatrixTests(unittest.TestCase):
 
     def test_ir_choice_disables_tv_slot_and_uses_one_set_not_a_delete_then_set(self):
         with tempfile.TemporaryDirectory() as d:
-            program=Mock(return_value={'status':'submitted','clientReleased':True,'receiptSaved':True})
+            program=Mock(return_value={'status':'submitted','connectionPreserved':True,'receiptSaved':True})
             table.assign(d,'assign',16,2,'ir:43',program=program)
             program.assert_called_once_with(d,'set',16,2,'43')
             self.assertEqual(table.load(d)['bindings'],{'10:02':'ir:43'})
@@ -55,11 +55,11 @@ class AssignmentMatrixTests(unittest.TestCase):
                 result=table.assign(d,'assign',32,0,'none',program=program)
                 self.assertEqual(result['status'],status);self.assertEqual(program.call_count,1)
                 self.assertEqual(table.load(d)['bindings'],{'20:00':'back'})
-            for result in ({'status':'submitted','clientReleased':False,'receiptSaved':True},
-                           {'status':'submitted','clientReleased':True,'receiptSaved':False}):
+            for result in ({'status':'submitted','connectionPreserved':False,'receiptSaved':True},
+                           {'status':'submitted','connectionPreserved':True,'receiptSaved':False}):
                 self.assertEqual(table.assign(d,'assign',32,0,'none',program=Mock(return_value=result))['status'],'partial')
             with patch.object(table,'execute',side_effect=OSError('full')):
-                self.assertEqual(table.assign(d,'assign',32,0,'none',program=Mock(return_value={'status':'submitted','clientReleased':True,'receiptSaved':True}))['status'],'partial')
+                self.assertEqual(table.assign(d,'assign',32,0,'none',program=Mock(return_value={'status':'submitted','connectionPreserved':True,'receiptSaved':True}))['status'],'partial')
             self.assertEqual(table.load(d)['bindings'],{'20:00':'back'})
 
     def test_preview_assignments_are_not_silently_activated(self):

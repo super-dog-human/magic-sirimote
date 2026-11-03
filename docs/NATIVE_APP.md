@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.21_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.22_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -45,7 +45,7 @@ Closing with unsaved edits asks whether to discard them.
 
 After confirmation, the app waits for input cleanup, saves the verified device
 settings, and applies changed assignments sequentially. Each local mapping is
-saved only after acknowledged IR delivery and connection cleanup. An uncertain
+saved only after acknowledged IR delivery and a saved operation receipt. An uncertain
 or failed write stops the batch: completed changes remain saved, remaining
 changes stay pending, and no request is automatically repeated. Reception remains
 paused after an incomplete batch; use the LG remote to inspect the result and

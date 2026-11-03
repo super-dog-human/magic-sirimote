@@ -94,14 +94,14 @@ class ReviewTests(unittest.TestCase):
             self.assertEqual(app.cell_label(1,2),'IR unknown *')
 
 
-    def test_owned_gatt_client_is_released_even_if_runtime_starts(self):
+    def test_existing_gatt_client_is_preserved_even_if_runtime_starts(self):
         tv = TV()
         def idle():
             if tv.writes(): raise RuntimeError('another runtime started')
         result = ir.program(VALUES, 'set', 1, 2, '08', tv, lambda r: None, idle=idle)
         self.assertEqual(len(tv.writes()), 1)
-        self.assertTrue(result['clientReleased'])
-        self.assertIn(('gatt/disconnect', {'clientId': '005'}), tv.calls)
+        self.assertTrue(result['connectionPreserved'])
+        self.assertFalse(any(m == 'gatt/disconnect' for m, _ in tv.calls))
 
     def test_final_receipt_failure_keeps_delivery_result_and_does_not_repeat(self):
         tv = TV()
@@ -110,7 +110,7 @@ class ReviewTests(unittest.TestCase):
         result = ir.program(VALUES, 'set', 1, 2, '08', tv, record, idle=lambda: None)
         self.assertEqual(result['status'], 'submitted')
         self.assertFalse(result['receiptSaved'])
-        self.assertTrue(result['clientReleased'])
+        self.assertTrue(result['connectionPreserved'])
         self.assertEqual(len(tv.writes()), 1)
 
     def test_each_queued_pointer_event_uses_the_visible_screen(self):

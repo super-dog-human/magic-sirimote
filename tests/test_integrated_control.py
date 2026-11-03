@@ -178,8 +178,9 @@ class ControlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             app = RuntimeSetup(Path(d), Mock())
             with patch('control_processes.require_no_other_input'), patch('control_processes.clean_state', return_value=False), patch('ir_programmer.execute') as execute:
-                with self.assertRaisesRegex(RuntimeError, 'cleanup'):
-                    app.program_ir(Path(d), 'delete', 1, 2, '')
+                result = app.program_ir(Path(d), 'delete', 1, 2, '')
+                self.assertEqual(result['status'], 'not-sent')
+                self.assertIn('cleanup', result['message'])
                 execute.assert_not_called()
 
     def test_ir_idle_exception_does_not_ignore_a_controller_or_other_service(self):
@@ -193,6 +194,22 @@ class ControlTests(unittest.TestCase):
             for args in (b'/usr/bin/python3\0-I\0-B\0/media/developer/apps/usr/palm/services/org.magicsirimote.app.service/roles/controller/native_probe.py\0', b'org.magicsirimote.other.service\0'):
                 command.write_bytes(args)
                 with self.assertRaises(RuntimeError): ir.runtime_idle(root, allow_idle_service=True)
+
+    def test_ir_idle_allows_only_exact_readonly_helpers(self):
+        import ir_programmer as ir
+        service='/media/developer/apps/usr/palm/services/org.magicsirimote.app.service/'
+        with tempfile.TemporaryDirectory() as d:
+            process=Path(d)/'2147483000';process.mkdir();command=process/'cmdline'
+            prefix=['/usr/bin/python3','-I','-B']
+            for tail in ([service+'power-read.py'],[service+'activity-read.py'],[service+'control.py','status']):
+                command.write_bytes(b'\0'.join(x.encode() for x in prefix+tail)+b'\0')
+                ir.runtime_idle(Path(d),allow_idle_service=True)
+                with self.assertRaises(RuntimeError):ir.runtime_idle(Path(d))
+            for tail in ([service+'control.py','start'],[service+'control.py','configure'],
+                         [service+'roles/receiver/native_probe.py'],[service+'power-read.py','unexpected'],
+                         [service+'unknown.py'],[service+'../power-read.py']):
+                command.write_bytes(b'\0'.join(x.encode() for x in prefix+tail)+b'\0')
+                with self.assertRaises(RuntimeError):ir.runtime_idle(Path(d),allow_idle_service=True)
 
     def test_old_native_window_blocks_input_before_launch_intent(self):
         import postconnect_supervisor_cycle as cycle

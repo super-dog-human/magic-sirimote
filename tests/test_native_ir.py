@@ -75,9 +75,23 @@ class InfraredTest(unittest.TestCase):
             self.assertEqual(tv.writes(), [list(ir.packet(action, 1, 2, '08'))])
             self.assertEqual(result['status'], 'submitted')
             self.assertFalse(result['readbackVerified'])
-            self.assertTrue(result['clientReleased'])
-            self.assertIn(('gatt/disconnect', {'clientId': '005'}), tv.calls)
+            self.assertTrue(result['connectionPreserved'])
+            self.assertFalse(any(m == 'gatt/disconnect' for m, _ in tv.calls))
             self.assertFalse(any(m in ('hid/disconnect', 'device/pair') for m, p in tv.calls))
+
+    def test_two_assignments_keep_the_preexisting_input_connection(self):
+        tv=TV();connected=True
+        def call(method,params,timeout):
+            nonlocal connected
+            if method=='gatt/disconnect':connected=False
+            if not connected:return {'returnValue':False}
+            return tv(method,params,timeout)
+        for button,code in ((16,'09'),(32,'43')):
+            result=ir.program(VALUES,'set',button,0,code,call,lambda _:None,idle=lambda:None)
+            self.assertEqual(result['status'],'submitted')
+            self.assertTrue(result['connectionPreserved'])
+        self.assertTrue(connected)
+        self.assertEqual(len(tv.writes()),2)
 
     def test_bad_identity_firmware_active_sensor_or_report_blocks_write(self):
         for field, value in [('serial', b'OTHER'), ('firmware', b'OTHER'), ('mode', b'\xa0\x01'),

@@ -45,7 +45,7 @@ class TVAssignmentsTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             def program(*args):
                 calls.append(args)
-                return {'status':'submitted','clientReleased':True,'receiptSaved':True}
+                return {'status':'submitted','connectionPreserved':True,'receiptSaved':True}
             app=InfraredScreen(Path(folder));app.choose(4);app.choose(5)
             self.assertEqual(calls,[]);self.assertEqual(app.drafts,{'10:00':'screen-toggle'})
             self.assertFalse((Path(folder)/tv.FILE).exists())
