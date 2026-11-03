@@ -207,20 +207,20 @@ class Setup:
             canvas.text('Reset cursor orientation', 842, 337 + shift, 23, ink, max_width=358)
             if not disabled: self.boxes.append((8, box))
             for index, title, box in ((6, 'Button Assignments', (64, 418 + shift, 1152, 61)),
-                                      (5, self.save_label, (454, 500 + shift, 372, 61)),
-                                      (7, 'Close', (844, 500 + shift, 372, 61))):
+                                      (5, self.save_label, (454, 516 + shift, 372, 61)),
+                                      (7, 'Close', (844, 516 + shift, 372, 61))):
                 canvas.rectangle(box, fill(self.focus == index))
                 canvas.text(title, box[0] + 25, box[1] + 17, 25, ink, max_width=322)
                 if not disabled: self.boxes.append((index, box))
             if self.show_reset:
-                box = (64, 500 + shift, 372, 61)
+                box = (64, 516 + shift, 372, 61)
                 canvas.rectangle(box, fill(self.focus == 9))
                 canvas.text('Reset app', box[0]+25, box[1]+17, 25, ink, max_width=322)
                 if not disabled: self.boxes.append((9, box))
             if self.message:
-                canvas.text(self.message, 66, 590 + shift, 22, max_width=1148)
+                canvas.text(self.message, 66, 606 + shift, 22, max_width=1148)
             if self.button_drafts and not disabled:
-                canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose ' + self.save_label + ' to apply.', 66, 628 + shift, 21, (114, 191, 227))
+                canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose ' + self.save_label + ' to apply.', 66, 644 + shift, 21, (114, 191, 227))
             self.draw_footer(canvas)
         canvas.present()
 

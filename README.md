@@ -25,7 +25,7 @@ The tested hardware and software configuration is:
 | Television | **LG G3 — OLED55G3PJA** |
 | webOS platform version (`sdkVersion`) | **11.2.0** |
 | TV firmware (`firmwareVersion`) | **43.21.96** |
-| Integrated TV app | Magic Sirimote **0.6.45** (integrated preview) |
+| Integrated TV app | Magic Sirimote **0.6.46** (integrated preview) |
 
 The webOS platform version and TV firmware version are separate values. The platform version above is the `sdkVersion` reported by the TV's system-information interface.
 
@@ -224,7 +224,7 @@ Enter the passphrase shown on the TV when prompted. If you already have a workin
 From the repository root:
 
 ```sh
-ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.45_arm.ipk
+ares-install --device my-tv releases/integrated-preview/org.magicsirimote.app_0.6.46_arm.ipk
 ares-launch --device my-tv org.magicsirimote.app
 ```
 
@@ -236,7 +236,7 @@ If the remote is already paired to this TV, Magic Sirimote opens its settings sc
 
 1. Use the LG remote to choose **Start pairing**.
 2. Once searching begins, hold **MENU + Volume Up** on Siri Remote for about five seconds, then release both. Keep the remote near the TV.
-3. Select the matching candidate if prompted. A previously known remote is selected by its saved identity.
+3. Use Up/Down on the LG remote to select the matching candidate, then choose **Pair selected remote**. Finding a device does not pair it. A previously known remote may be selected and paired automatically using its saved identity.
 4. The app checks the product ID, serial number and supported firmware before initializing input, then proceeds directly to setup completion. There is no fixed waiting period.
 5. The app saves the verified connection information and starts reception. Check swipe, surface click and pointer movement. Reopen Magic Sirimote for settings.
 
