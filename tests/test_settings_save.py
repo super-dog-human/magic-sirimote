@@ -38,6 +38,37 @@ class SaveTests(unittest.TestCase):
             self.assertEqual(app.button_drafts,{'10:00':'ir:09'})
             self.assertEqual(app.program_ir.call_count,1)
 
+    def test_save_disables_and_draws_before_waiting_for_tv(self):
+        with tempfile.TemporaryDirectory() as d:
+            app=RuntimeSetup(Path(d),Mock());canvas=Mock();app.confirm_action='save'
+            def detect(values):
+                self.assertTrue(app.controls_disabled)
+                canvas.present.assert_called_once()
+                self.assertEqual(app.boxes,[])
+                fills=[call.args[1] for call in canvas.rectangle.call_args_list]
+                self.assertEqual(len(fills),5)
+                self.assertNotIn((30,113,156),fills)
+                app.handle(('key',13),canvas);app.choose(6,canvas)
+                self.assertIsNone(app.confirm_action);self.assertIsNone(app.infrared)
+                return values
+            with patch.object(app,'detect_tv',side_effect=detect), patch.object(app,'prepare_settings'):
+                app.confirm_restart(canvas)
+            self.assertTrue(app.controls_disabled)
+
+    def test_failed_save_reenables_controls_and_preserves_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            app=RuntimeSetup(Path(d),Mock());app.confirm_action='save'
+            with patch.object(app,'detect_tv',side_effect=RuntimeError('TV unavailable')):
+                app.confirm_restart(Mock())
+            self.assertFalse(app.controls_disabled)
+            self.assertEqual(app.message,'TV unavailable')
+            app.choose(6,Mock());self.assertIsNotNone(app.infrared)
+            app.infrared=None;app.save_in_progress=True;app.button_drafts={'10:00':'ir:09'}
+            app.assignment_results.put((dict(app.button_drafts),[],{'status':'not-sent','message':'Remote sleeping'}))
+            app.assignments_tick()
+            self.assertFalse(app.controls_disabled)
+            self.assertEqual(app.button_drafts,{'10:00':'ir:09'})
+
     def test_batch_blocks_repeated_input_and_installer_until_complete(self):
         with tempfile.TemporaryDirectory() as d:
             app=RuntimeSetup(Path(d),Mock());entered=threading.Event();release=threading.Event()

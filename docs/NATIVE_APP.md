@@ -6,7 +6,7 @@ installing one replaces the other.
 
 ## Integrated runtime build
 
-[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.22_arm.ipk)
+[Download the integrated runtime preview](../releases/integrated-preview/org.magicsirimote.app_0.6.23_arm.ipk)
 and [its SHA-256 checksum](../releases/integrated-preview/SHA256SUMS).
 You can also build the package from source:
 
@@ -41,6 +41,8 @@ There is no per-cell Save button. On the first screen, choose **Save**,
 then confirm **Save and restart**. The confirmation explains that reception will
 pause and the app window will close while the input process restarts. Cancel
 leaves the edits pending and does not stop input or write to the remote.
+After confirmation, controls are dimmed and disabled until restart. If saving
+fails, the controls become available again and the error stays visible.
 Closing with unsaved edits asks whether to discard them.
 
 After confirmation, the app waits for input cleanup, saves the verified device

@@ -135,6 +135,10 @@ class Setup:
                 field = settings.FIELDS[self.editing]
                 self.values[field] = self.values[field][:-1]
 
+    @property
+    def controls_disabled(self):
+        return False
+
     def draw(self, canvas):
         if self.infrared is not None:
             self.infrared.draw(canvas)
@@ -156,24 +160,27 @@ class Setup:
             canvas.text('Select characters with arrows and OK, or use a USB keyboard.', 66, 632, 22)
             canvas.text('Back closes the keyboard. Choose Save settings on the previous screen.', 66, 665, 20, (155, 170, 190))
         else:
+            disabled = self.controls_disabled
+            fill = lambda selected: (27, 34, 44) if disabled else (30, 113, 156) if selected else (36, 48, 65)
+            ink = (105, 115, 130) if disabled else (226, 234, 243)
             for index, field in enumerate(settings.EDITABLE_FIELDS):
                 y = 140 + index * 91
                 canvas.text(settings.LABELS[index], 66, y, 21, (155, 170, 190))
                 box = (64, y + 31, 1152, 57)
-                canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
-                canvas.text(self.values[field] or 'Select to enter', 82, y + 44, 25, max_width=1110)
-                self.boxes.append((index, box))
+                canvas.rectangle(box, fill(self.focus == index))
+                canvas.text(self.values[field] or 'Select to enter', 82, y + 44, 25, ink, max_width=1110)
+                if not disabled: self.boxes.append((index, box))
             box = (64, 244, 1152, 54)
-            canvas.rectangle(box, (30, 113, 156) if self.focus == 3 else (36, 48, 65))
-            canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 258, 25)
-            self.boxes.append((3, box))
+            canvas.rectangle(box, fill(self.focus == 3))
+            canvas.text('Gyro cursor: ' + ('On' if self.values['gyroEnabled'] else 'Off') + '  (OK to toggle)', 82, 258, 25, ink)
+            if not disabled: self.boxes.append((3, box))
             for column, (index, title) in enumerate(((6, 'Button Assignments'), (5, 'Save'), (7, 'Close'))):
                 box = (64 + column * 390, 330, 372, 61)
-                canvas.rectangle(box, (30, 113, 156) if self.focus == index else (36, 48, 65))
-                canvas.text(title, box[0] + 25, box[1] + 17, 25, max_width=322)
-                self.boxes.append((index, box))
+                canvas.rectangle(box, fill(self.focus == index))
+                canvas.text(title, box[0] + 25, box[1] + 17, 25, ink, max_width=322)
+                if not disabled: self.boxes.append((index, box))
             canvas.text(self.message, 66, 425, 22, max_width=1148)
-            if self.button_drafts:
+            if self.button_drafts and not disabled:
                 canvas.text(str(len(self.button_drafts)) + ' button changes pending. Choose Save to apply.', 66, 476, 23, (114, 191, 227))
             self.draw_footer(canvas)
         canvas.present()

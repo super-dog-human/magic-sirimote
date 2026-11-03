@@ -86,6 +86,7 @@ class RuntimeSetup(Setup):
         self.resume_after_settings = False
         self.next_settings_check = 0
         self.saving_assignments = False
+        self.save_in_progress = False
         self.assignment_results = queue.Queue()
         self.pending_assignments = {}
         self.saved_values = dict(self.values)
@@ -166,6 +167,10 @@ class RuntimeSetup(Setup):
         reply = accepted(self.bus.request('stop', {}))
         self.message = 'Stopping input; automatic startup disabled.' if reply['status'] == 'stop-requested' else reply['status']
 
+    @property
+    def controls_disabled(self):
+        return self.save_in_progress or self.saving_assignments or self.pending_settings is not None or self.done
+
     def prepare_settings(self, action, values=None):
         if self.pending_settings is not None:
             return
@@ -174,7 +179,7 @@ class RuntimeSetup(Setup):
         self.resume_after_settings = True
         self.pending_settings = (action, values, time.monotonic() + 20)
         self.next_settings_check = 0
-        self.message = 'Preparing settings. Use the original LG remote while input pauses.'
+        self.message = 'Saving settings and restarting. Please wait...'
 
     def settings_tick(self, canvas):
         if self.pending_settings is None or time.monotonic() < self.next_settings_check:
@@ -197,12 +202,13 @@ class RuntimeSetup(Setup):
                 raise RuntimeError('Unknown settings operation.')
         except (OSError, ValueError, RuntimeError) as error:
             self.pending_settings = None
+            self.save_in_progress = False
             self.message = str(error)[:160]
         return True
 
     def start_assignment_batch(self, changes):
         self.saving_assignments = True
-        self.message = 'Saving button assignments. Use the LG remote; input is paused.'
+        self.message = 'Saving button assignments. Please wait...'
         def work():
             completed = []
             result = {'status': 'saved'}
@@ -226,8 +232,11 @@ class RuntimeSetup(Setup):
         self.pending_assignments = {}
         if len(completed) == len(changes):
             try: self.activate_settings()
-            except (OSError, ValueError, RuntimeError) as error: self.message = str(error)[:160]
+            except (OSError, ValueError, RuntimeError) as error:
+                self.save_in_progress = False
+                self.message = str(error)[:160]
         else:
+            self.save_in_progress = False
             self.message = '%d of %d assignments saved. ' % (len(completed), len(changes))
             self.message += result.get('message') or 'The remaining changes were not confirmed.'
             if result.get('status') in ('uncertain', 'partial'):
@@ -268,6 +277,7 @@ class RuntimeSetup(Setup):
         self.confirm_focus = 0
 
     def choose(self, index, canvas):
+        if self.controls_disabled: return
         if self.editing is not None:
             return super().choose(index, canvas)
         try:
@@ -288,11 +298,15 @@ class RuntimeSetup(Setup):
             self.message = str(error)[:160]
             self.done = False
 
-    def confirm_restart(self):
+    def confirm_restart(self, canvas=None):
+        if self.controls_disabled: return
         action = self.confirm_action
         self.confirm_action = None
         try:
             if action == 'save':
+                self.save_in_progress = True
+                self.message = 'Saving settings and restarting. Please wait...'
+                if canvas is not None: self.draw(canvas)
                 values = self.detect_tv({'schema': 1, **self.values})
                 from tv_assignments import validate
                 self.pending_assignments = dict(self.button_drafts)
@@ -306,6 +320,7 @@ class RuntimeSetup(Setup):
                 self.resume_settings()
         except (OSError, ValueError, RuntimeError) as error:
             self.done = False
+            self.save_in_progress = False
             self.message = str(error)[:160]
 
     def draw(self, canvas):
@@ -328,7 +343,7 @@ class RuntimeSetup(Setup):
         canvas.present()
 
     def handle(self, event, canvas):
-        if self.saving_assignments or self.pending_settings is not None:
+        if self.controls_disabled:
             return
         if self.confirm_action is not None:
             kind, value = event
@@ -337,12 +352,12 @@ class RuntimeSetup(Setup):
             elif kind == 'key' and value in ARROWS:
                 self.confirm_focus = 1 - self.confirm_focus
             elif kind == 'key' and value in (13, 1073741912):
-                if self.confirm_focus == 1: self.confirm_restart()
+                if self.confirm_focus == 1: self.confirm_restart(canvas)
                 else: self.confirm_action = None
             elif kind == 'click':
                 for index, (x,y,w,h) in enumerate(self.confirm_boxes):
                     if x <= value[0] < x+w and y <= value[1] < y+h:
-                        if index == 1: self.confirm_restart()
+                        if index == 1: self.confirm_restart(canvas)
                         else: self.confirm_action = None
                         break
             return
