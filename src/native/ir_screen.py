@@ -8,7 +8,7 @@ PRESETS = (('Power on/off', '08'), ('Back', '28'), ('Home', '7C'),
            ('Settings', '43'), ('Volume +', '02'), ('Volume -', '03'),
            ('Mute', '09'), ('Play', 'B0'), ('Pause', 'BA'))
 TV_ACTIONS = (('Do nothing', 'none'), ('Back', 'back'),
-              ('Settings', 'settings'), ('Play / Pause', 'playpause'),
+              ('Play / Pause', 'playpause'),
               ('Screen off / restore', 'screen-toggle'))
 CHOICES = TV_ACTIONS + tuple((name + ' (IR)', 'ir:' + code) for name, code in PRESETS)
 CUSTOM = len(CHOICES)

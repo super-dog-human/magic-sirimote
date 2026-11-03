@@ -93,7 +93,8 @@ Saving a new assignment migrates to schema 2 without enabling those old choices.
 
 ## Available actions
 
-TV actions are Back, Settings, Play / Pause, and Screen off / restore.
+TV actions are Back, Play / Pause, and Screen off / restore.
+Settings is offered only as **Settings (IR)** (`43`).
 Home is offered only as **Home (IR)**. A previously saved TV Home is shown as
 **Home (legacy TV)** and converted to Home (IR) on the next confirmed Save.
 Screen off / restore keeps audio playing and suppresses cursor/touch output

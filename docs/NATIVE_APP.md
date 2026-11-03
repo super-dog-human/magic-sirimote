@@ -114,7 +114,7 @@ not an absolute screen calibration and cannot remove every sensor limitation.
 
 Save sends every concrete displayed button assignment, not just edited cells.
 Unknown IR slots remain unchanged and are not counted. Home is offered only as
-**Home (IR)**. Stored legacy TV Home choices migrate when Save and restart is chosen.
+**Home (IR)**. Settings is also offered only as **Settings (IR)**. Stored legacy TV Home choices migrate when Save and restart is chosen.
 The confirmation displays the assignment count before reception is paused.
 
 Cold-boot readiness includes webOS service startup, Bluetooth and native input
