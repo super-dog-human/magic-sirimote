@@ -4,7 +4,7 @@
 
 Thank you to the open-source Siri Remote and LG webOS communities for the tools, code and discoveries that made this possible. In particular, this project owes much to [open-appleremote](https://github.com/a-funk/open-appleremote), [SiriRemote-Linux](https://github.com/Yanndroid/SiriRemote-Linux), [Clean Your TV](https://github.com/Razdva122/clean-your-tv-lg-webos), and [webOSbrew](https://www.webosbrew.org/).
 
-Magic Sirimote lets a first-generation Siri Remote control an LG webOS TV. Install one app on the TV, pair the remote in that app, and choose your button assignments. **Your Mac does not need to stay on after setup. No Apple TV or diagnostic cable is needed for the tested setup procedure.**
+Magic Sirimote lets a first-generation Siri Remote control an LG webOS TV. Install one app on the TV, pair the remote in that app, and choose your button assignments. **Your Mac does not need to stay on after setup. No Apple TV is needed.**
 
 This is an experimental community project with limited hardware testing. Reconnection and recovery are still being improved. Keep the original LG remote available.
 
@@ -33,12 +33,12 @@ The webOS platform version and TV firmware version are different values. You can
 
 **A1962 is also accepted by the pairing filter, but has not been tested with this app on an LG TV.** Do not assume its cursor, infrared programming or full reset will work. The infrared writer rejects firmware it has not been validated against. Later, silver Siri Remote generations are not supported.
 
-Testing includes removing and recreating the A1513's pairing without a diagnostic cable. An independently clean installation with a factory-fresh remote and a different TV has not been verified.
+Testing includes removing and recreating the A1513's pairing. An independently clean installation with a factory-fresh remote and a different TV has not been verified.
 
 ### Have these ready
 
 - A compatible LG webOS TV and its original LG remote. Use the LG remote for setup and saving settings.
-- A charged Siri Remote. Disconnect any diagnostic cable before pairing or using it wirelessly.
+- A charged Siri Remote.
 - A Mac connected to the same local network as the TV. The TV may use Ethernet while the Mac uses Wi-Fi, provided they can communicate.
 - Internet access to create an LG Developer account and download the tools and app.
 
@@ -303,7 +303,7 @@ Check that installation reported success, then try the launch command from step 
 ### Pairing problems
 
 - Start searching in the app **before** holding MENU + Volume Up. Release both buttons after about five seconds and keep the remote near the TV.
-- Charge the remote if necessary. Disconnect its diagnostic cable, if one is attached.
+- Charge the remote if necessary.
 - If no candidate appears, choose **Search again** when offered and repeat the sequence.
 - If a candidate appears, select it and choose **Pair selected remote**. Discovery and pairing are separate steps.
 - If product or firmware verification fails, record the exact message. A name resembling “Siri Remote” is not sufficient for acceptance.
@@ -369,4 +369,4 @@ Further thanks to:
 - LG's [Bluetooth service](https://github.com/webosose/webos.service.bluetooth2), [Bluetooth SIL API](https://github.com/webosose/bluetooth-sil-api), [Luna Service 2](https://github.com/webosose/luna-service2), and [webOS TV documentation](https://webostv.developer.lge.com/) for platform interfaces and guidance.
 - The Linux input, Python, Node.js and LLVM communities.
 
-Project-authored code is available under the [MIT license](LICENSE). Upstream projects retain their own copyrights and licenses. These credits describe research and tooling contributions; they do not imply endorsement or that entire upstream packages are bundled. The download does not include TV firmware, LG native libraries, Python, Node.js, LLVM, captured Bluetooth traffic or diagnostic-cable firmware. This is an independent project, not an Apple or LG product.
+Project-authored code is available under the [MIT license](LICENSE). Upstream projects retain their own copyrights and licenses. These credits describe research and tooling contributions; they do not imply endorsement or that entire upstream packages are bundled. The download does not include TV firmware, LG native libraries, Python, Node.js, LLVM or captured Bluetooth traffic. This is an independent project, not an Apple or LG product.
