@@ -140,6 +140,51 @@ def _archive_unstarted_after_boot(*,c,b,intent,intent_stat,controller_app,receiv
  os.rename('receiver-launch-intent.json',dest,src_dir_fd=c,dst_dir_fd=c);os.fsync(c)
  return {'status':'reconciled','run':run,'priorOutcome':'not-started-before-reboot','launchIntentArchived':True}
 
+def archive_not_ready(*,c,b,intent,intent_stat,receipt,receiver_state,controller_app,receiver_app,receiver_package,pin,lease,owner,group,state_uid=5999):
+ """Preserve a finished receiver that exited before any sensor preparation.
+
+ This is not a successful input session or a sensor-stop proof. A pinned
+ receiver writes not-ready only before entering sensor preparation and discards
+ its empty journal. Any ready/progress/journal/recovery evidence excludes this.
+ """
+ run=intent['run']
+ if receipt.get('status') not in ('not-ready','stopped-before-receiver'):return None
+ if any(receipt.get(k) is not None for k in ('phase','previousPhase','counts','frameCounts','readStats')):return None
+ start=read_start(receiver_state,run,state_uid=state_uid,group=group,historical=True)
+ if start['process']!=receipt['process']:raise RuntimeError('unprepared receiver differs')
+ forbidden={'borrowed-active','recovery-request.json','recovery-controller-start.json',
+  'receiver-ready-'+run+'.json','receiver-progress-'+run+'.json'}
+ def absent():
+  return not any(n in forbidden or n.startswith(('borrowed-complete-'+run,'borrowed-recovered-'+run,'receiver-recovery-start-'+run,'receiver-recovery-result-'+run)) for n in os.listdir(b))
+ if not absent():return None
+ rows=[];values={}
+ for name in ('request.json','controller-start.json'):
+  dest=name[:-5]+'-not-ready-'+run+'.json'
+  try:value,info=_read(b,name,owner,group,0o660,historical=True);source=name
+  except FileNotFoundError:value,info=_read(b,dest,owner,group,0o660,historical=True);source=dest
+  if value.get('run')!=run or source==name and dest in os.listdir(b):raise RuntimeError('unprepared handoff differs')
+  values[name]=value;rows.append((source,dest,info))
+ request,record=values['request.json'],values['controller-start.json'];process=record.get('process')
+ if (request.get('schema')!=1 or request.get('appId')!=bundle.app_id(Path(receiver_app).name)
+     or record.get('schema')!=1 or record.get('appId')!=bundle.app_id(Path(controller_app).name)
+     or type(process) is not dict or process.get('status',{}).get('Uid','').split()!=[str(owner)]*4):raise RuntimeError('unprepared identities differ')
+ def proof():
+  return (lease.held() is True and absent()
+   and (os.fstat(lease.dirfd).st_dev,os.fstat(lease.dirfd).st_ino)==(os.fstat(c).st_dev,os.fstat(c).st_ino)
+   and _ended(process,controller_app,ignore_current=True) and _ended(receipt['process'],receiver_app)
+   and package.package_matches(receiver_app,receiver_package,pin) is True
+   and read_start(receiver_state,run,state_uid=state_uid,group=group,historical=True)==start
+   and read_receipt(receiver_state,run,state_uid=state_uid,group=group,historical=True)==receipt
+   and _identity(os.stat('receiver-launch-intent.json',dir_fd=c,follow_symlinks=False))==_identity(intent_stat))
+ dest='receiver-launch-not-ready-'+run+'.json'
+ if dest in os.listdir(c) or not proof():raise RuntimeError('unprepared exit proof unavailable')
+ for source,target,info in rows:
+  if not proof() or _identity(os.stat(source,dir_fd=b,follow_symlinks=False))!=_identity(info):raise RuntimeError('unprepared evidence changed')
+  if source!=target:os.rename(source,target,src_dir_fd=b,dst_dir_fd=b);os.fsync(b)
+ if not proof():raise RuntimeError('unprepared proof changed')
+ os.rename('receiver-launch-intent.json',dest,src_dir_fd=c,dst_dir_fd=c);os.fsync(c)
+ return {'status':'reconciled','run':run,'priorOutcome':'receiver-not-ready-before-sensors','launchIntentArchived':True}
+
 def reconcile(*,controller_state,receiver_state,controller_app,receiver_app,receiver_package,pin,lease,state_uid=5999,group=5000):
  if lease.held() is not True:raise RuntimeError('supervisor lease required')
  owner=os.getuid();fds=[]
@@ -156,6 +201,9 @@ def reconcile(*,controller_state,receiver_state,controller_app,receiver_app,rece
   # The authenticated receiver reader enforces receiver UID/privilege/file ACLs.
   try:completed=read_receipt(receiver_state,run,state_uid=state_uid,group=group,historical=True)
   except FileNotFoundError:completed=None
+  if completed is not None and bundle.active():
+   unprepared=archive_not_ready(c=c,b=b,intent=intent,intent_stat=intent_stat,receipt=completed,receiver_state=receiver_state,controller_app=controller_app,receiver_app=receiver_app,receiver_package=receiver_package,pin=pin,lease=lease,owner=owner,group=group,state_uid=state_uid)
+   if unprepared is not None:return unprepared
   if completed is None:
    if bundle.active():
     unstarted=archive_before_input(c=c,b=b,intent=intent,intent_stat=intent_stat,controller_app=controller_app,receiver_app=receiver_app,receiver_package=receiver_package,pin=pin,lease=lease,owner=owner,group=group)

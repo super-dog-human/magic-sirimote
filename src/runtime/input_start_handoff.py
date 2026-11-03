@@ -194,12 +194,15 @@ class HandoffClient:
     def __init__(self, *, path, run, token, controller, controller_uid):
         self.path, self.run, self.token = path, run, token
         self.controller, self.uid = dict(controller), controller_uid
+        self.authenticated = False
 
     def _request(self, observe=False):
         challenge = secrets.token_hex(16)
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-                sock.settimeout(.5)
+                # The first peer authorization hashes the installed package.
+                # Cold storage can exceed 0.5 s; steady-state checks stay short.
+                sock.settimeout(.5 if self.authenticated else 3)
                 sock.connect(self.path)
                 pid, uid, _ = struct.unpack('3i', sock.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
                 if pid != self.controller['pid'] or uid != self.uid:
@@ -214,8 +217,12 @@ class HandoffClient:
                     if type(response) is not dict or set(response)!=set(expected)|{'observation'}:return None
                     if {key:response[key] for key in expected}!=expected:return None
                     from controller_status_watch import select_observation
-                    return select_observation(response['observation'])
-                return expected if response==expected else None
+                    value = select_observation(response['observation'])
+                    self.authenticated = True
+                    return value
+                if response != expected: return None
+                self.authenticated = True
+                return expected
         except (OSError, ValueError, RuntimeError, TypeError, KeyError):
             return None
 

@@ -9,7 +9,7 @@ import build_support
 
 ROOT = Path(__file__).resolve().parent
 APP = build_native.APP
-VERSION = '0.6.8'
+VERSION = '0.6.9'
 ROLES = ('controller', 'receiver')
 
 

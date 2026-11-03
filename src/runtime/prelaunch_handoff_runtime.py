@@ -69,11 +69,13 @@ class PrelaunchOwner:
         c=self.cycle
         if uid<=0 or gid!=5000:return False
         if self.peer is None:
+            started=time.monotonic()
             value=observe_live(receiver_state=c.receiver_state,run=c.run,app_path=c.receiver_app,
                 pkg_path=c.receiver_package,pin=c.pin,allow_exe_permission_denied=c.allow_fallback)
             p=value['process'];uids=p['status']['Uid'].split()
             if p['pid']!=pid or uids!=[str(uid)]*4:return False
             self.peer=(pid,uid,gid,p['startTicks'])
+            print(json.dumps({'stage':'receiver-authorization','elapsedMs':int((time.monotonic()-started)*1000)}),flush=True)
         if self.peer[:3]!=(pid,uid,gid):return False
         # Detect PID reuse without hashing the package on every challenge.
         text=Path('/proc/'+str(pid)+'/stat').read_text()

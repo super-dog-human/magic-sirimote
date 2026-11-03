@@ -81,6 +81,10 @@ def run_and_record(*,state_path,run,**kwargs):
  try:write_start(state_path,run)
  except Exception:return {'run':run,'status':'attention','reason':'start-receipt-unverified'}
  result=run_once(state_path=state_path,run=run,**kwargs)
+ if result.get('status')=='not-ready':
+  import json
+  reason=result.get('reason')
+  print(json.dumps({'receiverStartup':reason if reason in ('connected-profile-not-observed','connection-or-feature-unavailable') else 'not-ready'}),flush=True)
  try:write_receipt(state_path,run,result)
  except Exception:return {'run':run,'status':'attention','reason':'receipt-unverified','sessionResult':result}
  return result
