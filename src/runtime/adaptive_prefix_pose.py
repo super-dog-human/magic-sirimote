@@ -5,7 +5,7 @@ stillness. Touch-bearing prefixes do not contain a complete orientation. No
 device, Bluetooth or native input operations are performed here.
 """
 import math
-from pose_math import compact_quaternion, conjugate, pointing_angles, shortest_angle
+from pose_math import compact_quaternion, heading_reference_inverse, pointing_angles, shortest_angle
 from vector_adaptive_pose_pointer import ReducedGainVectorAdaptivePosePointer
 
 
@@ -103,7 +103,10 @@ class AdaptivePrefixPose:
             self.origin, self.initial_at = q, now
             self.samples += 1
             if now - self.epoch >= self.CALIBRATION_SECONDS and self.samples >= self.CALIBRATION_SAMPLES:
-                self.reference_inverse = conjugate(q)
+                self.reference_inverse = heading_reference_inverse(q)
+                if self.reference_inverse is None:
+                    self.stats['geometryRejected'] += 1
+                    return
                 self._reset_calibration()
                 self._clear_tracking()
             return

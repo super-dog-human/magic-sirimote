@@ -123,12 +123,12 @@ cd "$HOME/Downloads/magic-sirimote"
 
 ```sh
 curl --fail --location --output org.magicsirimote.app_arm.ipk \
-  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/integrated-preview/org.magicsirimote.app_arm.ipk
+  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/org.magicsirimote.app_arm.ipk
 ```
 
 ```sh
 curl --fail --location --output SHA256SUMS \
-  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/integrated-preview/SHA256SUMS
+  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/SHA256SUMS
 ```
 
 Check the download:

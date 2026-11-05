@@ -39,6 +39,20 @@ def pointing_angles(reference_inverse,q):
             -math.atan2(forward[2],horizontal))
 
 
+def heading_reference_inverse(q):
+    """Center heading while retaining the pose frame's vertical axis.
+
+    Removing the entire starting pose would tilt the screen axes whenever
+    calibration starts with a rolled or pitched remote. Only remove yaw;
+    the pointer discards its initial angular offset before emitting movement.
+    """
+    angles = pointing_angles((0.,0.,0.,1.), q)
+    if angles is None:
+        return None  # No stable heading when pointing nearly straight up/down.
+    half = angles[0] / 2
+    return (0.,0.,math.sin(half),math.cos(half))
+
+
 def shortest_angle(delta):return (delta+math.pi)%(2*math.pi)-math.pi
 
 

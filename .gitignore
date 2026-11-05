@@ -13,4 +13,4 @@ node_modules/
 *.pcapng
 
 # Published integrated package.
-!/releases/integrated-preview/*.ipk
+!/releases/*.ipk

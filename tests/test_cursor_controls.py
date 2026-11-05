@@ -78,11 +78,11 @@ class CursorControlsTests(unittest.TestCase):
             app.button_drafts={'10:00':'ir:09'};app.choose(8,Mock())
             self.assertIsNone(app.confirm_action);self.assertEqual(app.button_drafts,{'10:00':'ir:09'})
 
-    def test_new_receiver_reference_replaces_tilted_reference(self):
+    def test_starting_roll_does_not_change_screen_reference(self):
         tilted=AdaptivePrefixPose();flat=AdaptivePrefixPose()
         sample=pose();sample['orientation3']=(0.,math.sin(.5),0.)
         for i in range(30):tilted.feed(sample,i*.01);flat.feed(pose(),i*.01)
-        self.assertNotEqual(tilted.reference_inverse,flat.reference_inverse)
+        self.assertEqual(tilted.reference_inverse,flat.reference_inverse)
         self.assertEqual(flat.reference_inverse,(0.,0.,0.,1.))
 
 class FullSaveTests(unittest.TestCase):
