@@ -52,6 +52,10 @@ def write_receipt(directory,run,result,*,state_uid=5999,group=5000,process_info=
  details=(source.get('readStats') or {}).get('receiveDiagnostics')
  if valid_receive_diagnostics(details):data['receiveDiagnostics']=details
  if cleanup:data['cleanupDiagnostics']=cleanup
+ if 'localRecovery' in result:
+  from owned_idle_recovery import validate_receipt
+  validate_receipt(result)
+  data['localRecovery']=result['localRecovery']
  fd=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   d=os.fstat(fd)

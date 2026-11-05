@@ -3,6 +3,7 @@
 No device opens. Caller provides already-verified output descriptors. The
 caller also authenticates the live sensor stream.
 """
+from collections import deque
 from prefix_output_candidate import PrefixOutputCandidate
 from nonblocking_relative_transport import NonblockingRelativeTransport
 from output_bridge import EVENT
@@ -13,6 +14,7 @@ class GroupedPrefixOutput(PrefixOutputCandidate):
   super().__init__(outputs,clock=clock,sensor_input_verified=sensor_input_verified,session_policy=session_policy,max_actions=max_actions,action_history_limit=action_history_limit)
   seconds=30. if session_policy is None else session_policy.seconds
   self.transport=NonblockingRelativeTransport(self._write_grouped,self._deliver,clock=clock,generation=1,max_seconds=seconds,session_policy=session_policy)
+  self.center_release_flags=deque()
   self.transport_token=1
   self.motion_budget_drops=0
  def _write_grouped(self,packet):
@@ -28,15 +30,27 @@ class GroupedPrefixOutput(PrefixOutputCandidate):
    else:raise ValueError('unexpected grouped event')
   if group or events[-1][2:]!=(0,0,0):raise ValueError('unterminated grouped packet')
   try:
+   if getattr(self.outputs,'absolute_motion',False) is True:
+    # The continuous receiver batches REL fragments directly. Convert their
+    # net displacement before the output boundary; never send REL to ABS-only
+    # hardware. The legacy neutral tail has zero displacement and emits nothing.
+    delta=[sum(value for _,_,kind,axis,value in events if kind==2 and axis==code) for code in (0,1)]
+    self.outputs.move_relative(*delta)
+    return len(packet)
    n=self.outputs.write_fn(self.outputs.mouse_fd,packet)
    if n!=len(packet):raise OSError('short write')
    if packet!=encode_neutral_cursor_flush():self.outputs.motion_writes+=1
    return n
   except BaseException:self.outputs.failed=True;raise
  def _deliver(self,action,down):
-  super()._emit(action,down)
+  forced=self.center_release_flags.popleft() if action=='center' else None
+  super()._emit(action,down,forced=forced)
   return True
  def _emit(self,action,down):
+  if action=='center':
+   # Transport may defer delivery past the recognizer callback. Carry the
+   # physical/forced release distinction with that exact queued transition.
+   self.center_release_flags.append(self.router.press.core.release_forced)
   if down and action in ('up','down','left','right'):
    # Discard old unsent cursor motion; complete any written neutral tail
    # before the direction key so no cursor packet follows that switch.
@@ -62,7 +76,10 @@ class GroupedPrefixOutput(PrefixOutputCandidate):
    delta=self.router.tick();self._discard_untracked()
    # Finish the previous frame before a new body can postpone its neutral tail.
    self._check_transport(self.transport.pump(self.transport_token))
-   if delta is not None and self.bridge.sensor_input_verified:
+   pointer_ready=getattr(self.outputs,'pointer_ready',True) is not False
+   if not pointer_ready:
+    self._check_transport(self.transport.discard_queued_motion(self.transport_token))
+   if delta is not None and self.bridge.sensor_input_verified and pointer_ready:
     # A large valid pose step is not an output-device failure. Discard it and
     # rebase tracking rather than increasing the write budget or replaying it.
     # Validate before transport.motion(), which closes on an encoding failure.

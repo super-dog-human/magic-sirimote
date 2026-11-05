@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src/native'), str(ROOT / 'src/runtime')]
 import battery_status as battery
-from battery_read import capture, BatteryClient, ScreenRefresh
+from battery_read import ScreenRefresh
 from runtime_device import identity
 
 
@@ -33,32 +33,6 @@ class BatteryTests(unittest.TestCase):
             with self.assertRaises(ValueError): parse(data)
         data = reply(); data['values'] *= 2
         with self.assertRaises(ValueError): parse(data)
-
-    def test_one_shot_read_cannot_write_connect_or_repeat(self):
-        for method in ('gatt/connect', 'gatt/discoverServices', 'gatt/writeCharacteristicValue'):
-            call = BatteryClient('5', pump=lambda: None, guard=lambda: True)
-            with self.assertRaises(ValueError): call._validate_request(method, call.params, 2)
-        call = BatteryClient('5', pump=lambda: None, guard=lambda: True)
-        self.assertEqual(call._validate_request('gatt/readCharacteristicValues', call.params, 2), ('gatt/readCharacteristicValues', 2, False))
-        with self.assertRaises(ValueError): call._validate_request('gatt/readCharacteristicValues', call.params, 2)
-
-    def test_lost_link_discards_reply_and_failed_read_replaces_old_value(self):
-        device = identity()
-        with tempfile.TemporaryDirectory() as state:
-            battery.save(state, device.remote, device.adapter, 75)
-            factory = Mock(return_value=Mock(return_value=reply()))
-            guard = Mock(side_effect=[True, False])
-            self.assertIsNone(capture('5', pump=lambda: None, guard=guard, client_factory=factory, state=state))
-            self.assertIn('unavailable', battery.label(state, device.remote, device.adapter))
-            factory = Mock(return_value=Mock(side_effect=TimeoutError))
-            self.assertIsNone(capture('5', pump=lambda: None, guard=lambda: True, client_factory=factory, state=state))
-            factory.return_value.assert_called_once()
-
-    def test_unavailable_link_never_dispatches(self):
-        with tempfile.TemporaryDirectory() as state:
-            factory = Mock()
-            capture('5', pump=lambda: None, guard=lambda: False, client_factory=factory, state=state)
-            factory.assert_not_called()
 
     def test_display_hides_age_and_never_uses_a_different_remote(self):
         with tempfile.TemporaryDirectory() as state:
@@ -105,6 +79,8 @@ class BatteryTests(unittest.TestCase):
                 spawn = Mock(return_value=child); link = [True]
                 refresh = ScreenRefresh('5', lambda: link[0], fd=r, state=state, spawn=spawn)
                 try:
+                    refresh.tick()
+                    spawn.assert_not_called()  # Reception alone never requests battery I/O.
                     nonce = 'a' * 32
                     with patch('native_app_identity.verify_self', return_value=True):
                         os.write(w, (nonce + '\n').encode()); refresh.tick()

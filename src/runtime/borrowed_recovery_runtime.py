@@ -23,13 +23,13 @@ class RecoveryBorrowedModeWriter:
   self.used=True
   return ack(self.stop('hid/internal/setReport',{'address':TARGET,'reportType':'feature','reportData':[240,160,0]},timeout=6))
 
-def recover_zero(*,watch,lease,generation,paired_check,external_feature_guard,record,
-                 old_receiver_exited,gatt_lookup_reply,clock=time.monotonic,pump=lambda:None,
+def _recover_zero(*,watch,lease,generation,paired_check,external_feature_guard,record,
+                 prior_inactive,gatt_lookup_reply,clock=time.monotonic,pump=lambda:None,
                  requester_factory=BorrowedGattRequester,reader_factory=BorrowedModeReader,
                  activation_factory=NativeModeClient,stop_factory=PumpingGattPartialStopClient):
- if old_receiver_exited() is not True or paired_check() is not True or lease.held() is not True:raise RuntimeError('recovery admission unavailable')
  pre=PreBorrowGuard(watch,lease,generation=generation,external_feature_guard=external_feature_guard,clock=clock)
- def admit():return pre() is True and old_receiver_exited() is True and paired_check() is True
+ from postconnect_receiver_device import RecoveryPairingCheck
+ admit=RecoveryPairingCheck(paired_check,lambda:pre() is True and prior_inactive() is True,clock=clock)
  if admit() is not True:raise RuntimeError('recovery target unavailable')
  if record({'stage':'recovery-gatt-lookup-intent','generation':generation}) is not True:raise RuntimeError('lookup intent unrecorded')
  from recovery_lookup_handoff import validate_reply
@@ -51,6 +51,17 @@ def recover_zero(*,watch,lease,generation,paired_check,external_feature_guard,re
    if record({'stage':'recovery-disable-intent','generation':generation}) is not True:raise RuntimeError('disable intent unrecorded')
    writer(0)
    mode=BorrowedStopModeRead(stop,guard=control)(reader)
-  if type(mode) is not int or mode!=0 or not control():raise RuntimeError('recovery zero unconfirmed')
-  return {'status':'recovered','generation':generation,'modeZeroVerified':True,'oldReceiverExitVerified':True,'featureExclusivity':'cooperative-only-unproven'}
+  if type(mode) is not int or mode!=0 or not control() or not admit(fresh=True):raise RuntimeError('recovery zero unconfirmed')
+  return {'status':'recovered','generation':generation,'modeZeroVerified':True,'featureExclusivity':'cooperative-only-unproven'}
  finally:view.close()
+
+
+def recover_zero(*,old_receiver_exited,**kwargs):
+ result=_recover_zero(prior_inactive=old_receiver_exited,**kwargs)
+ return {**result,'oldReceiverExitVerified':True}
+
+
+def recover_owned_zero(*,session_closed,**kwargs):
+ """The same worker has closed every input/output resource before waiting."""
+ result=_recover_zero(prior_inactive=session_closed,**kwargs)
+ return {**result,'priorSessionClosedVerified':True}

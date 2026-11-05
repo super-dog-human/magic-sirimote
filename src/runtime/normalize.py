@@ -5,9 +5,16 @@ forwarded as complete legacy touch values, without manufacturing absent
 motion bytes.
 """
 from decoder import decode
+from touch_coordinates import decode_touch
 
 
 def normalize(frame):
+    if type(frame) in (bytes, bytearray) and frame and frame[0] == 0xfc:
+        value = bytes(frame[1:])
+        if len(value) == 2 and value[0] == 0:
+            return {'touch_value': value, 'orientation3': None, 'touch_active': False}
+        if decode_touch(value) is not None:
+            return {'touch_value': value, 'orientation3': None, 'touch_active': True}
     sample = decode(frame)
     if sample is None:
         return None

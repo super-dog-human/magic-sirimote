@@ -34,6 +34,34 @@ class ScreenTests(unittest.TestCase):
                     'gyroEnabled': True, 'gyroSensitivity': 3}, bus=Mock(), stop_runtime=Mock(), apply=Mock(), done=False)
         with patch.object(m, 'BluetoothBus', return_value=self.bus): self.screen = m.PairingScreen(self.app)
         self.addCleanup(self.screen.close)
+    def test_checking_does_not_flash_pairing_instructions(self):
+        canvas = Mock()
+        self.screen.draw(canvas)
+        labels = [call.args[0] for call in canvas.text.call_args_list]
+        self.assertIn('Magic Sirimote', labels)
+        self.assertIn('Checking remote connection...', labels)
+        self.assertNotIn('Pair a Siri Remote', labels)
+        self.assertFalse(any('Start pairing' in label or 'MENU' in label for label in labels))
+        canvas.present.assert_called_once()
+
+    def test_unpaired_result_displays_pairing(self):
+        self.screen.flow.on_reply('devices', {'returnValue': True, 'devices': []})
+        self.screen.tick()
+        canvas = Mock(); self.screen.draw(canvas)
+        labels = [call.args[0] for call in canvas.text.call_args_list]
+        self.assertIn('Pair a Siri Remote', labels)
+        self.assertIn('Start pairing', labels)
+        self.assertNotIn('Loading...', labels)
+
+    def test_check_failure_displays_error(self):
+        self.screen.flow.fail('Bluetooth is unavailable')
+        self.assertTrue(self.screen.tick())
+        self.assertEqual(self.screen.route, 'error')
+        canvas = Mock(); self.screen.draw(canvas)
+        labels = [call.args[0] for call in canvas.text.call_args_list]
+        self.assertIn('Bluetooth is unavailable', labels)
+        self.assertNotIn('Loading...', labels)
+
     def test_paired_remote_routes_to_settings_without_writes(self):
         self.screen.flow.adapter = TV
         self.screen.flow.on_reply('devices', {'returnValue': True, 'devices': [
@@ -75,6 +103,36 @@ class ScreenTests(unittest.TestCase):
         self.assertFalse(self.screen.visible)
         self.assertEqual(self.app.values['remoteAddress'],REMOTE)
         self.assertEqual(self.app.paired_serial,'DL0000000000')
+
+    def test_cached_bond_recovery_requires_verification_then_starts_without_ir(self):
+        self.app.values['remoteAddress'] = ''
+        self.screen.flow.adapter = TV
+        self.screen.flow.on_reply('devices', {'returnValue': True, 'devices': [
+            {'address': REMOTE, 'paired': True, 'name': 'DL0000000000',
+             'classOfDevice': 0x1F00, 'scanRecord': []}]})
+        self.screen.tick()
+        self.assertEqual(self.screen.flow.phase, 'identity')
+        self.app.apply.assert_not_called()
+        self.screen.flow.phase = 'existing-verified'
+        self.screen.flow.serial = 'VERIFIED1234'
+        self.screen.tick(); self.screen.tick()
+        self.app.apply.assert_called_once()
+        self.assertEqual(self.app.apply.call_args.args[0]['remoteName'], 'VERIFIED1234')
+        self.assertFalse(any(method in ('adapter/pair', 'adapter/unpair', 'hid/internal/setReport')
+                             for _, method, _ in self.bus.sent))
+
+    def test_cached_bond_verification_failure_never_starts_or_unpairs(self):
+        self.app.values['remoteAddress'] = ''
+        self.screen.flow.adapter = TV
+        self.screen.flow.on_reply('devices', {'returnValue': True, 'devices': [
+            {'address': REMOTE, 'paired': True, 'name': 'DL0000000000',
+             'classOfDevice': 0x1F00, 'scanRecord': []}]})
+        self.screen.tick()
+        self.screen.flow.fail('Unsupported product')
+        self.screen.tick()
+        self.app.apply.assert_not_called()
+        self.assertTrue(self.screen.visible)
+        self.assertFalse(any(method == 'adapter/unpair' for _, method, _ in self.bus.sent))
 
 
 if __name__ == '__main__': unittest.main()

@@ -5,6 +5,7 @@ const cp = require('child_process');
 const {createService} = require('../src/integrated/service');
 
 async function main() {
+  const scheduled = []; let polls = 0, finishPoll;
   let timer, exited = false, helpers = 0, disabled = 0, enabled = false;
   class Handle extends EventEmitter {
     registerMethod() {}
@@ -15,8 +16,8 @@ async function main() {
     helpers++;
     return {stdin: {on() {}, end() { setImmediate(() => callback(null, '{"returnValue":true}')); }}};
   };
-  const {handle} = createService({Handle, startupStore: {}, startupFactory: () => ({summary: () => ({enabled, registered: false}), poll: async () => {}, disable: () => { disabled++; }}), timers: {
-    setTimeout(callback, delay) { if (delay === 60000) timer = callback; return delay; }, clearTimeout() {}
+  const {handle} = createService({Handle, startupStore: {}, startupFactory: () => ({summary: () => ({enabled, registered: false}), poll: () => { polls++; return new Promise(resolve => { finishPoll = resolve; }); }, disable: () => { disabled++; }}), timers: {
+    setTimeout(callback, delay) { if (delay === 60000) timer = callback; else scheduled.push({callback, delay}); return delay; }, clearTimeout() {}
   }, processExit() { exited = true; }});
   function request(method, sender) {
     return new Promise(resolve => {
@@ -26,6 +27,17 @@ async function main() {
     });
   }
   try {
+    const flush = () => new Promise(resolve => setImmediate(resolve));
+    assert.equal(scheduled[0].delay, 0, 'First power observation is immediate');
+    scheduled.shift().callback(); await flush();
+    assert.equal(polls, 1);
+    assert.equal(scheduled.length, 0, 'Do not overlap a pending power observation');
+    finishPoll({pollAfterMs: 150}); await flush();
+    assert.equal(scheduled[0].delay, 150, 'Confirm a transition promptly');
+    scheduled.shift().callback(); await flush();
+    assert.equal(polls, 2);
+    finishPoll(); await flush();
+    assert.equal(scheduled[0].delay, 2000, 'Keep the ordinary interval after confirmation');
     assert.equal((await request('status', '')).returnValue, true);
     assert.equal((await request('status', '')).returnValue, true);
     assert.equal(helpers, 2);

@@ -65,11 +65,12 @@ function activityCall(handle, method, params, subscribe = false, timers = global
   });
 }
 function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim(), now = Date.now, token = () => crypto.randomBytes(24).toString('hex')}) {
-  let sample = null, repeated = 0;
+  const serviceCreatedAt = now();
+  let sample = null, repeated = 0, sampleAt = null, sampleReadStartedAt = null;
   const load = () => store.read();
   function summary() {
     const s = load();
-    return {enabled: !!(s && s.enabled), registered: !!(s && s.phase === 'ready'), phase: s ? s.phase : 'not-registered', lastOutcome: s ? s.lastOutcome || null : null, lastFailure: s ? s.lastFailure || null : null, lastTick: s ? s.lastTick || null : null};
+    return {enabled: !!(s && s.enabled), registered: !!(s && s.phase === 'ready'), phase: s ? s.phase : 'not-registered', lastOutcome: s ? s.lastOutcome || null : null, lastFailure: s ? s.lastFailure || null : null, lastTick: s ? s.lastTick || null : null, lastStartTiming: s ? s.lastStartTiming || null : null};
   }
   function prepare() {
     let s = load();
@@ -117,7 +118,7 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
       previousActivityId: s.activityId, power: s.power, attempt: s.attempt});
     return {returnValue: true, status: 'cancelled'};
   }
-  async function tick(message, params) {
+  async function tick(message, params, duringCompletion) {
     let s = load();
     if (!s || !['prepared', 'ready'].includes(s.phase) || message.senderServiceName() !== 'com.webos.service.activitymanager' || message.applicationID() !== APP
         || Object.keys(params).sort().join(',') !== '$activity,token' || params.token !== s.token
@@ -126,7 +127,13 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     // A genuine callback can finish binding a create whose acknowledgement was lost.
     s.activityId = params.$activity.activityId;
     const next = token(); s.phase = 'completing'; s.nextToken = next; store.write(s);
-    let lease, failedStage = 'adopt', errorCode = null, lastCall;
+    const completing = {active: false, token: s.token, nextToken: next, activityId: s.activityId};
+    const current = () => {
+      const value = load();
+      return value && value.phase === 'completing' && value.token === completing.token
+        && value.nextToken === next && value.activityId === completing.activityId ? value : null;
+    };
+    let lease, failedStage = 'adopt', errorCode = null, lastCall, inputCheckFailed = false;
     const startedAt = now();
     try {
       const adopted = await activity('adopt', {activityId: s.activityId, subscribe: true, wait: false}, true);
@@ -135,17 +142,35 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
       if (!adopted.value || adopted.value.returnValue !== true || adopted.value.adopted !== true) throw Error('Adoption unconfirmed');
       failedStage = 'complete'; errorCode = null;
       const schedule = {start: new Date(now() + 60000).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, 'Z')};
-      const complete = await activity('complete', {activityId: s.activityId, restart: true, schedule,
-        callback: {method: 'luna://' + APP + '.service/startupTick', params: {token: next}}});
+      // Keep external mutations serialized, but allow power/input preparation
+      // while ActivityManager persists the next callback. The capability exists
+      // only after adoption; a saved "completing" record cannot authorize a start.
+      const pending = activity('complete', {activityId: s.activityId, restart: true, schedule,
+        callback: {method: 'luna://' + APP + '.service/startupTick', params: {token: next}}})
+        .then(value => ({value}), error => ({error}));
+      completing.active = true;
+      if (duringCompletion) {
+        try { await duringCompletion(deps => completing.active ? poll(deps, completing) : Promise.resolve()); }
+        catch (_) { inputCheckFailed = true; }
+      }
+      completing.active = false;
+      const settled = await pending;
+      if (settled.error) throw settled.error;
+      const complete = settled.value;
       lastCall = complete;
       errorCode = complete.value && complete.value.errorCode;
       if (!complete.value || complete.value.returnValue !== true) throw Error('Completion unconfirmed');
+      s = current();
+      if (!s) return {returnValue: false, status: 'registration-state-changed'};
       s.token = next; delete s.nextToken; s.phase = 'ready';
       s.lastTick = {epochMs: now(), elapsedMs: now() - startedAt,
         receivedAfterMs: Number.isFinite(lastCall.receivedAfterMs) ? lastCall.receivedAfterMs : null};
+      if (inputCheckFailed) s.lastTick.inputCheckFailed = true;
       store.write(s);
       return {returnValue: true, status: 'scheduled'};
     } catch (_) {
+      s = current();
+      if (!s) return {returnValue: false, status: 'registration-state-changed'};
       s.phase = 'attention';
       s.lastFailure = {stage: failedStage, errorCode: Number.isSafeInteger(errorCode) ? errorCode : null,
         receivedAfterMs: lastCall && Number.isFinite(lastCall.receivedAfterMs) ? lastCall.receivedAfterMs : null,
@@ -153,10 +178,30 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
       store.write(s);
       return {returnValue: false, status: 'registration-needs-attention-' + failedStage,
         errorText: failedStage + ' unconfirmed (' + (Number.isSafeInteger(errorCode) ? errorCode : 'no reply') + ')'};
-    } finally { if (lease) { try { lease.cancel(); } catch (_) {} } }
+    } finally { completing.active = false; if (lease) { try { lease.cancel(); } catch (_) {} } }
   }
   async function repair() {
     const s = load();
+    if (s && s.phase === 'prepared') {
+      // Reinstallation can remove our local record but leave a terminal OS
+      // reservation. Read details in the service; only the native creator cancels.
+      const read = await activity('getDetails', {activityName: NAME, internal: false, current: false});
+      const a = read.value && read.value.returnValue === true && read.value.activity;
+      const callback = a && a.callback, params = callback && callback.params;
+      if (!a || a.name !== NAME || !Number.isSafeInteger(a.activityId) || a.activityId < 1
+          || !a.creator || a.creator.serviceId !== APP
+          || !callback || callback.method !== 'luna://' + APP + '.service/startupTick'
+          || !params || Object.keys(params).join(',') !== 'token' || !HEX.test(params.token || '')
+          || !['failed', 'expired'].includes(a.state)
+          || !Array.isArray(a.adopters) || a.adopters.length
+          || !Array.isArray(a.subscribers) || a.subscribers.length) {
+        return {returnValue: false, errorText: 'Existing startup reservation cannot be safely replaced'};
+      }
+      const fresh = load();
+      if (!fresh || fresh.phase !== 'prepared' || fresh.token !== s.token) throw Error('Startup registration changed');
+      s.activityId = a.activityId; s.phase = 'cancel-pending'; s.resetToken = token(); store.write(s);
+      return {returnValue: true, status: 'cancel-required', activityId: s.activityId, resetToken: s.resetToken};
+    }
     if (!s || !['ready', 'attention', 'completing'].includes(s.phase)) throw Error('Startup is not ready');
     const read = await activity('getDetails', {activityId: s.activityId, internal: false, current: false});
     const a = read.value && read.value.activity;
@@ -191,22 +236,34 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     return tick({senderServiceName: () => 'com.webos.service.activitymanager', applicationID: () => APP},
       {token: s.token, $activity: {activityId: s.activityId}});
   }
-  async function poll({power, status, start, stop}) {
-    let s = load(); if (!s || !s.enabled || s.phase !== 'ready') return;
+  async function poll({power, status, start, stop, recoverUnstarted}, completing, wakeOnly = false) {
+    let s = load();
+    const adoptedCompletion = s && completing && completing.active
+      && s.phase === 'completing' && s.token === completing.token
+      && s.nextToken === completing.nextToken && s.activityId === completing.activityId;
+    if (!s || !s.enabled || (s.phase !== 'ready' && !adoptedCompletion)) return;
+    const powerReadStartedAt = now();
     const p = await power();
-    if (!p || (p.processing !== undefined && p.processing !== '')) { sample = null; repeated = 0; return; }
+    const powerReadFinishedAt = now();
+    if (!p || (p.processing !== undefined && p.processing !== '')) { sample = null; repeated = 0; sampleAt = null; sampleReadStartedAt = null; return; }
     // Screen Off keeps playback/input alive, so the microphone can restore it.
     const kind = p.state === 'Active' ? 'active' : ['Active Standby', 'Suspend'].includes(p.state) ? 'standby' : null;
-    if (!kind) { sample = null; repeated = 0; return; }
-    if (sample === kind) repeated++; else { sample = kind; repeated = 1; }
-    if (repeated < 2) return;
+    if (!kind) { sample = null; repeated = 0; sampleAt = null; sampleReadStartedAt = null; return; }
+    // Extra checks during completion may accelerate wake, never the normal
+    // standby debounce or a cooperative stop.
+    if ((completing || wakeOnly) && kind !== 'active') { sample = null; repeated = 0; sampleAt = null; sampleReadStartedAt = null; return; }
+    if (sample === kind) repeated++; else { sample = kind; repeated = 1; sampleAt = powerReadFinishedAt; sampleReadStartedAt = powerReadStartedAt; }
+    // Confirm wake promptly; keep the longer standby debounce for transient TV states.
+    if (repeated < 2) return kind === 'active' ? {pollAfterMs: 150} : undefined;
     const bootId = boot();
     if (typeof bootId !== 'string' || !/^[a-f0-9-]{36}$/.test(bootId)) throw Error('Boot identity unavailable');
     let changed = false;
     if (!s.power || s.power.boot !== bootId) { s.power = {boot: bootId, state: kind, cycle: 0}; changed = true; }
     else if (s.power.state !== kind) { if (kind === 'active') s.power.cycle++; s.power.state = kind; changed = true; }
     if (changed) store.write(s);
+    const statusReadStartedAt = now();
     const found = await status();
+    const statusReadFinishedAt = now();
     if (!found || found.returnValue !== true || !found.processes) return;
     if (kind === 'standby') {
       if (found.processes.controller.length && s.stopCycle !== key(s, bootId)) {
@@ -216,11 +273,22 @@ function createStartup({store, activity, boot = () => fs.readFileSync('/proc/sys
     }
     if (found.processes.controller.length || found.processes.receiver.length || found.processes.ui.length || found.processes.legacy.length) return;
     const attempt = key(s, bootId);
-    if (s.attempt === attempt) return;
+    if (s.attempt === attempt) {
+      if (typeof recoverUnstarted !== 'function' || await recoverUnstarted() !== true) return;
+      // Retirement proves no receiver ever started. It does not establish
+      // current power; take fresh observations before authorizing replacement.
+      s.attempt = null; s.lastOutcome = 'unstarted-request-retired'; store.write(s);
+      sample = null; repeated = 0; sampleAt = null; sampleReadStartedAt = null;
+      return {pollAfterMs: 150};
+    }
+    s.lastStartTiming = {serviceCreatedAt, firstActiveReadStartedAt: sampleReadStartedAt,
+      firstActiveSampleAt: sampleAt, activeConfirmedAt: powerReadFinishedAt,
+      statusReadStartedAt, statusReadFinishedAt, startRequestedAt: now(), startReturnedAt: null};
     s.attempt = attempt; s.lastOutcome = 'starting'; store.write(s);
     const result = await start();
+    s.lastStartTiming.startReturnedAt = now();
     s.lastOutcome = result && result.returnValue === true ? result.status : 'start-needs-attention'; store.write(s);
   }
-  return {summary, prepare, bind, disable, manualStart, resume, cancelled, tick, repair, poll};
+  return {summary, prepare, bind, disable, manualStart, resume, cancelled, tick, repair, poll: deps => poll(deps), wake: deps => poll(deps, null, true)};
 }
 module.exports = {APP, NAME, disk, activityCall, createStartup};

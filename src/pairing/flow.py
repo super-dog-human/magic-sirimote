@@ -1,5 +1,6 @@
 """TV pairing flow; validates identity before handing off to normal reception."""
 import re
+import time
 
 PRODUCTS = {0x0266: 'A1513', 0x026D: 'A1962'}
 
@@ -41,8 +42,21 @@ def plausible(device):
 
 
 
+def cached_remote_hint(device):
+    """A discovery hint for an existing bond, never proof of supported hardware.
+
+    webOS may retain a serial-shaped name and uncategorized device class while
+    dropping the advertisement. GATT product/firmware verification is mandatory
+    before adopting this hint; it is never used for new pairing.
+    """
+    return (device.get('scanRecord') in (None, [])
+            and device.get('classOfDevice') == 0x1F00
+            and type(device.get('name')) is str
+            and re.fullmatch(r'[A-Z0-9]{12}', device['name']) is not None)
+
+
 def paired_route(devices, saved):
-    candidates = [d for d in devices if d.get('paired') is True and not d.get('blocked') and (plausible(d) or (bool(saved) and str(d.get('address', '')).lower() == saved))]
+    candidates = [d for d in devices if d.get('paired') is True and not d.get('blocked') and not d.get('pairing') and (plausible(d) or (not saved and cached_remote_hint(d)) or (bool(saved) and str(d.get('address', '')).lower() == saved))]
     exact = [d for d in candidates if str(d.get('address', '')).lower() == saved]
     if len(exact) == 1: return exact[0]
     # Do not silently switch an existing configuration to another remote.
@@ -51,8 +65,9 @@ def paired_route(devices, saved):
 
 
 class PairingFlow:
-    def __init__(self, bus, record):
+    def __init__(self, bus, record, clock=time.monotonic):
         self.bus, self.record = bus, record
+        self.clock = clock; self.firmware_retry_at = None; self.firmware_retries = 0; self.firmware = None
         self.phase = 'idle'; self.message = 'Use the LG remote to begin pairing.'
         self.adapter = None; self.target = None; self.known = {}; self.candidates = {}
         self.selected = 0; self.evidence = []; self.was_paired = False
@@ -63,7 +78,7 @@ class PairingFlow:
 
     def save(self):
         self.record({'phase': self.phase, 'message': self.message, 'adapter': self.adapter,
-                     'target': self.target, 'model': PRODUCTS.get(self.product), 'serialVerified': self.serial is not None, 'wasPaired': self.was_paired,
+                     'target': self.target, 'model': PRODUCTS.get(self.product), 'serialVerified': self.serial is not None, 'wasPaired': self.was_paired, 'firmware': self.firmware,
                      'candidates': list(self.candidates.values()), 'evidence': self.evidence})
 
     def note(self, kind, value):
@@ -75,6 +90,7 @@ class PairingFlow:
         self.bus.request(tag, method, params, **kw)
 
     def fail(self, message):
+        self.firmware_retry_at = None
         # Remove only a new bond made by this attempt, before any input-start
         # write. Never remove a saved/existing bond or retry uncertain writes.
         if self.owned_pair and not self.input_sent and self.phase != 'rejecting':
@@ -140,6 +156,14 @@ class PairingFlow:
         # No raw advertising payloads, link keys, PINs or input packets are logged.
         if tag != 'scan' or value.get('returnValue') is not True: self.note(tag, {k: value[k] for k in ('returnValue', 'errorCode', 'errorText', 'request',
                    'address', 'adapterAddress', 'connected', 'connecting') if k in value})
+        if (tag == 'identity-firmware' and value.get('returnValue') is False
+                and value.get('errorCode') == 174 and self.product in PRODUCTS
+                and hasattr(self, 'pending_serial') and self.firmware_retries < 2):
+            self.firmware_retries += 1
+            self.firmware_retry_at = self.clock() + (0.25 if self.firmware_retries == 1 else 0.75)
+            self.message = 'Retrying firmware information read. Keep Siri Remote awake...'
+            self.note('firmware-read-retry', {'attempt': self.firmware_retries})
+            return
         if tag == 'scan' and value.get('returnValue') is not True:
             if 'timed out' in value.get('errorText', ''): self.stop_scan(); return
         if value.get('returnValue') is not True:
@@ -285,6 +309,7 @@ class PairingFlow:
                 # Persistent IR programming retains its separate exact-FW gate.
                 if self.product == 0x0266 and firmware != b'01004102200070033000070131001800B000410240001508':
                     raise ValueError('This remote firmware has not been validated')
+                self.firmware = firmware.decode('ascii')
                 self.serial = self.pending_serial
                 if self.existing_only:
                     self.phase = 'existing-verified'; self.message = 'Siri Remote verified.'
@@ -312,4 +337,7 @@ class PairingFlow:
     def tick(self):
         try:
             for tag, value in self.bus.events(): self.on_reply(tag, value)
+            if self.firmware_retry_at is not None and self.clock() >= self.firmware_retry_at:
+                self.firmware_retry_at = None
+                self.read_identity('firmware', '2a26')
         except Exception as error: self.fail(error)

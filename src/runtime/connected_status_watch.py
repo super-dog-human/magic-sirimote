@@ -4,13 +4,13 @@ Subscriptions provide events and the caller supplies status polls. A poll is
 discarded if an event arrives while it is in flight. The actual subscription
 adapter and feature ownership are separate concerns.
 """
-import math,threading
+import math,threading,time
 from borrowed_gatt_view import TARGET,ADAPTER,valid_client
 
 class ConnectedStatusWatch:
  def __init__(self,*,clock,max_age=3):
   if not callable(clock) or type(max_age) not in (int,float) or not math.isfinite(max_age) or not 0<max_age<=5:raise ValueError('invalid watch')
-  self.clock=clock;self.max_age=max_age;self.lock=threading.Lock();self.closed=False;self.acks=set();self.seq=0;self.generation=1;self.last=None;self.last_disconnected=None;self.last_connectable=None
+  self.clock=clock;self.max_age=max_age;self.lock=threading.Lock();self.changed=threading.Condition(self.lock);self.closed=False;self.acks=set();self.seq=0;self.generation=1;self.last=None;self.last_disconnected=None;self.last_connectable=None
  @staticmethod
  def valid(p):
   return (type(p) is dict and p.get('returnValue') is True and str(p.get('address','')).lower()==TARGET and str(p.get('adapterAddress','')).lower()==ADAPTER and
@@ -18,7 +18,8 @@ class ConnectedStatusWatch:
  @staticmethod
  def connected(p):return p['connected'] is True and p['connecting'] is False and p['connectRequest'] is False
  def event(self,role,p):
-  with self.lock:
+  with self.changed:
+   self.changed.notify_all()
    if self.closed:return False
    if role not in ('hid','gatt') or not self.valid(p) or ('subscribed' in p and p['subscribed'] is not True):self.closed=True;self.last=None;return False
    if role not in self.acks:
@@ -37,7 +38,8 @@ class ConnectedStatusWatch:
  def is_open(self):
   with self.lock:return not self.closed
  def commit_poll(self,token,hid,gatt):
-  with self.lock:
+  with self.changed:
+   self.changed.notify_all()
    if self.closed or type(token) is not int or token!=self.seq:return False
    if not self.valid(hid) or not self.valid(gatt):self.closed=True;self.last=None;return False
    now=self.clock()
@@ -50,14 +52,33 @@ class ConnectedStatusWatch:
     self.last_disconnected={'hid':dict(hid),'gatt':dict(gatt),'generation':self.generation,'observedAt':now,'sequence':self.seq} if idle(hid) and idle(gatt) else None
     return False
    self.last_disconnected=None;self.last_connectable=None;self.last={'hid':dict(hid),'gatt':dict(gatt),'generation':self.generation,'observedAt':now,'sequence':self.seq};return True
+ def _snapshot_locked(self):
+  if self.closed or self.last is None:return None
+  now=self.clock();then=self.last['observedAt']
+  if type(now) not in (int,float) or not math.isfinite(now) or not 0<=now-then<=self.max_age:return None
+  return {**self.last,'hid':dict(self.last['hid']),'gatt':dict(self.last['gatt'])}
  def snapshot(self):
-  with self.lock:
-   if self.closed or self.last is None:return None
-   now=self.clock();then=self.last['observedAt']
-   if type(now) not in (int,float) or not math.isfinite(now) or not 0<=now-then<=self.max_age:return None
-   return {**self.last,'hid':dict(self.last['hid']),'gatt':dict(self.last['gatt'])}
+  with self.lock:return self._snapshot_locked()
+ def wait_for_connection(self,timeout,stop):
+  """Wake a waiting supervisor after a fresh two-profile poll, not an event.
+
+  The condition uses the same lock as publication, so a connection arriving
+  between the caller's snapshot and this wait cannot be missed. The caller
+  still takes a new snapshot and performs all admission checks afterward.
+  """
+  if type(timeout) not in (int,float) or not math.isfinite(timeout) or not 0<timeout<=.5:raise ValueError('Invalid connection wait')
+  deadline=time.monotonic()+timeout
+  with self.changed:
+   while not self.closed and not stop.is_set():
+    if self._snapshot_locked() is not None:return True
+    remaining=deadline-time.monotonic()
+    if remaining<=0:return False
+    self.changed.wait(min(.05,remaining))
+   return False
  def close(self):
-  with self.lock:self.closed=True;self.last=None;self.last_disconnected=None;self.last_connectable=None
+  with self.changed:
+   self.closed=True;self.last=None;self.last_disconnected=None;self.last_connectable=None
+   self.changed.notify_all()
  def diagnostic(self,generation):
   """Non-authoritative metadata; never grants control or refreshes a poll."""
   with self.lock:

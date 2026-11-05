@@ -41,8 +41,10 @@ class VerifiedOutputs:
  Callers must first open the exact node read/write and compare it to the
  verified path identity. Any uncertain output makes this bridge fail closed.
  """
- def __init__(self,key_fd,mouse_fd,*,ioctl_fn=fcntl.ioctl,write_fn=os.write,sleep_fn=time.sleep):
+ def __init__(self,key_fd,mouse_fd,*,ioctl_fn=fcntl.ioctl,write_fn=os.write,sleep_fn=time.sleep,allow_missing_mouse=False):
+  if mouse_fd is None and allow_missing_mouse is not True:raise ValueError('mouse output required')
   self.key_fd,self.mouse_fd=key_fd,mouse_fd
+  self.mouse_provider=None;self.spare_key_fd=None
   self.ioctl_fn,self.write_fn=ioctl_fn,write_fn
   self.sleep_fn=sleep_fn
   self.failed=False;self.closed=False
@@ -55,6 +57,10 @@ class VerifiedOutputs:
    raise RuntimeError('Builtin-missing-arrow-capability')
   held=_ioctl_bitmap(key_fd,IOCG_KEY_STATE,ioctl_fn)
   if any(_key_is_down(held,code) for code in KEY_CODES): raise RuntimeError('Builtin-key-already-held')
+  if mouse_fd is not None:self._verify_mouse()
+
+ def _verify_mouse(self):
+  mouse_fd=self.mouse_fd;ioctl_fn=self.ioctl_fn
   ev=_ioctl_bitmap(mouse_fd,IOCG_EVENT_BITS,ioctl_fn)
   rel=_ioctl_bitmap(mouse_fd,IOCG_REL_BITS,ioctl_fn)
   key=_ioctl_bitmap(mouse_fd,IOCG_KEY_BITS,ioctl_fn)
@@ -63,6 +69,11 @@ class VerifiedOutputs:
    raise RuntimeError('ClickableMouse-missing-relative-capability')
   mouse_state=_ioctl_bitmap(mouse_fd,IOCG_KEY_STATE,ioctl_fn)
   if _key_is_down(mouse_state,BTN_LEFT): raise RuntimeError('ClickableMouse-BTN_LEFT-already-held')
+
+ @property
+ def pointer_ready(self):
+  if self.mouse_provider is not None and not self.closed:self.mouse_provider.poll(self)
+  return self.mouse_fd is not None and not self.closed
 
  def _managed_key_down(self):
   # LGE RCU is shared with the TV. Its power key can remain latched after
@@ -77,6 +88,7 @@ class VerifiedOutputs:
  def move_relative(self,dx,dy):
   """Write one complete relative frame; a short write is never retried."""
   if self.failed or self.closed:raise RuntimeError('output-bridge-not-active')
+  if not self.pointer_ready:return
   if type(dx) is not int or type(dy) is not int or not all(-2147483648<=v<=2147483647 for v in (dx,dy)):
    raise ValueError('relative-delta-outside-int32')
   if dx==0 and dy==0:return
@@ -116,6 +128,7 @@ class VerifiedOutputs:
    raise first
 
  def click_frame(self,packet):
+  if self.mouse_fd is None:raise RuntimeError('mouse output not ready')
   return self._button_frame(self.mouse_fd,BTN_LEFT,packet,'ClickableMouse-BTN_LEFT')
 
  def select_frame(self,packet):
@@ -157,7 +170,11 @@ class VerifiedOutputs:
   if self.closed:return
   self.closed=True
   failures=[]
-  for fd in (self.mouse_fd,self.key_fd):
+  if self.mouse_provider is not None:
+   try:self.mouse_provider.close()
+   except BaseException as e:failures.append(type(e).__name__)
+  for fd in (self.mouse_fd,self.key_fd,self.spare_key_fd):
+   if fd is None:continue
    try:close_fn(fd)
    except BaseException as e:failures.append(type(e).__name__)
   if failures: raise RuntimeError('output-fd-close-failed:'+','.join(failures))
@@ -165,7 +182,7 @@ class VerifiedOutputs:
  def verify_released(self):
   if self._managed_key_down():
    raise RuntimeError('Builtin-keys-held-at-cleanup')
-  if _key_is_down(_ioctl_bitmap(self.mouse_fd,IOCG_KEY_STATE,self.ioctl_fn),BTN_LEFT):
+  if self.mouse_fd is not None and _key_is_down(_ioctl_bitmap(self.mouse_fd,IOCG_KEY_STATE,self.ioctl_fn),BTN_LEFT):
    raise RuntimeError('ClickableMouse-BTN_LEFT-held-at-cleanup')
   return True
 
@@ -180,6 +197,7 @@ class VerifiedOutputs:
   if type(max_attempts) is not int or not 1<=max_attempts<=2:raise ValueError('release-attempt-bound')
   self.emergency_release_verified=False
   for fd,codes,label in ((self.key_fd,KEY_CODES,'LGE RCU'),(self.mouse_fd,(BTN_LEFT,),'ClickableMouse')):
+   if fd is None:continue
    try:
     state=_ioctl_bitmap(fd,IOCG_KEY_STATE,self.ioctl_fn)
     pending=[code for code in codes if _key_is_down(state,code)]

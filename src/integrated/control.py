@@ -93,6 +93,39 @@ def stop():
     return {'returnValue': True, 'status': 'stop-requested'}
 
 
+def retire_unstarted():
+    """Retire only an expired request that never entered receiver/sensor code."""
+    from supervisor_lease import SupervisorLease
+    from orphan_reconcile import _read, _archive_unstarted_after_boot
+    found = require_no_other_input()
+    if found['ui']: raise RuntimeError('Native window is still present')
+    controller = bundle.role_path('controller', '')
+    receiver = bundle.role_path('receiver', '')
+    with_lease = SupervisorLease(controller / 'state')
+    b = None
+    try:
+        c = with_lease.dirfd
+        b = os.open(receiver / 'state', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        for fd in (c, b):
+            info = os.fstat(fd)
+            if info.st_uid != 5999 or info.st_gid != 5000 or stat.S_IMODE(info.st_mode) not in (0o770, 0o775):
+                raise RuntimeError('Unsafe runtime directory')
+        intent, info = _read(c, 'receiver-launch-intent.json', os.getuid(), 5000, 0o640, historical=True)
+        import re
+        if (set(intent) != {'run','stage','generation'} or intent['stage'] != 'receiver-launch-intent'
+                or type(intent['run']) is not str or not re.fullmatch('[a-f0-9]{32}', intent['run'])
+                or type(intent['generation']) is not int or intent['generation'] < 1):
+            raise RuntimeError('Invalid launch intent')
+        result = _archive_unstarted_after_boot(c=c, b=b, intent=intent, intent_stat=info,
+            controller_app=str(controller), receiver_app=str(receiver), receiver_package=str(bundle.PACKAGE),
+            pin=bundle.read_pin('receiver'), lease=with_lease, owner=os.getuid(), group=5000,
+            allow_current_boot=True)
+        return {'returnValue': True, 'status': 'retired-unstarted' if result else 'unchanged'}
+    finally:
+        if b is not None: os.close(b)
+        with_lease.close()
+
+
 def main():
     bundle.select('controller')
     command = sys.argv[1] if len(sys.argv) == 2 else ''
@@ -117,6 +150,7 @@ def main():
     if command == 'status': return status()
     if command == 'start': return prepare_start()
     if command == 'stop': return stop()
+    if command == 'retireUnstarted': return retire_unstarted()
     raise ValueError('Unknown runtime command')
 
 

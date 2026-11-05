@@ -5,6 +5,7 @@ for a fresh stable connection, then passes the actual reply in its authenticated
 request. The receiver must adopt it without a second connect operation.
 """
 import re
+import time
 from pathlib import Path
 from prelaunch_handoff_runtime import lookup_before_input, write_json_once
 from borrowed_gatt_view import BorrowedGattView
@@ -44,3 +45,37 @@ def obtain(*, watch, lease, directory, run, eligible,
             or current.get('generation') != generation):
         raise RuntimeError('recovery lookup connection changed')
     return reply, generation
+
+
+class RecoveredLookup:
+    """One-use client handoff after verified cleanup on an unchanged connection.
+
+    Kept only in the live controller, never restored from disk. A changed,
+    stale or replaced watcher requires the ordinary lookup path instead.
+    """
+    def __init__(self, *, clock=time.monotonic):
+        self.clock = clock
+        self.value = None
+
+    def remember(self, reply, *, watch, lease, generation):
+        self.value = None
+        validate_reply(reply)
+        current = watch.snapshot()
+        if (lease.held() is not True or watch.is_open() is not True
+                or type(current) is not dict or current.get('generation') != generation):
+            return
+        self.value = (dict(reply), watch, lease, generation, self.clock())
+
+    def take(self, *, watch, lease):
+        value, self.value = self.value, None
+        if value is None:
+            return None
+        reply, original_watch, original_lease, generation, saved_at = value
+        current = watch.snapshot()
+        if (watch is not original_watch or lease is not original_lease
+                or lease.held() is not True or watch.is_open() is not True
+                or not 0 <= self.clock() - saved_at <= 5
+                or type(current) is not dict or current.get('generation') != generation):
+            return None
+        validate_reply(reply)
+        return reply, generation

@@ -128,7 +128,7 @@ original remaining connection budget starts only once preflight succeeds.
  try:
   mark('bootstrap-start')
   if not guard():mark('bootstrap-guard-unavailable');return False
-  previous=None
+  previous=None;readiness_started=clock()
   while guard():
    # No intent is reserved and no connection request can be dispatched here.
    # Every retry rechecks the exact bonded target, not just service availability.
@@ -140,7 +140,8 @@ original remaining connection budget starts only once preflight succeeds.
    if reason=='ready':break
    if reason!=previous:mark(reason);previous=reason
    if not wait_for_ready:return False
-   wait(5)
+   # React quickly during boot; prolonged absence uses a quieter read-only poll.
+   wait(.25 if clock()-readiness_started<20 else 2)
   else:mark('bootstrap-guard-unavailable');return False
   preparing=False
   if wait_for_ready:deadline=clock()+budget

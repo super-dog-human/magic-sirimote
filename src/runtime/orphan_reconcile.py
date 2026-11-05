@@ -94,19 +94,27 @@ def archive_before_input(*,c,b,intent,intent_stat,controller_app,receiver_app,re
  os.rename('receiver-launch-intent.json',dest,src_dir_fd=c,dst_dir_fd=c);os.fsync(c)
  return {'status':'reconciled','run':run,'priorOutcome':'input-never-started','launchIntentArchived':True}
 
-def _archive_unstarted_after_boot(*,c,b,intent,intent_stat,controller_app,receiver_app,receiver_package,pin,lease,owner,group,boot_time=None):
+def _archive_unstarted_after_boot(*,c,b,intent,intent_stat,controller_app,receiver_app,receiver_package,pin,lease,owner,group,boot_time=None,allow_current_boot=False,now_ms=None,native_idle=None):
  """Retire an expired pre-boot launch that never reached B's durable start.
 
  B fsyncs its start receipt before creating the sensor journal or issuing any
  sensor command. Absence of both is usable only with the pinned B package,
- no live B process, and a request that expired before this boot. This is an
- abandoned handoff, never a successful session or a sensor-stop receipt.
+ no live B process, and an expired request. Same-boot retirement additionally
+ excludes any native wrapper, so a delayed launch cannot enter with a request
+ it read before expiry. This is never a successful session or sensor-stop proof.
  """
  run=intent['run']
  def boot():
   return int(next(x.split()[1] for x in Path('/proc/stat').read_text().splitlines() if x.startswith('btime ')))
  started=boot() if boot_time is None else boot_time
  if type(started) is not int or started<=0:raise RuntimeError('boot time unavailable')
+ if allow_current_boot:
+  import time
+  clock=(lambda:int(time.time()*1000)) if now_ms is None else lambda:now_ms
+  if type(clock()) is not int or clock()<=0:raise RuntimeError('current time unavailable')
+  if native_idle is None:
+   from control_processes import processes
+   native_idle=lambda:not processes()['ui']
  def absent():
   names=os.listdir(b)
   forbidden={'borrowed-active','recovery-request.json','recovery-controller-start.json',
@@ -120,18 +128,21 @@ def _archive_unstarted_after_boot(*,c,b,intent,intent_stat,controller_app,receiv
   try:value,info=_read(b,name,owner,group,0o660,historical=True);source=name
   except FileNotFoundError:value,info=_read(b,dest,owner,group,0o660,historical=True);source=dest
   if source==name and dest in os.listdir(b):raise RuntimeError('duplicate unstarted handoff')
-  if info.st_mtime>=started or value.get('run')!=run:raise RuntimeError('handoff not from prior boot')
+  if (not allow_current_boot and info.st_mtime>=started) or value.get('run')!=run:raise RuntimeError('handoff not from prior boot')
   values[name]=value;rows.append((source,dest,info))
  q=values['request.json'];record=values['controller-start.json'];process=record.get('process')
  if (set(q)!={'schema','appId','run','expiresEpochMs'} or type(q['schema']) is not int or q['schema']!=1 or q['appId']!=bundle.app_id(Path(receiver_app).name) or
-     type(q['expiresEpochMs']) is not int or not 0<q['expiresEpochMs']<started*1000 or intent_stat.st_mtime>=started):
+     type(q['expiresEpochMs']) is not int or q['expiresEpochMs']<=0 or
+     (not allow_current_boot and (q['expiresEpochMs']>=started*1000 or intent_stat.st_mtime>=started))):
   raise RuntimeError('unstarted request not expired before boot')
+ if allow_current_boot and q['expiresEpochMs']>=clock():raise RuntimeError('unstarted request not expired')
  if (set(record)!={'schema','appId','run','process'} or type(record['schema']) is not int or record['schema']!=1 or record['appId']!=bundle.app_id(Path(controller_app).name) or
      type(process) is not dict or set(process)!={'pid','startTicks','status'} or type(process.get('status')) is not dict or
      process['status'].get('Uid','').split()!=[str(owner)]*4 or process['status'].get('CapEff')!='0000000000000000'):
   raise RuntimeError('unstarted controller identity invalid')
  def proof():
   if lease.held() is not True or not absent():return False
+  if allow_current_boot and (q['expiresEpochMs']>=clock() or native_idle() is not True):return False
   ls=os.fstat(lease.dirfd);cs=os.fstat(c)
   return ((ls.st_dev,ls.st_ino)==(cs.st_dev,cs.st_ino) and
    (boot_time is not None or boot()==started) and
@@ -146,7 +157,7 @@ def _archive_unstarted_after_boot(*,c,b,intent,intent_stat,controller_app,receiv
   if source!=target:os.rename(source,target,src_dir_fd=b,dst_dir_fd=b);os.fsync(b)
  if not proof():raise RuntimeError('unstarted handoff proof changed')
  os.rename('receiver-launch-intent.json',dest,src_dir_fd=c,dst_dir_fd=c);os.fsync(c)
- return {'status':'reconciled','run':run,'priorOutcome':'not-started-before-reboot','launchIntentArchived':True}
+ return {'status':'reconciled','run':run,'priorOutcome':('not-started-expired' if allow_current_boot else 'not-started-before-reboot'),'launchIntentArchived':True}
 
 def archive_not_ready(*,c,b,intent,intent_stat,receipt,receiver_state,controller_app,receiver_app,receiver_package,pin,lease,owner,group,state_uid=5999):
  """Preserve a finished receiver that exited before any sensor preparation.
@@ -216,7 +227,7 @@ def reconcile(*,controller_state,receiver_state,controller_app,receiver_app,rece
    if bundle.active():
     unstarted=archive_before_input(c=c,b=b,intent=intent,intent_stat=intent_stat,controller_app=controller_app,receiver_app=receiver_app,receiver_package=receiver_package,pin=pin,lease=lease,owner=owner,group=group)
     if unstarted is not None:return unstarted
-   unstarted=_archive_unstarted_after_boot(c=c,b=b,intent=intent,intent_stat=intent_stat,controller_app=controller_app,receiver_app=receiver_app,receiver_package=receiver_package,pin=pin,lease=lease,owner=owner,group=group)
+   unstarted=_archive_unstarted_after_boot(c=c,b=b,intent=intent,intent_stat=intent_stat,controller_app=controller_app,receiver_app=receiver_app,receiver_package=receiver_package,pin=pin,lease=lease,owner=owner,group=group,allow_current_boot=bundle.active())
    if unstarted is not None:return unstarted
   if completed is not None and completed['status']=='complete':
    outcome='complete';receipt=completed
@@ -233,7 +244,7 @@ def reconcile(*,controller_state,receiver_state,controller_app,receiver_app,rece
   j=os.open('borrowed-'+outcome+'-'+run,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=b)
   try:
    names=os.listdir(j)
-   if not names or any(not re.fullmatch('borrowed-'+run+r'-[0-9]{2}\.json',name) for name in names):raise RuntimeError('foreign recovered journal evidence')
+   if not names or any(not re.fullmatch('borrowed-'+run+r'-[0-9]{2,4}\.json',name) for name in names):raise RuntimeError('foreign recovered journal evidence')
   finally:os.close(j)
   evidence=inspect_journal(Path(receiver_state)/('borrowed-'+outcome+'-'+run),run,owner_uid=receiver_uid,state_uid=receiver_uid,group=group,historical=True)
   if evidence.get('status') not in ('sensor-state-unknown','zero-recorded-live-recheck-required','no-sensor-enable-recorded','input-start-recorded-sensor-not-attempted'):raise RuntimeError('invalid recovered journal')

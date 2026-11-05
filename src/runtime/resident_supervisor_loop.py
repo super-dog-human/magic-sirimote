@@ -23,7 +23,11 @@ def run_loop(*,watch,lease,cycle_factory,stop,clock=time.monotonic,observe_timeo
    ready=watch.snapshot()
    if ready is None:
     if not waiting_emitted and watch.disconnected_snapshot() is not None:emit('waiting-for-connection');waiting_emitted=True
-    connect_tick();stop.wait(.5);continue
+    connect_tick()
+    wait_connected=getattr(watch,'wait_for_connection',None)
+    if callable(wait_connected):wait_connected(.5,stop)
+    else:stop.wait(.5)
+    continue
   else:
    try:ready=rearm.observe()
    except Exception:return {'status':'attention','reason':'rearm-observation-error'}
@@ -57,6 +61,7 @@ def run_loop(*,watch,lease,cycle_factory,stop,clock=time.monotonic,observe_timeo
      healthy=cycle.receiver_healthy() is True
      checked_at=clock();next_health_check=checked_at+5
      if healthy:deadline=checked_at+finish_timeout
+    if not stop_sent and callable(getattr(cycle,'receiver_idle',None)) and cycle.receiver_idle() is True:connect_tick()
     if callable(getattr(cycle,'note_disconnect',None)):cycle.note_disconnect()
     if cycle.ready_to_finish() is True:ready_to_finish=True;break
     if callable(getattr(cycle,'receiver_failed',None)) and cycle.receiver_failed() is True:

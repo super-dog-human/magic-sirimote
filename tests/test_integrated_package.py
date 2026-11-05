@@ -77,6 +77,69 @@ with patch('controller_start_record.read_record',return_value=record), patch('lo
  read.assert_not_called()
 ''')
 
+    def test_controller_checks_both_packages_before_session_or_device_changes(self):
+        for rejected in ('controller', 'receiver'):
+            self.child("""
+import bundle_boot as boot, runtime_bundle as bundle
+from unittest.mock import patch
+rejected = """ + repr(rejected) + """
+with patch.object(bundle,'read_pin',side_effect=lambda role:{'role':role}), patch.object(bundle,'packages_match',side_effect=lambda pins:all(pin['role']!=rejected for pin in pins.values())), patch.object(boot,'load') as load, patch.object(boot,'_save_session') as save, patch.object(boot,'configure') as configure:
+ try: boot.main('controller')
+ except RuntimeError: pass
+ else: raise AssertionError('Invalid package accepted')
+ load.assert_not_called();save.assert_not_called();configure.assert_not_called()
+""")
+
+    def test_controller_conflict_or_invalid_settings_prevent_session_and_input(self):
+        for failure in ('conflict','settings'):
+            self.child("""
+import bundle_boot as boot, runtime_bundle as bundle
+bundle.select('controller')
+from unittest.mock import patch
+failure = """ + repr(failure) + """
+with patch.object(bundle,'select'), patch.object(bundle,'read_pin',side_effect=lambda role:{'role':role}), patch.object(bundle,'packages_match',return_value=True), patch('controller_connect_identity.verify_self',return_value=True), patch('control_processes.processes',return_value={'ui':[]}), patch('control_processes.require_no_other_input',side_effect=RuntimeError('conflict') if failure=='conflict' else None), patch.object(boot,'load',side_effect=ValueError('invalid settings')) as load, patch.object(boot,'bind_device') as bind, patch.object(boot,'_save_session') as save, patch.object(boot,'configure') as configure:
+ try: boot.main('controller')
+ except (RuntimeError,ValueError): pass
+ else: raise AssertionError('Invalid controller start accepted')
+ if failure=='conflict':load.assert_not_called()
+ bind.assert_not_called();save.assert_not_called();configure.assert_not_called()
+""")
+
+    def test_prepared_controller_cannot_write_or_run_before_release_and_fresh_checks(self):
+        for scenario in ('cancel', 'settings-changed', 'conflict', 'released'):
+            self.child("""
+import os, sys, types
+import bundle_boot as boot, runtime_bundle as bundle
+from unittest.mock import patch, Mock
+bundle.select('controller')
+scenario = """ + repr(scenario) + """
+values={'schema':1,'remoteAddress':'aa:bb:cc:dd:ee:10','adapterAddress':'aa:bb:cc:dd:ee:20','remoteName':'Remote','gyroEnabled':True,'gyroSensitivity':3}
+run=Mock(return_value=23)
+module=types.ModuleType('resident_controller_entry');module.main=run
+released=False
+bind=Mock();save=Mock()
+def gate(value):
+ global released
+ bind.assert_not_called();save.assert_not_called();run.assert_not_called()
+ released=True
+ return scenario!='cancel'
+def settings(path):
+ return dict(values,gyroSensitivity=4) if released and scenario=='settings-changed' else dict(values)
+def conflicts(**kwargs):
+ if released and scenario=='conflict':raise RuntimeError('New receiver')
+ return {'ui':[]}
+with patch.object(bundle,'select'), patch.dict(os.environ,{'MAGIC_SIRIMOTE_PRELOAD':'a'*32}), patch.dict(sys.modules,{'resident_controller_entry':module}), patch.object(bundle,'read_pin',side_effect=lambda role:{'role':role}), patch.object(bundle,'packages_match',return_value=True), patch('controller_connect_identity.verify_self',return_value=True), patch('local_attestation._start_ticks',return_value=123), patch('control_processes.processes',return_value={'ui':[]}), patch('control_processes.require_no_other_input',side_effect=conflicts), patch('controller_preload.await_start',side_effect=gate), patch.object(boot,'load',side_effect=settings), patch.object(boot,'bind_device',bind), patch.object(boot,'_save_session',save):
+ if scenario in ('settings-changed','conflict'):
+  try:boot.main('controller')
+  except RuntimeError:pass
+  else:raise AssertionError('Changed state accepted')
+ else:assert boot.main('controller')==(23 if scenario=='released' else 0)
+ if scenario=='released':
+  bind.assert_called_once();save.assert_called_once();run.assert_called_once()
+ else:
+  bind.assert_not_called();save.assert_not_called();run.assert_not_called()
+""")
+
     def test_retained_state_cannot_be_rebound_to_another_remote(self):
         self.child("""
 import bundle_boot
@@ -98,6 +161,7 @@ for field,value in [('remoteAddress','aa:bb:cc:dd:ee:30'),('adapterAddress','aa:
             first = build_integrated.build(base / 'one')
             second = build_integrated.build(base / 'two')
             name = first['package']['package']
+            self.assertEqual(name, build_integrated.APP + '_arm.ipk')
             raw = (base / 'one' / name).read_bytes()
             self.assertEqual(raw, (base / 'two' / name).read_bytes())
             parts = build_support.read_ar(raw)
@@ -106,6 +170,11 @@ for field,value in [('remoteAddress','aa:bb:cc:dd:ee:30'),('adapterAddress','aa:
                 payload = {name: tar.extractfile(m).read() for name, m in members.items() if m.isfile()}
             apps = [name for name in payload if name.endswith('/appinfo.json')]
             services = [name for name in payload if name.endswith('/services.json')]
+            for name in payload:
+                if name.endswith(('/appinfo.json', '/packageinfo.json', '/package.json')):
+                    self.assertEqual(json.loads(payload[name])['version'], build_integrated.VERSION)
+            with tarfile.open(fileobj=io.BytesIO(parts['control.tar.gz']), mode='r:gz') as control:
+                self.assertIn('Version: ' + build_integrated.VERSION + '\n', control.extractfile('control').read().decode())
             self.assertEqual(len(apps), 1)
             self.assertEqual(len(services), 1)
             prefix = 'usr/palm/services/' + runtime_bundle.SERVICE + '/'

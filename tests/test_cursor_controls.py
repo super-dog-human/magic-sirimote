@@ -46,7 +46,17 @@ class CursorControlsTests(unittest.TestCase):
             totals.append(sum(out));first.append(when[0])
         self.assertEqual(totals,sorted(set(totals)))
         self.assertLessEqual(max(first)-min(first),.04)
-        self.assertEqual(AdaptivePrefixPose(3).AXIS_GAINS,(1453.5,1453.5))
+        self.assertEqual(AdaptivePrefixPose(3).AXIS_GAINS,(1090.125,1090.125))
+
+    def test_middle_level_reproduces_previous_level_two_frame_for_frame(self):
+        with patch.object(AdaptivePrefixPose, 'SENSITIVITY_FACTORS', (.5,.75,1.,1.25,1.5)):
+            previous = AdaptivePrefixPose(2)
+        current = AdaptivePrefixPose(3)
+        for i in range(200):
+            sample = pose(max(0,i-30)*.003)
+            previous.feed(sample,i*.01);current.feed(sample,i*.01)
+            self.assertEqual(current.tick(i*.01),previous.tick(i*.01))
+        self.assertEqual(current.stats,previous.stats)
 
     def test_reset_only_drains_and_resumes_without_saving_or_ir(self):
         with tempfile.TemporaryDirectory() as d:
@@ -104,7 +114,7 @@ class PreferenceRuntimeTests(unittest.TestCase):
         with patch.object(runtime_device,'_cursor',(False,5)):
             receiver=PrefixOutputCandidate(Mock(),clock=lambda:0.,sensor_input_verified=True)
             self.assertFalse(receiver.router.motion_enabled)
-            self.assertEqual(receiver.router.pose.AXIS_GAINS,(2180.25,2180.25))
+            self.assertEqual(receiver.router.pose.AXIS_GAINS,(1816.875,1816.875))
             receiver.bind(1);receiver.feed_raw(1,b'\xfc\x00\x00')
             self.assertFalse(receiver.router.motion_enabled)
         with patch.object(runtime_device,'_cursor',(True,1)):

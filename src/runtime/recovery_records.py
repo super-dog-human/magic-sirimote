@@ -30,7 +30,7 @@ def archive_uncertain(directory,run,*,owner_uid,proof,state_uid=5999,group=5000)
   activefd=os.open('borrowed-active',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=d)
   try:
    names=os.listdir(activefd)
-   if not names or any(not re.fullmatch('borrowed-'+run+r'-[0-9]{2}\.json',name) for name in names):raise RuntimeError('foreign or empty recovery journal')
+   if not names or any(not re.fullmatch('borrowed-'+run+r'-[0-9]{2,4}\.json',name) for name in names):raise RuntimeError('foreign or empty recovery journal')
   finally:os.close(activefd)
   evidence=inspect_journal(Path(directory)/'borrowed-active',run,owner_uid=owner_uid,state_uid=owner_uid,group=group,historical=True)
   if evidence.get('status') not in ('sensor-state-unknown','zero-recorded-live-recheck-required','no-sensor-enable-recorded','input-start-recorded-sensor-not-attempted'):raise RuntimeError('uncertain sensor journal not established')

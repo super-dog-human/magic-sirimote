@@ -5,14 +5,15 @@ import time
 
 from direct_pose_pointer import DirectPosePointer
 from motion_report import decode_compact_motion
-from position_press import PositionPress, SurfaceRegions
+from position_press import PositionPress
+from touch_surface import regions as surface_regions
 from touch_coordinates import decode_touch
 
 
 class InputRouter:
     """No native I/O. Emits semantic press actions through an injected sink."""
     def __init__(self, emit, *, clock=time.monotonic, max_seconds=30., pose_mode='direct',
-                 touch_mode='press-position', session_policy=None):
+                 touch_mode='press-position', session_policy=None, deferred_center=False):
         from input_session_policy import resolve_session_bounds
         max_seconds, action_limit = resolve_session_bounds(max_seconds, session_policy)
         self.clock = clock
@@ -41,12 +42,11 @@ class InputRouter:
         if session_policy is not None:
             pointer_options['session_policy'] = session_policy
         self.pointer = pointer_type(**pointer_options)
-        regions = SurfaceRegions(x_min=-1768, x_max=-200, y_min=-1032, y_max=440,
-                                 center_fraction=.65)
+        regions = surface_regions()
         if touch_mode=='swipe-click':
             from swipe_click import SwipeClick
             press_options = {'clock': clock, 'max_seconds': max_seconds,
-                             'max_actions': action_limit}
+                             'max_actions': action_limit, 'deferred_center': deferred_center}
             if session_policy is not None:
                 press_options['session_policy'] = session_policy
             self.press=SwipeClick(self._emit,regions,**press_options)

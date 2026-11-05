@@ -3,17 +3,17 @@
 from adaptive_prefix_pose import AdaptivePrefixPose
 from runtime_device import cursor_preferences
 from normalize import normalize
-from position_press import SurfaceRegions
+from touch_surface import regions as surface_regions
 from swipe_click import SwipeClick
 from navigation_mode import NavigationMode
 
 class AdaptivePrefixRouter:
- def __init__(self, emit, *, clock, motion_enabled=True, session_policy=None, max_actions=12):
+ def __init__(self, emit, *, clock, motion_enabled=True, session_policy=None, max_actions=12, deferred_center=False):
   if type(motion_enabled) is not bool:raise ValueError('explicit motion gate required')
   self.motion_enabled=motion_enabled;self.clock=clock;self.pose=AdaptivePrefixPose(sensitivity=cursor_preferences()[1]);self.generation=None;self.closed=False
   self.navigation=NavigationMode();self.emit=emit
   seconds=30. if session_policy is None else session_policy.seconds
-  self.press=SwipeClick(self._semantic,SurfaceRegions(x_min=-1768,x_max=-200,y_min=-1032,y_max=440),clock=clock,max_seconds=seconds,max_actions=max_actions,session_policy=session_policy)
+  self.press=SwipeClick(self._semantic,surface_regions(),clock=clock,max_seconds=seconds,max_actions=max_actions,session_policy=session_policy,deferred_center=deferred_center)
  def _semantic(self,action,down):
   if down and action in ('up','down','left','right'):
    self.navigation.select_navigation(self.clock());self.pose._clear_tracking()

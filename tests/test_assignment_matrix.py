@@ -14,7 +14,7 @@ from native_bus import NativeBus
 from test_settings_render import DiscardingCanvas
 
 class AssignmentMatrixTests(unittest.TestCase):
-    def test_fresh_install_shows_twelve_none_slots_and_full_save_deletes_both_durations(self):
+    def test_fresh_install_shows_twelve_none_slots_without_sending_defaults(self):
         with tempfile.TemporaryDirectory() as d:
             app=InfraredScreen(Path(d))
             for _,button in table.ROWS:
@@ -39,16 +39,16 @@ class AssignmentMatrixTests(unittest.TestCase):
 
     def test_first_save_with_siri_screen_off_removes_hold_before_press_without_unknown_error(self):
         with tempfile.TemporaryDirectory() as d:
-            changes=table.displayed_bindings(d,{'10:00':'screen-toggle'})
+            changes=table.changed_bindings(d,{'10:00':'screen-toggle'})
             ordered=table.plan(d,changes)
-            self.assertEqual(len(ordered),12)
+            self.assertEqual(ordered,[('10:02','none'),('10:00','screen-toggle')])
             self.assertLess(ordered.index(('10:02','none')),ordered.index(('10:00','screen-toggle')))
             program=Mock(return_value={'status':'submitted','connectionPreserved':True,'receiptSaved':True})
             for key,action in ordered:
                 button,delay=(int(x,16) for x in key.split(':'))
                 self.assertEqual(table.assign(d,'assign',button,delay,action,program=program)['status'],'saved')
             self.assertEqual(table.load(d)['bindings'],changes)
-            self.assertEqual(program.call_count,12)
+            self.assertEqual(program.call_count,2)
             self.assertTrue(all(call.args[1]=='delete' for call in program.call_args_list))
 
     def test_empty_runtime_assignments_emit_no_short_or_hold_actions(self):
@@ -99,19 +99,19 @@ class AssignmentMatrixTests(unittest.TestCase):
 
     def test_uncertainty_and_partial_save_never_commit_or_repeat(self):
         with tempfile.TemporaryDirectory() as d:
-            table.execute(d,'assign',32,0,'back')
+            table.execute(d,'assign',32,0,'ir:28')
             table.execute(d,'assign',32,2,'none')
             for status in ('not-sent','uncertain'):
                 program=Mock(return_value={'status':status})
                 result=table.assign(d,'assign',32,0,'none',program=program)
                 self.assertEqual(result['status'],status);self.assertEqual(program.call_count,1)
-                self.assertEqual(table.load(d)['bindings'],{'20:00':'back','20:02':'none'})
+                self.assertEqual(table.load(d)['bindings'],{'20:00':'ir:28','20:02':'none'})
             for result in ({'status':'submitted','connectionPreserved':False,'receiptSaved':True},
                            {'status':'submitted','connectionPreserved':True,'receiptSaved':False}):
                 self.assertEqual(table.assign(d,'assign',32,0,'none',program=Mock(return_value=result))['status'],'partial')
             with patch.object(table,'execute',side_effect=OSError('full')):
                 self.assertEqual(table.assign(d,'assign',32,0,'none',program=Mock(return_value={'status':'submitted','connectionPreserved':True,'receiptSaved':True}))['status'],'partial')
-            self.assertEqual(table.load(d)['bindings'],{'20:00':'back','20:02':'none'})
+            self.assertEqual(table.load(d)['bindings'],{'20:00':'ir:28','20:02':'none'})
 
     def test_preview_assignments_are_not_silently_activated(self):
         with tempfile.TemporaryDirectory() as d:

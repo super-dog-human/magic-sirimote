@@ -133,17 +133,23 @@ def ir_knowledge(directory, known):
                 raise ValueError('IR delivery history is invalid.')
             status = receipt.get('status')
             if status == 'not-sent': continue
-            key = slot(receipt.get('button'), receipt.get('delay'))
             action = receipt.get('action')
             code = receipt.get('code')
-            if status not in ('pending', 'uncertain', 'submitted') or action not in ('set', 'delete'):
+            if status not in ('pending', 'uncertain', 'submitted') or action not in ('set', 'delete', 'reset-all'):
                 raise ValueError('IR delivery history is invalid.')
+            if action == 'reset-all':
+                if receipt.get('button') is not None or receipt.get('delay') is not None or code is not None:
+                    raise ValueError('IR reset receipt is invalid.')
+                keys = [slot(button, delay) for _, button in BUTTONS for delay in (0, 2)]
+            else:
+                keys = [slot(receipt.get('button'), receipt.get('delay'))]
             value = None
             if status == 'submitted':
-                value = 'none' if action == 'delete' else 'ir:' + str(code).upper()
+                value = 'none' if action in ('delete', 'reset-all') else 'ir:' + str(code).upper()
                 if not valid_action(value): raise ValueError('IR delivery history is invalid.')
             rank = (info.st_mtime_ns, path.name)
-            if key not in latest or rank > latest[key][0]: latest[key] = (rank, value)
+            for key in keys:
+                if key not in latest or rank > latest[key][0]: latest[key] = (rank, value)
         finally:
             os.close(fd)
     result = dict(known)
@@ -192,6 +198,17 @@ def assign(directory, action, button, delay, code, *, program):
         raise ValueError('Choose an available action.')
     plan(directory, {slot(button, delay): code})  # Check the other duration before writing.
     ir = code.startswith('ir:')
+    saved = load(directory)
+    bindings = saved['bindings'] if saved['schema'] == 2 else {}
+    known = ir_knowledge(directory, bindings).get(slot(button, delay))
+    desired_ir = code if ir else 'none'
+    current_ir = (known if known.startswith('ir:') else 'none') if known is not None else None
+    if current_ir == desired_ir:
+        try:
+            execute(directory, 'assign', button, delay, code)
+        except (OSError, ValueError):
+            return {'status': 'partial', 'mappingSaved': False, 'infraredChanged': False}
+        return {'status': 'saved', 'mappingSaved': True, 'infraredChanged': False}
     result = program(directory, 'set' if ir else 'delete', button, delay, code[3:] if ir else '')
     if result.get('status') != 'submitted':
         return result
@@ -205,9 +222,34 @@ def assign(directory, action, button, delay, code, *, program):
 
 
 def displayed_bindings(directory, drafts):
-    """Save every displayed slot; unconfigured cells explicitly default to none."""
+    """Display unconfigured cells as none without inferring remote IR contents."""
     validate({'schema': 2, 'bindings': drafts})
     value = load(directory)
     saved = value['bindings'] if value['schema'] == 2 else {}
     defaults = {slot(button, delay): 'none' for _, button in ROWS for delay in (0, 2)}
     return {**defaults, **saved, **drafts}
+
+
+def changed_bindings(directory, drafts):
+    """Save edited cells only, with a required same-button hold cleanup if unknown.
+
+    Unedited buttons are never reconciled or cleared. A missing Hold must be
+    resolved before removing Press IR, since a lone IR Hold can fire immediately.
+    """
+    validate({'schema': 2, 'bindings': drafts})
+    if not drafts:
+        return {}
+    value = load(directory)
+    saved = value['bindings'] if value['schema'] == 2 else {}
+    known = ir_knowledge(directory, saved)
+    changes = {key: action for key, action in drafts.items()
+               if saved.get(key) != action or known.get(key) is None
+               or (known[key] if known[key].startswith('ir:') else 'none')
+                  != (action if action.startswith('ir:') else 'none')}
+    shown = displayed_bindings(directory, drafts)
+    for _, button in ROWS:
+        press, hold = slot(button, 0), slot(button, 2)
+        if press in changes and not changes[press].startswith('ir:') and hold not in changes and hold not in known:
+            changes[hold] = shown[hold]
+    plan(directory, changes)
+    return changes

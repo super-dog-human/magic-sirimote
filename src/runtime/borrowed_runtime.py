@@ -21,12 +21,15 @@ class InputStartProof:
  def __init__(self,*,watch,lease,external_feature_guard,record,generation):
   self.watch=watch;self.lease=lease;self.external=external_feature_guard;self.record=record;self.generation=generation;self.used=False
 
-def initialize_input(*,watch,lease,paired,external_feature_guard,record,pump=lambda:None,clock=time.monotonic):
+def initialize_input(*,watch,lease,paired,external_feature_guard,record,pump=lambda:None,clock=time.monotonic,gatt_lookup_reply=None):
  if paired is not True or not callable(record) or not callable(external_feature_guard) or not callable(pump):raise ValueError('invalid runtime dependencies')
  snapshot=watch.snapshot()
  if type(snapshot) is not dict or type(snapshot.get('generation')) is not int:raise RuntimeError('no observed connected generation')
  generation=snapshot['generation'];pre=PreBorrowGuard(watch,lease,generation=generation,external_feature_guard=external_feature_guard,clock=clock)
  if pre() is not True:raise RuntimeError('pre-borrow guard unavailable')
+ if gatt_lookup_reply is not None:
+  from recovery_lookup_handoff import validate_reply
+  validate_reply(gatt_lookup_reply)
  if record({'stage':'f0af-intent','generation':generation}) is not True:raise RuntimeError('input start intent not recorded')
  input_start=BorrowedInputStart(pump=pump,guard=pre)
  try:
@@ -34,7 +37,9 @@ def initialize_input(*,watch,lease,paired,external_feature_guard,record,pump=lam
  except BaseException:
   record({'stage':'f0af-unknown','generation':generation});raise
  if record({'stage':'f0af-ack','generation':generation}) is not True:raise RuntimeError('input start acknowledgement not recorded')
- return InputStartProof(watch=watch,lease=lease,external_feature_guard=external_feature_guard,record=record,generation=generation)
+ proof=InputStartProof(watch=watch,lease=lease,external_feature_guard=external_feature_guard,record=record,generation=generation)
+ proof.gatt_lookup_reply=gatt_lookup_reply
+ return proof
 
 def accept_prelaunch_input(*,watch,lease,paired,external_feature_guard,record,handoff_check,clock=time.monotonic,gatt_lookup_reply=None):
  if paired is not True or not callable(handoff_check):raise ValueError('invalid input handoff')
@@ -85,9 +90,8 @@ def prepare(*,watch,lease,paired,external_feature_guard,record,pump=lambda:None,
   ensure_notifications(view.client_id,pump=pump,guard=control,record=record)
   import runtime_bundle as bundle
   if bundle.active():
-   from battery_read import capture, ScreenRefresh
+   from battery_read import ScreenRefresh
    session.battery_refresh=ScreenRefresh(view.client_id, control)
-   capture(view.client_id,pump=pump,guard=control)
   return session
  except BaseException:
   view.close();raise

@@ -11,18 +11,20 @@ from local_feature_lease import LocalFeatureLease
 from atomic_session_directory import AtomicSessionDirectory
 from postconnect_receiver_device import paired_target,open_target
 from postconnect_receiver_entry import run_connected_once
-from output_devices import open_verified_outputs
+from output_devices import open_verified_outputs,OutputSelection
 from receiver_result_receipt import write_receipt,write_start
 from receiver_request_auth import authenticate
 from controller_start_record import read_record
 from cooperative_feature_assumption import CooperativeFeatureAssumption
 from receiver_ready_receipt import write_ready
 from receiver_progress import write_progress
+from pumping_luna_client import with_native_requests
 
+@with_native_requests
 def run_once(*,state_path,run,external_feature_guard=None,cooperative_only=False,duration=60,stop_event=None,system_buttons=False,
              startup_timeout=12,clock=time.monotonic,pump_factory=None,
              lease_factory=LocalFeatureLease,journal_factory=AtomicSessionDirectory,
-             session_runner=run_connected_once,identity_check=ordinary,input_handoff_check=None,gatt_lookup_reply=None):
+             session_runner=run_connected_once,identity_check=ordinary,input_handoff_check=None,gatt_lookup_reply=None,idle_recovery=None):
  if type(system_buttons) is not bool or type(cooperative_only) is not bool or (cooperative_only and external_feature_guard is not None) or (not cooperative_only and not callable(external_feature_guard)) or not callable(clock) or (duration is not None and (type(duration) not in (int,float) or not 0<duration<=7200)) or type(startup_timeout) not in (int,float) or not 0<startup_timeout<=30:raise ValueError('invalid app configuration')
  stop=stop_event or threading.Event()
  if not callable(getattr(stop,'is_set',None)) or not callable(getattr(stop,'wait',None)):raise ValueError('invalid stop event')
@@ -39,18 +41,78 @@ def run_once(*,state_path,run,external_feature_guard=None,cooperative_only=False
   if stop.is_set():result={'status':'stopped-before-receiver'}
   elif pump.snapshot() is None:result={'status':'not-ready','reason':'connected-profile-not-observed'}
   else:
-   from hid_retry_guard import make_guard
-   initial=pump.tracker.snapshot()
-   if type(initial) is not dict or type(initial.get('generation')) is not int:raise RuntimeError('retry generation unavailable')
-   retry_guard=make_guard(watch=pump.tracker,lease=lease,stop=stop,feature=external_feature_guard,generation=initial['generation'])
-   def open_with_retry():return open_target(allow_retry=retry_guard,wait=stop.wait)
-   def outputs():return open_verified_outputs(allow_retry=retry_guard,wait=stop.wait)[0]
-   extra={}
-   if input_handoff_check is not None:extra.update(input_handoff_check=input_handoff_check,gatt_lookup_reply=gatt_lookup_reply)
-   if system_buttons:
-    from system_key_device import open_verified_system_key
-    extra.update({'open_system_keys':open_verified_system_key,'close_system_keys':os.close})
-   result=session_runner(watch=pump.tracker,lease=lease,paired_check=paired_target,external_feature_guard=external_feature_guard,record=journal,open_target=open_with_retry,open_outputs=outputs,close_target=os.close,duration=duration,abort=stop.is_set,clock=clock,on_ready=lambda session:write_ready(state_path,run,session),on_progress=lambda session,value:write_progress(state_path,run,session,value),**extra)
+   resumed=False;prior_recovery=None
+   output_selection=OutputSelection(scan=open_verified_outputs)
+   while True:
+    from hid_retry_guard import make_guard
+    initial=pump.tracker.snapshot()
+    if type(initial) is not dict or type(initial.get('generation')) is not int:raise RuntimeError('retry generation unavailable')
+    retry_guard=make_guard(watch=pump.tracker,lease=lease,stop=stop,feature=external_feature_guard,generation=initial['generation'])
+    def open_with_retry():return open_target(allow_retry=retry_guard,wait=stop.wait)
+    output_ready=threading.Event();output_records=None;current_outputs=None
+    def outputs():
+     nonlocal output_records,current_outputs
+     try:
+      import runtime_bundle as bundle
+      deferred=bundle.active() and duration is None
+      options={'allow_missing_mouse':True} if deferred else {}
+      value,output_records=output_selection.open(allow_retry=retry_guard,wait=stop.wait,**options)
+      if deferred:
+       try:
+        from absolute_pointer import prefer_absolute
+        value,output_records=prefer_absolute(value,output_records,retry_guard)
+       except BaseException:
+        value.close();raise
+      if deferred and value.mouse_fd is None:
+       try:
+        from deferred_mouse import DeferredMouse
+        value.mouse_provider=DeferredMouse(output_records[0],retry_guard)
+        value.mouse_provider.start()
+       except BaseException:
+        value.close();raise
+      current_outputs=value
+      return value
+     finally:output_ready.set()
+    extra={}
+    if input_handoff_check is not None:extra.update(input_handoff_check=input_handoff_check)
+    if gatt_lookup_reply is not None:extra.update(gatt_lookup_reply=gatt_lookup_reply)
+    if system_buttons:
+     from system_key_device import open_system_key_from_record
+     def system_keys():
+      output_ready.wait()  # The bounded output scan always signals, even on failure.
+      if output_records is None:raise RuntimeError('shared output inventory unavailable')
+      selected=[record for record in output_records if record.get('name')=='LGE RCU']
+      if len(selected)!=1 or retry_guard() is not True:raise RuntimeError('shared output inventory invalid')
+      return open_system_key_from_record(selected[0])
+     extra.update({'open_system_keys':system_keys,'close_system_keys':os.close})
+    def ready(session):
+     options={'resume_sequence':journal.journal.sequence} if resumed else {}
+     if current_outputs is not None:options['pointer_ready']=getattr(current_outputs,'pointer_ready',True) is not False
+     return write_ready(state_path,run,session,**options)
+    result=session_runner(watch=pump.tracker,lease=lease,paired_check=paired_target,external_feature_guard=external_feature_guard,record=journal,open_target=open_with_retry,open_outputs=outputs,close_target=os.close,duration=duration,abort=stop.is_set,clock=clock,on_ready=ready,on_progress=lambda session,value:write_progress(state_path,run,session,value),**extra)
+    if idle_recovery is None or duration is not None or stop.is_set():break
+    if resumed and result.get('diagnostic')=='target-not-present':
+     from owned_idle_recovery import recover_missing_target
+     result=recover_missing_target(result=result,prior_recovery=prior_recovery,state_path=state_path,run=run,
+       watch=pump.tracker,lease=lease,stop=stop,external_feature_guard=external_feature_guard,clock=clock)
+     # A fresh application receives a fresh device namespace. Do not repeat
+     # setup in this worker after confirming zero for the controller.
+     break
+    result=idle_recovery(result=result,state_path=state_path,run=run,watch=pump.tracker,lease=lease,
+                         initial_generation=initial['generation'],stop=stop,external_feature_guard=external_feature_guard)
+    if 'localRecovery' not in result:break
+    from owned_idle_recovery import validate_receipt
+    from borrowed_runtime_journal import MAX_ENTRIES
+    proof=validate_receipt(result);current=pump.tracker.snapshot()
+    if (stop.is_set() or lease.held() is not True or type(current) is not dict
+        or current['generation']!=proof['generation'] or not 0<=clock()-proof['observedAt']<=5
+        or journal.journal.sequence+11>MAX_ENTRIES):break
+    # Reuse this worker only after verified zero and complete resource closure.
+    # The original prelaunch input grant stays revoked; initialize input anew.
+    if pump.tracker.mark_active() is not True:break
+    if journal({'stage':'session-recovered','generation':proof['generation']}) is not True:
+     raise RuntimeError('resume stop proof unrecorded')
+    input_handoff_check=None;gatt_lookup_reply=proof['gattLookupReply'];resumed=True;prior_recovery=result
  except Exception as exc:result={'status':'attention','reason':'startup-'+type(exc).__name__}
  finally:
   if pump is not None:
@@ -100,8 +162,10 @@ def run_authorized(*,state_path,run,controller_record,controller_app,controller_
   return result
  from prelaunch_handoff_runtime import receiver_client
  client=receiver_client(controller_app,controller_record)
- from controller_status_watch import ControllerStatusWatch
- return run_and_record(state_path=state_path,run=run,input_handoff_check=client.check,gatt_lookup_reply=client.gatt_lookup_reply,pump_factory=lambda:ControllerStatusWatch(client),external_feature_guard=external_feature_guard,cooperative_only=cooperative_only,duration=duration,stop_event=stop_event,system_buttons=system_buttons)
+ from controller_status_watch import ControllerStatusWatch,ResumingControllerWatch
+ from owned_idle_recovery import wait_and_recover
+ resident=duration is None
+ return run_and_record(state_path=state_path,run=run,input_handoff_check=client.check,gatt_lookup_reply=client.gatt_lookup_reply,pump_factory=lambda:(ResumingControllerWatch(client) if resident else ControllerStatusWatch(client)),idle_recovery=wait_and_recover if resident else None,external_feature_guard=external_feature_guard,cooperative_only=cooperative_only,duration=duration,stop_event=stop_event,system_buttons=system_buttons)
 
 def run_from_state(*,state_path,controller_app,controller_package,controller_pin,external_feature_guard=None,cooperative_only=False,allow_exe_permission_denied=False,duration=60,stop_event=None,system_buttons=False):
  try:record=read_record(state_path);run=record['run']

@@ -1,8 +1,7 @@
-"""Bounded LGE RCU discovery for experiments; no opens occur on import.
+"""Verified LGE RCU discovery and reopen; no opens occur on import.
 
-This is not enabled in the resident service. Its caller owns the returned FD
-and must close it. A successful open proves identity/capabilities, not that
-webOS will interpret any particular key or that input is safe to duplicate.
+The caller owns the returned FD and must close it. Identity and capability
+checks do not establish exclusive access to the TV's shared input device.
 """
 import errno,fcntl,os,stat,struct,time
 from system_key_sink import SystemKeySink,identity_matches,KEYS,EVIOCGBIT_KEY
@@ -47,7 +46,11 @@ def open_verified_system_key(root='/dev/input',*,lstat=os.lstat,open_fn=os.open,
   except (OSError,ValueError,UnicodeError):complete=False
   finally:close(fd)
  if not complete or len(candidates)!=1:raise RuntimeError('system input inventory incomplete or nonunique')
- path,expected=candidates[0];fd=open_fn(path,os.O_RDWR|os.O_NONBLOCK|os.O_NOFOLLOW|os.O_CLOEXEC)
+ path,expected=candidates[0]
+ return _open_system_key(path,expected,end=end,lstat=lstat,open_fn=open_fn,fstat=fstat,ioctl=ioctl,close=close,write=write,clock=clock)
+
+def _open_system_key(path,expected,*,end,lstat,open_fn,fstat,ioctl,close,write,clock):
+ fd=open_fn(path,os.O_RDWR|os.O_NONBLOCK|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   def verify(open_fd):
    if open_fd!=fd:return False
@@ -59,3 +62,28 @@ def open_verified_system_key(root='/dev/input',*,lstat=os.lstat,open_fn=os.open,
   sink=SystemKeySink(fd,identity_check=verify,ioctl=ioctl,write=write)
   return sink,fd
  except BaseException:close(fd);raise
+
+
+def open_system_key_from_record(record,*,root='/dev/input',lstat=os.lstat,open_fn=os.open,
+                                fstat=os.fstat,ioctl=fcntl.ioctl,close=os.close,
+                                write=os.write,clock=time.monotonic):
+ """Use this setup's verified output selection; reverify the reopened FD.
+
+ The caller must obtain the record from a fresh validated output open in
+ the same setup attempt; a stale inventory record alone is insufficient.
+ """
+ import re
+ if (type(record) is not dict or record.get('name')!='LGE RCU'
+     or record.get('capabilitiesVerified') is not True
+     or type(record.get('path')) is not str
+     or not re.fullmatch(re.escape(root)+r'/event(?:[0-9]|[1-9][0-9]|1[01][0-9]|12[0-7])',record['path'])):
+  raise ValueError('invalid shared system input record')
+ expected=lstat(record['path'])
+ fields={'dev':expected.st_dev,'inode':expected.st_ino,'rdev':expected.st_rdev,
+         'uid':expected.st_uid,'gid':expected.st_gid}
+ if (not stat.S_ISCHR(expected.st_mode) or
+     any(type(record.get(k)) is not int or record[k]!=v for k,v in fields.items())
+     or record.get('mode')!=oct(stat.S_IMODE(expected.st_mode))):
+  raise RuntimeError('shared system input changed before reopen')
+ return _open_system_key(record['path'],expected,end=clock()+5,lstat=lstat,open_fn=open_fn,
+                         fstat=fstat,ioctl=ioctl,close=close,write=write,clock=clock)

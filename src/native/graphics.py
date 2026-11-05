@@ -54,6 +54,8 @@ class Canvas:
         self.window = self.renderer = None
         self.fonts = {}
         self.video = self.text_ready = False
+        self.show_pending = True
+        self.restore_pending = False
         try:
             self.error = self.bind(self.sdl, 'SDL_GetError', C.c_char_p, [])
             if self.bind(self.sdl, 'SDL_Init', C.c_int, [C.c_uint])(0x20) != 0:
@@ -61,7 +63,7 @@ class Canvas:
             self.video = True
             self.window = self.bind(self.sdl, 'SDL_CreateWindow', C.c_void_p,
                                     [C.c_char_p, C.c_int, C.c_int, C.c_int, C.c_int, C.c_uint])(
-                b'Magic Sirimote', 0, 0, self.WIDTH, self.HEIGHT, 4)
+                b'Magic Sirimote', 0, 0, self.WIDTH, self.HEIGHT, 8)  # SDL_WINDOW_HIDDEN; reveal a complete frame.
             if not self.window:
                 raise RuntimeError(self.error())
             self.renderer = self.bind(self.sdl, 'SDL_CreateRenderer', C.c_void_p,
@@ -170,12 +172,21 @@ class Canvas:
     def restore(self):
         if not self.window:
             raise RuntimeError('Window is unavailable')
-        # Raising a minimized webOS window alone does not restore it.
-        for name in ('SDL_RestoreWindow', 'SDL_ShowWindow', 'SDL_RaiseWindow'):
-            self.bind(self.sdl, name, None, [C.c_void_p])(self.window)
+        # Do not expose the previous screen before the next draw is complete.
+        self.show_pending = True
+        self.restore_pending = True
 
     def present(self):
+        if self.show_pending:
+            # Reveal only after all draw commands are ready, then submit the
+            # complete frame immediately (including SDL builds that skip hidden windows).
+            if self.restore_pending:
+                self.bind(self.sdl, 'SDL_RestoreWindow', None, [C.c_void_p])(self.window)
+            self.bind(self.sdl, 'SDL_ShowWindow', None, [C.c_void_p])(self.window)
         self.present_frame(self.renderer)
+        if self.show_pending:
+            self.bind(self.sdl, 'SDL_RaiseWindow', None, [C.c_void_p])(self.window)
+            self.show_pending = self.restore_pending = False
 
     def close(self):
         for font in self.fonts.values():

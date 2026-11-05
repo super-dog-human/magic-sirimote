@@ -2,6 +2,7 @@
 import json
 import os
 import stat
+import time
 from pathlib import Path
 import runtime_bundle as bundle
 from runtime_device import configure
@@ -103,18 +104,33 @@ def receiver_settings():
     return values
 
 
-def main(role):
+def main(role, *, started_at=None):
+    began = time.monotonic() if started_at is None else started_at
+    def timing(stage):
+        print(json.dumps({'stage': 'runtime-startup-timing', 'role': role,
+            'step': stage, 'pid': os.getpid(), 'epochMs': int(time.time() * 1000),
+            'elapsedMs': round((time.monotonic() - began) * 1000)}, separators=(',', ':')), flush=True)
+    from controller_preload import token, await_start, revalidate
+    preparation = token() if role == 'controller' else None
+    prepared_run = None
     bundle.select(role)
+    timing('bundle-imported')
     pin = bundle.read_pin(role)
-    if not bundle.package_matches(bundle.role_path(role, ''), bundle.PACKAGE, pin):
-        raise RuntimeError('Installed runtime does not match package')
     if role == 'controller':
+        receiver_pin = bundle.read_pin('receiver')
+        if not bundle.packages_match({'controller':pin, 'receiver':receiver_pin}):
+            raise RuntimeError('Installed runtime does not match both role pins')
+    elif not bundle.package_matches(bundle.role_path(role, ''), bundle.PACKAGE, pin):
+        raise RuntimeError('Installed runtime does not match package')
+    timing('package-verified')
+    if role == 'controller':
+        timing('receiver-package-verified')
         from controller_connect_identity import verify_self
         from local_attestation import _start_ticks
         if not verify_self():
             raise RuntimeError('Controller process identity unavailable')
+        timing('controller-identity-verified')
         from control_processes import require_no_other_input, processes
-        import time
         deadline = time.monotonic() + 15
         while processes()['ui']:
             require_no_other_input(allow_self=True)
@@ -122,25 +138,50 @@ def main(role):
                 raise RuntimeError('Close the setup window before starting input')
             time.sleep(.05)
         require_no_other_input(allow_self=True)
+        timing('other-processes-checked')
         values = load(bundle.ROOT / 'state')
+        if preparation is not None:
+            from runtime_device import configure_cursor
+            configure_cursor(enabled=values['gyroEnabled'], sensitivity=values['gyroSensitivity'])
+            configure(remote=values['remoteAddress'], adapter=values['adapterAddress'], name=values['remoteName'])
+            from resident_controller_entry import main as prepared_run
+            timing('runtime-preloaded')
+            if not await_start(preparation):
+                return 0
+            def conflicts():
+                found = require_no_other_input(allow_self=True)
+                if found['ui']:
+                    raise RuntimeError('Settings window opened during preparation')
+            revalidate(values, {'controller':pin, 'receiver':receiver_pin},
+                load_values=lambda:load(bundle.ROOT / 'state'), read_pin=bundle.read_pin,
+                verify_package=lambda role, value:bundle.package_matches(bundle.role_path(role, ''), bundle.PACKAGE, value),
+                verify_process=verify_self, check_conflicts=conflicts, verify_pair=bundle.packages_match)
+            timing('preparation-revalidated')
         bind_device(bundle.ROOT / 'state', values)
         _save_session(session_path(os.getpid(), _start_ticks(Path('/proc/self/stat'))), values)
+        timing('session-saved')
     else:
         from control_processes import processes
         if processes()['legacy']:
             raise RuntimeError('The previous input runtime is still active')
         values = receiver_settings()
+        timing('session-verified')
     if role == 'receiver':
         from tv_assignments import load as load_assignments
         from system_buttons import configure_assignments
         app_state = Path('/media/developer/apps/usr/palm/applications/org.magicsirimote.app/state')
         assignments = load_assignments(app_state)
         configure_assignments(assignments['bindings'] if assignments['schema'] == 2 else {})
-    from runtime_device import configure_cursor
-    configure_cursor(enabled=values['gyroEnabled'], sensitivity=values['gyroSensitivity'])
-    configure(remote=values['remoteAddress'], adapter=values['adapterAddress'], name=values['remoteName'])
-    if role == 'controller':
-        from resident_controller_entry import main as run
+    if prepared_run is not None:
+        run = prepared_run
     else:
-        from postconnect_receiver_native_entry import main as run
-    return run()
+        from runtime_device import configure_cursor
+        configure_cursor(enabled=values['gyroEnabled'], sensitivity=values['gyroSensitivity'])
+        configure(remote=values['remoteAddress'], adapter=values['adapterAddress'], name=values['remoteName'])
+        timing('device-configured')
+        if role == 'controller':
+            from resident_controller_entry import main as run
+        else:
+            from postconnect_receiver_native_entry import main as run
+        timing('runtime-imported')
+    return run(timing=timing) if role == 'controller' else run()

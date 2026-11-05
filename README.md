@@ -19,16 +19,14 @@ This is an experimental community project with limited hardware testing. Reconne
 
 | Component | Tested model or version |
 | --- | --- |
-| Siri Remote | First generation, black, **A1513** |
-| Remote main firmware | **0241** |
-| Remote radio firmware | **0107** |
+| Siri Remote | First generation, black, **A1513** and **A1962** |
 | LG TV | **LG G3 — OLED55G3PJA** |
 | webOS platform version | **11.2.0** (`sdkVersion`) |
 | TV firmware | **43.21.96** |
 
 The webOS platform version and TV firmware version are different values. You can check your TV's values during the connection step below. You do not need to look up the remote's firmware before starting; the app checks its identity and firmware during setup.
 
-The pairing filter accepts the black **A1513** and **A1962** models. Later, silver Siri Remote generations are not supported.
+Both models have been tested for pairing, infrared assignments, swipes, touch-surface clicks, and gyro pointer control. Later, silver Siri Remote generations are not supported.
 
 ## Set up from a Mac
 
@@ -114,7 +112,7 @@ ares-device --system-info --device my-tv
 
 ### 5. Download and install Magic Sirimote
 
-An **IPK** is the app's installation file. The current package is **0.1.0**.
+An **IPK** is the app's installation file.
 
 The following commands create a folder under Downloads and download the package and its checksum. Copy each command into Terminal and wait for it to finish before continuing:
 
@@ -124,8 +122,8 @@ cd "$HOME/Downloads/magic-sirimote"
 ```
 
 ```sh
-curl --fail --location --output org.magicsirimote.app_0.1.0_arm.ipk \
-  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/integrated-preview/org.magicsirimote.app_0.1.0_arm.ipk
+curl --fail --location --output org.magicsirimote.app_arm.ipk \
+  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/integrated-preview/org.magicsirimote.app_arm.ipk
 ```
 
 ```sh
@@ -139,12 +137,12 @@ Check the download:
 shasum -a 256 -c SHA256SUMS
 ```
 
-The result should end with `org.magicsirimote.app_0.1.0_arm.ipk: OK`. If it does not, download both files again before installing.
+The result should end with `org.magicsirimote.app_arm.ipk: OK`. If it does not, download both files again before installing.
 
 Keep the TV on, then install and open the app:
 
 ```sh
-ares-install --device my-tv org.magicsirimote.app_0.1.0_arm.ipk
+ares-install --device my-tv org.magicsirimote.app_arm.ipk
 ```
 
 ```sh
@@ -167,7 +165,7 @@ The app shows **Pair a Siri Remote**. If it opens the settings screen instead, c
 4. After the search detects your remote, it appears in the candidate list. Use **Up/Down** to select it. The list is empty until a remote is detected; its name may contain a serial number.
 5. Select **Pair selected remote** and press OK. Use Left/Right to move between the bottom buttons if necessary. **Appearing in the list does not mean pairing is complete.** If the app already knows this remote, it may select and pair it automatically.
 6. Wait while the app verifies the remote and prepares input. On success, it saves the connection information and closes the window to start reception.
-7. Press Siri Remote's touch surface once to wake it. Try swiping to move the TV's selection, then pressing the surface to select an item.
+7. Press Siri Remote's touch surface once to wake it. Try swiping to move the TV's selection, then pressing and releasing the surface to select an item.
 
 If the app reports an error or no candidate appears, see [Pairing problems](#pairing-problems).
 
@@ -194,7 +192,7 @@ Here is a useful starting configuration. **It is a suggestion, not a preset appl
 
 **How Press and Hold interact:** an IR Press action is sent immediately and may also happen at the beginning of a long hold. For example, holding the suggested TV button can send Home first, then Power. If you assign an IR action to Hold, also assign an IR action to Press on that button. A hold-only IR assignment can fire on a short press, so the app prevents that combination.
 
-**What “Do nothing” means:** on an unconfigured app, all twelve cells display Do nothing. That display is not a readback of the remote's existing infrared memory. Saving applies the displayed choices: Do nothing deletes that slot's IR assignment and disables its TV-side action. To disable a button completely, set both its cells to Do nothing.
+**What “Do nothing” means:** on an unconfigured app, all twelve cells display Do nothing. That display is not a readback of the remote's existing infrared memory. Explicitly choosing Do nothing and saving removes that slot's IR assignment and disables its TV-side action. Unedited buttons are left unchanged. To disable a button completely, set both its cells to Do nothing.
 
 Choose every cell you want to use before your first save. The app cannot recover an unknown infrared assignment after you overwrite or delete it.
 
@@ -202,10 +200,10 @@ Choose every cell you want to use before your first save. The app cannot recover
 
 1. Press **Back** to return to the first settings screen. Your button edits remain pending.
 2. Leave **Gyro cursor** on if you want pointer control.
-3. Choose **Save and restart**. The app applies all twelve displayed assignments and restarts reception.
+3. Choose **Save and restart**. The app applies your edited assignments and restarts reception.
 4. Wait for the window to close, then use Siri Remote.
 
-If saving fails partway through, some assignments may already have changed. Read the displayed result, press Siri Remote's touch surface once to wake it, and see [Saving problems](#saving-problems) before retrying. Selecting a choice or leaving the editor with Back does not itself save anything. **Close** asks whether to discard unsaved edits.
+If saving fails partway through, some assignments may already have changed. Read the displayed result and press Siri Remote's touch surface once to wake it before retrying. Selecting a choice or leaving the editor with Back does not itself save anything. **Close** asks whether to discard unsaved edits, then returns to Home. Back from the first settings screen also returns to Home.
 
 ## Troubleshooting
 
@@ -230,12 +228,16 @@ ares-launch --device my-tv org.magicsirimote.app
 ### Pairing problems
 
 - Start searching in the app **before** holding MENU + Volume Up. Release both buttons after about five seconds and keep the remote near the TV.
-- Charge the remote if necessary.
+- Charge the remote if necessary, then disconnect its cable before testing input.
 - If no candidate appears, choose **Search again** when offered and repeat the sequence.
 - If a candidate appears, select it and choose **Pair selected remote**. Discovery and pairing are separate steps.
 - If product or firmware verification fails, record the exact message. A name resembling “Siri Remote” is not sufficient for acceptance.
 
 The pairing used by Magic Sirimote may not appear in the TV's ordinary Bluetooth-controller list. An empty list there does not by itself mean pairing failed. Use Magic Sirimote's own screen and test input instead.
+
+### The remote does not respond after being idle
+
+Siri Remote can go to sleep after a period of inactivity. **Press the touch surface down once to wake it**, then swipe or move the remote. Simply touching or swiping the surface may not wake it. Allow a moment for Bluetooth to reconnect. If it still does not respond, follow the checks below.
 
 ### Only power or volume works
 
@@ -253,14 +255,6 @@ Recovery is not guaranteed for every Bluetooth failure. If the problem keeps ret
 
 Check that Gyro cursor is on and saved. Lift your finger completely off the touch surface and move the remote more deliberately. If movement is misdirected, lay the remote flat with its touch surface up and front end toward the TV. Choose **Reset cursor orientation**, confirm **Restart**, and leave the remote still until reception resumes. A working swipe does not necessarily mean orientation setup has completed yet.
 
-### Saving problems
-
-Keep the TV on and the remote nearby. Press Siri Remote's touch surface once to wake it before saving, then use the LG remote to operate the app while reception pauses.
-
-If you see a partial-save count, the completed items may already be stored. Inspect the choices and the error before retrying; do not assume the previous configuration was restored. If Hold uses an IR action, Press must also use an IR action on the same button. For example, set TV / Control Center to **Press: Home (IR)** and **Hold: Power on/off (IR)**. Setting Press to Do nothing while Hold uses IR is not allowed.
-
-The displayed assignments are the app's saved choices, not a complete readback of the remote's memory. Saving writes persistent IR settings, even when values are unchanged. Save when you intend to apply settings, rather than repeatedly saving as a connection test.
-
 ### Voice input
 
 Voice input is not supported.
@@ -277,10 +271,6 @@ To start over:
 4. Let the reset finish. If it stops partway through, read the error; reopening the app may offer **Continue reset** to finish the remaining steps. Some IR assignments may already be deleted.
 5. When **Start pairing** appears, follow [Pair Siri Remote with the TV](#6-pair-siri-remote-with-the-tv), then configure and save your button assignments again.
 
-To remove the app and its remote setup, complete that reset first, close the app, then run on the Mac:
-
-```sh
-ares-install --device my-tv --remove org.magicsirimote.app
-```
+To uninstall Magic Sirimote, open **Edit App List** on the TV's Home screen, select Magic Sirimote, and choose **Delete**. If you also want to remove its remote pairing and infrared assignments, complete **Reset app** before uninstalling.
 
 Uninstalling the app alone should not be treated as unpairing the remote or deleting its stored IR settings. Reset clears the active configuration but may retain inactive local recovery records; it is not secure erasure of diagnostic history.

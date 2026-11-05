@@ -1,4 +1,5 @@
 [
+  "absolute_pointer.py",
   "action_pipeline.py",
   "adaptive_pose_pointer.py",
   "adaptive_prefix_pose.py",
@@ -34,8 +35,10 @@
   "controller_status_watch.py",
   "cooperative_feature_assumption.py",
   "decoder.py",
+  "deferred_mouse.py",
   "direct_gatt_read.py",
   "direct_pose_pointer.py",
+  "early_navigation.py",
   "gated_hidraw_router.py",
   "grouped_prefix_output.py",
   "gyro_pointer.py",
@@ -66,7 +69,10 @@
   "orphan_reconcile.py",
   "output_bridge.py",
   "output_devices.py",
+  "output_sysfs.py",
+  "owned_idle_recovery.py",
   "owned_settings_activation.py",
+  "package_read_batch.py",
   "partial_activation_stop.py",
   "passive_connection_wait.py",
   "persistent_status_client.py",
@@ -131,8 +137,10 @@
   "touch_click.py",
   "touch_coordinates.py",
   "touch_dpad.py",
+  "touch_surface.py",
   "tv_bluetooth.py",
   "tv_launch.py",
+  "unentered_recovery.py",
   "vector_adaptive_pose_pointer.py",
   "verified_mode_reader.py"
 ]

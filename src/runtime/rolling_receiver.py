@@ -12,8 +12,10 @@ from normalize import normalize
 from navigation_mode import NavigationMode
 
 class RollingReceiver:
-    def __init__(self,outputs,*,continuity,mode_verified,clock=time.monotonic,seconds=7200,history_limit=32):
+    def __init__(self,outputs,*,continuity,mode_verified,clock=time.monotonic,seconds=7200,history_limit=32,navigation_verified=None):
         if not callable(continuity) or not callable(mode_verified) or not callable(clock):raise ValueError('verified control callbacks required')
+        if navigation_verified is not None and not callable(navigation_verified):raise ValueError('invalid navigation authorization')
+        self.navigation_verified=navigation_verified
         self.navigation=NavigationMode()
         self.outputs=outputs;self.continuity=continuity;self.mode_verified=mode_verified;self.clock=clock
         self.policy=InputSessionPolicy.sustained(seconds);self.history_limit=history_limit
@@ -24,10 +26,15 @@ class RollingReceiver:
         self.stop_reason=None
         self.decoded_kinds=dict.fromkeys(('no-touch','one-touch','two-touch','rejected'),0)
     def _live(self):
-        try:return self.continuity() is True and self.mode_verified() is True
+        try:return self.continuity() is True and (self.mode_verified() is True or (self.navigation_verified is not None and self.navigation_verified() is True))
         except Exception:return False
     def _new(self):
         r=CombinedReceiver(self.outputs,clock=self.clock,sensor_input_verified=False,session_policy=self.child_policy,max_actions=self.policy.max_actions,action_history_limit=self.history_limit)
+        # Only the coordinate basis survives an in-process rollover or screen
+        # pause on this verified sensor session. Filters, pending displacement,
+        # deadlines and button state belong to the new child and stay fresh.
+        if self.receiver is not None:
+            r.router.pose.reference_inverse=self.receiver.router.pose.reference_inverse
         r.router.navigation=self.navigation
         self.generation+=1
         if not r.bind(self.generation):raise RuntimeError('receiver-bind-failed')
@@ -78,7 +85,9 @@ class RollingReceiver:
             parsed=decode_prefix(report)
             kind=parsed['kind'] if parsed is not None else 'rejected'
             self.decoded_kinds[kind]=min(100000000,self.decoded_kinds[kind]+1)
-            if parsed is not None and parsed.get('kind')=='no-touch':
+            motion_verified=self.mode_verified() is True
+            if not motion_verified:self.receiver.bridge.sensor_input_verified=False
+            if motion_verified and parsed is not None and parsed.get('kind')=='no-touch':
                 self.receiver.bridge.sensor_input_verified=True;self.complete_frames+=1
             result=self.receiver.feed_raw(self.generation,report)
             sample=normalize(report)
@@ -98,6 +107,7 @@ class RollingReceiver:
     def tick(self):
         if not self._advance():return False
         try:
+            if not self.mode_verified():self.receiver.bridge.sensor_input_verified=False
             if not self.paused:self.receiver.tick()
             return True
         except BaseException:

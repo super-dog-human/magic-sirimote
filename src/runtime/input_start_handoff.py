@@ -39,7 +39,7 @@ def _receive(sock):
 
 class InputStartHandoff:
     def __init__(self, *, run, controller, generation, connection_valid,
-                 journal, send_input_start, launch_receiver, connection_snapshot=None):
+                 journal, send_input_start, launch_receiver, connection_snapshot=None, connection_observation=None, owner_valid=None):
         if not isinstance(run, str) or len(run) != 32 or any(c not in '0123456789abcdef' for c in run):
             raise ValueError('invalid run')
         if (set(controller) != {'pid', 'startTicks'} or
@@ -50,10 +50,14 @@ class InputStartHandoff:
         self.valid, self.journal = connection_valid, journal
         if connection_snapshot is not None and not callable(connection_snapshot):raise ValueError("invalid observation provider")
         self.connection_snapshot=connection_snapshot
+        if (connection_observation is None) != (owner_valid is None) or (connection_observation is not None and not all(callable(f) for f in (connection_observation, owner_valid))):
+            raise ValueError('invalid reconnect observation provider')
+        self.connection_observation=connection_observation;self.owner_valid=owner_valid
         self.send, self.launch = send_input_start, launch_receiver
         self.token = secrets.token_hex(16)
         self.started = self.acknowledged = self.revoked = False
         self.receiver_pid = None
+        self.receiver_idle = False
         self.lock = threading.RLock()
 
     def _check(self):
@@ -104,13 +108,27 @@ class InputStartHandoff:
         with self.lock:
             if not self.acknowledged:
                 raise RuntimeError('input start not acknowledged')
-            if type(request) is not dict or set(request) not in ({'run','token','challenge'}, {'run','token','challenge','operation'}) or ('operation' in request and request['operation']!='observe'):
+            if type(request) is not dict or set(request) not in ({'run','token','challenge'}, {'run','token','challenge','operation'}) or ('operation' in request and request['operation'] not in ('observe','connection','idle','active')):
                 raise ValueError('invalid handoff request')
             if request['run'] != self.run or request['token'] != self.token:
                 raise RuntimeError('wrong handoff session')
             challenge = request['challenge']
             if not isinstance(challenge, str) or len(challenge) != 32 or any(c not in '0123456789abcdef' for c in challenge):
                 raise ValueError('invalid challenge')
+            if request.get('operation') in ('connection','idle','active'):
+                # This is a read-only lifecycle observation, never a renewed
+                # input-start grant. Only the already bound worker may use it.
+                if self.receiver_pid != peer_pid or self.connection_observation is None or self.owner_valid() is not True:
+                    raise RuntimeError('reconnect observation unavailable')
+                if request.get('operation')=='idle':
+                    self.receiver_idle=True;self.revoked=True
+                from controller_status_watch import select_connection
+                value=select_connection(self.connection_observation())
+                if request.get('operation')=='active':
+                    if value['open'] is not True or value['snapshot'] is None:raise RuntimeError('resume connection unavailable')
+                    self.receiver_idle=False
+                if self.owner_valid() is not True:raise RuntimeError('controller owner lost')
+                return {'run':self.run,'challenge':challenge,'controller':self.controller,'connection':value}
             self._check()
             if self.receiver_pid is None:
                 self.receiver_pid = peer_pid
@@ -196,7 +214,7 @@ class HandoffClient:
         self.controller, self.uid = dict(controller), controller_uid
         self.authenticated = False
 
-    def _request(self, observe=False):
+    def _request(self, observe=False, connection=False, idle=False, active=False):
         challenge = secrets.token_hex(16)
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
@@ -209,8 +227,16 @@ class HandoffClient:
                     return None
                 request={'run':self.run, 'token':self.token, 'challenge':challenge}
                 if observe:request['operation']='observe'
+                if connection:request['operation']='idle' if idle else 'active' if active else 'connection'
                 _send(sock,request)
                 response = _receive(sock)
+                if connection:
+                    expected={'run':self.run,'challenge':challenge,'controller':self.controller}
+                    if type(response) is not dict or set(response)!=set(expected)|{'connection'} or {key:response[key] for key in expected}!=expected:return None
+                    from controller_status_watch import select_connection
+                    value=select_connection(response['connection'])
+                    self.authenticated=True
+                    return value
                 expected={'run':self.run, 'challenge':challenge,
                           'controller':self.controller, 'inputStarted':True}
                 if observe:
@@ -228,3 +254,9 @@ class HandoffClient:
 
     def check(self):return self._request() is not None
     def observe(self):return self._request(observe=True)
+
+    def connection(self):return self._request(connection=True)
+
+    def idle(self):return self._request(connection=True,idle=True) is not None
+
+    def active(self):return self._request(connection=True,active=True) is not None

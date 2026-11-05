@@ -89,9 +89,17 @@ class PersistentStatusClient:
             raise RuntimeError('LS2 client thread changed')
 
     def read(self, method, *, timeout=3):
-        self._thread()
         if method not in METHODS or type(timeout) not in (int, float) or not 0 < timeout <= 3:
             raise ValueError('bounded profile status read required')
+        return self._request(method, {'address': TARGET, 'subscribe': False}, timeout=timeout)
+
+    def _request(self, method, params, *, timeout, guard=lambda: None, pump=lambda: None):
+        interval=getattr(pump,'poll_interval',.1)
+        if type(interval) not in (int,float) or not .005<=interval<=.1:
+            raise ValueError('invalid monitor pump interval')
+        # Private transport entry. Runtime commands must first pass their
+        # existing per-method policy and native-process guard in PumpingLunaClient.
+        self._thread()
         if self.closed or self.disconnected or self.abort():
             raise RuntimeError('LS2 client unavailable')
         replies = []
@@ -111,17 +119,26 @@ class PersistentStatusClient:
         token = C.c_ulong()
         delivered = False
         try:
+            deadline = time.monotonic() + timeout
+            pump(); guard()
+            if time.monotonic() >= deadline:
+                raise TimeoutError('LS2 deadline expired before dispatch')
             self._check(self.call_one(self.handle,
                 ('luna://com.webos.service.bluetooth2/' + method).encode(),
-                json.dumps({'address': TARGET, 'subscribe': False}).encode(),
+                json.dumps(params, separators=(',', ':')).encode(),
                 receive, None, C.byref(token), C.byref(self.error)))
-            deadline = time.monotonic() + timeout
+            next_guard = time.monotonic() + .1
+            next_pump = time.monotonic() + interval
             while not replies:
                 if self.disconnected or self.abort():
                     raise RuntimeError('LS2 read interrupted')
                 if time.monotonic() >= deadline:
                     raise TimeoutError('LS2 read timed out')
                 self.iterate(self.context, False)
+                if time.monotonic() >= next_guard:
+                    guard(); next_guard = time.monotonic() + .1
+                if time.monotonic() >= next_pump:
+                    pump(); next_pump = time.monotonic() + interval
                 if not replies:
                     time.sleep(.005)
             delivered = True
@@ -129,6 +146,9 @@ class PersistentStatusClient:
                 raise RuntimeError('LS2 reply invalid')
             if self.disconnected or self.abort():
                 raise RuntimeError('LS2 read interrupted')
+            pump(); guard()
+            if time.monotonic() >= deadline:
+                raise TimeoutError('LS2 read timed out during guard')
             return replies[0]
         finally:
             if delivered:

@@ -23,7 +23,7 @@ class SwipeClick:
     SWIPE_PULSE_SECONDS = .060
 
     def __init__(self, emit, regions, *, clock=time.monotonic,
-                 max_seconds=30, max_actions=16, session_policy=None):
+                 max_seconds=30, max_actions=16, session_policy=None, deferred_center=False):
         if not callable(emit):
             raise ValueError('An injected semantic emitter is required')
         if not isinstance(regions, SurfaceRegions):
@@ -45,7 +45,7 @@ class SwipeClick:
             raise ValueError('Finite monotonic clock required')
         self.core = TouchClick(self._translate, max_seconds=max_seconds,
                                max_clicks=max_actions, clock=self._clock_proxy,
-                               session_policy=session_policy)
+                               session_policy=session_policy, deferred_output=deferred_center)
         self.max_actions = max_actions
         self.swipes = dict.fromkeys(('up', 'down', 'left', 'right'), 0)
         self.stats = {'physicalClicks': 0, 'semanticEvents': 0,

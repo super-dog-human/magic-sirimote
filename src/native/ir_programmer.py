@@ -1,4 +1,4 @@
-"""One explicitly requested IR change; no I/O on import and no write retries.
+"""One explicitly requested IR change or whole-IR reset; no I/O on import and no write retries.
 
 Settings cannot be read back on the supported locked firmware. An LS2 success
 is a transport acknowledgement, never verification of the EEPROM contents.
@@ -23,14 +23,30 @@ REPORT = '00002a4d-0000-1000-8000-00805f9b34fb'
 REFERENCE = '00002908-0000-1000-8000-00805f9b34fb'
 SERIAL = '00002a25-0000-1000-8000-00805f9b34fb'
 FIRMWARE = '00002a26-0000-1000-8000-00805f9b34fb'
-# Exact firmware identification returned by the tested A1513; other versions
-# need their own validation rather than assuming the same programming format.
+# Exact firmware identities: A1513 Main0241 and A1962 Main0116.
+# Both single-row formats were checked against their matching firmware images.
 SUPPORTED_FIRMWARE = b'01004102200070033000070131001800B000410240001508'
+A1962_FIRMWARE = b'B000750001001601300030022000040431001800C1000100'
+PNP = '00002a50-0000-1000-8000-00805f9b34fb'
+SUPPORTED_PROFILES = {
+    (0x0266, SUPPORTED_FIRMWARE),
+    (0x026d, A1962_FIRMWARE),
+}
+
+def validated_profile(pnp, firmware):
+    return (len(pnp) == 7 and pnp[:3] == b'\x01\x4c\x00'
+            and (int.from_bytes(pnp[3:5], 'little'), firmware) in SUPPORTED_PROFILES)
+
 BUTTONS = (('TV / Home', 1), ('Volume +', 2), ('Volume -', 4),
            ('Play / Pause', 8), ('Microphone', 16), ('MENU', 32), ('Surface click', 128))
 
 
 def packet(action, button, delay, code=''):
+    if action == 'reset-all':
+        if button is not None or delay is not None or code != '':
+            raise ValueError('Whole-IR reset does not accept a button or code.')
+        # Both validated firmware images route 80 AA 55 to the IR database reset.
+        return bytes.fromhex('f080aa55')
     if type(button) is not int or button not in dict((v, k) for k, v in BUTTONS):
         raise ValueError('Choose one physical button.')
     if action == 'delete':
@@ -61,6 +77,7 @@ def runtime_idle(proc=Path('/proc'), *, allow_idle_service=False):
             readonly = [[b'/usr/bin/python3', b'-I', b'-B', (service + name).encode()]
                         for name in ('power-read.py', 'activity-read.py')]
             readonly.append([b'/usr/bin/python3', b'-I', b'-B', (service + 'control.py').encode(), b'status'])
+            readonly.append([b'/usr/bin/python3', b'-I', b'-B', (service + 'power-read.py').encode(), b'--serve'])
             if argv == [(APP + '.service').encode()] or argv in readonly:
                 continue  # Caller separately checks input workers and unfinished state.
         if b'org.codex.siriremote.' in command or b'org.magicsirimote.' in command:
@@ -126,7 +143,7 @@ def program(values, action, button, delay, code, call, record, idle=runtime_idle
         invoke('gatt/discoverServices', {'address': remote}, 8)
         if read(DIS, SERIAL) != values['remoteName'].encode():
             raise RuntimeError('The connected remote does not match the saved device name.')
-        if read(DIS, FIRMWARE) != SUPPORTED_FIRMWARE:
+        if not validated_profile(read(DIS, PNP), read(DIS, FIRMWARE)):
             raise RuntimeError('This remote firmware has not been validated for infrared programming.')
         descriptor = invoke('gatt/readDescriptorValues', {
             'clientId': client, 'service': HID, 'characteristic': REPORT, 'descriptors': [REFERENCE]})

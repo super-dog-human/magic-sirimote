@@ -16,8 +16,9 @@ from receiver_handoff_archive import archive as archive_handoff
 from tv_launch import Launcher
 
 class SupervisorCycle:
- def __init__(self,*,watch,lease,controller_state,receiver_state,run,controller_process,receiver_app,receiver_package,receiver_pin,allow_exe_permission_denied=False,intent_factory=ReceiverLaunchIntent,launcher_factory=Launcher,write_start=write_record,write_receiver_request=write_request,clock=time.time):
+ def __init__(self,*,watch,lease,controller_state,receiver_state,run,controller_process,receiver_app,receiver_package,receiver_pin,allow_exe_permission_denied=False,intent_factory=ReceiverLaunchIntent,launcher_factory=Launcher,write_start=write_record,write_receiver_request=write_request,clock=time.time,lookup_cache=None):
   if not callable(getattr(watch,'snapshot',None)) or not callable(getattr(lease,'held',None)) or lease.held() is not True or type(controller_process) is not dict or controller_process.get('pid')!=os.getpid() or not callable(clock):raise ValueError('invalid supervisor context')
+  self.lookup_cache=lookup_cache;self.recovery_lookup_reply=None
   self.controller_state=controller_state;self.prelaunch=None;self.watch=watch;self.lease=lease;self.receiver_state=receiver_state;self.run=run;self.controller_process=controller_process;self.receiver_app=receiver_app;self.receiver_package=receiver_package;self.pin=receiver_pin;self.allow_fallback=allow_exe_permission_denied;self.write_start=write_start;self.write_request=write_receiver_request;self.clock=clock;self.intent=intent_factory(controller_state,run);self.launcher=launcher_factory(run);self.live=None;self.generation=None;self.finished=False;self.finish_attempted=False;self.recovery_disconnect=None;self.recovery_attempted=False
  def begin(self):
   if self.lease.held() is not True:raise RuntimeError('supervisor lease lost')
@@ -40,10 +41,16 @@ class SupervisorCycle:
    if self.write_start(self.receiver_state,self.run,self.controller_process) is not True:raise RuntimeError('controller record unavailable')
    if self.write_request(self.receiver_state,self.run,int(self.clock()*1000)+120000) is not True:raise RuntimeError('receiver request unavailable')
    from pathlib import Path
+   from borrowed_gatt_requester import revalidate_client
    from prelaunch_handoff_runtime import PrelaunchOwner,lookup_before_input,write_json_once
    def lookup_record(stage,value):
     write_json_once(Path(self.controller_state)/('gatt-'+self.run+'-'+stage+'.json'),{'run':self.run,**value})
-   reply,generation=lookup_before_input(watch=self.watch,lease=self.lease,record=lookup_record)
+   reused=self.lookup_cache.take(watch=self.watch,lease=self.lease) if self.lookup_cache is not None else None
+   if reused is None:
+    reply,generation=lookup_before_input(watch=self.watch,lease=self.lease,record=lookup_record,verify_ready=revalidate_client if bundle.active() else None)
+   else:
+    reply,generation=reused
+    lookup_record('reused',{'generation':generation,'reply':reply,'ownership':'unproven'})
    self.prelaunch=PrelaunchOwner(self,self.controller_state,generation,lookup_reply=reply)
    self.prelaunch.begin()
   except Exception:return {'status':'attention','reason':'input-start-or-launch-unconfirmed'}
@@ -51,7 +58,11 @@ class SupervisorCycle:
   return {'status':'accepted','generation':generation,'receiverReady':False}
  def observe_receiver(self):
   if self.generation is None or self.finished or self.lease.held() is not True:raise RuntimeError('receiver observation unavailable')
-  self.live=observe_live(receiver_state=self.receiver_state,run=self.run,app_path=self.receiver_app,pkg_path=self.receiver_package,pin=self.pin,allow_exe_permission_denied=self.allow_fallback)
+  try:
+   self.live=observe_live(receiver_state=self.receiver_state,run=self.run,app_path=self.receiver_app,pkg_path=self.receiver_package,pin=self.pin,allow_exe_permission_denied=self.allow_fallback)
+  except FileNotFoundError:
+   if bundle.active():self.launcher.retry_unentered(receiver_state=self.receiver_state,lease=self.lease)
+   raise
   return {'run':self.run,'processObserved':True,'executableVerified':self.live['executableVerified']}
  def ready_to_finish(self):
   if self.live is None or self.finished or self.finish_attempted or self.lease.held() is not True:return False
@@ -86,6 +97,8 @@ class SupervisorCycle:
    # matching_processes permits fallback only for exe PermissionError.
    return current==self.live
   except (OSError,RuntimeError,ValueError):return False
+ def receiver_idle(self):
+  return self.prelaunch is not None and self.prelaunch.handoff.receiver_idle is True
  def note_disconnect(self):
   value=self.watch.disconnected_snapshot()
   if type(value) is dict and value.get('generation',0)>self.generation:self.recovery_disconnect=value['generation']
@@ -117,12 +130,16 @@ class SupervisorCycle:
     from control_processes import processes
     if processes()['ui']:return None
    if package.package_matches(self.receiver_app,self.receiver_package,self.pin) is not True or observed_process_ended(self.live,app_path=self.receiver_app) is not True:return None
+   from owned_idle_recovery import accept_recovery
+   local=accept_recovery(self)
+   if local is not None:return local
    prior=prior_run(self.receiver_state,self.run,expected_process=self.live['process'])
    self.recovery_prior_outcome=prior['priorOutcome']
    self.recovery_attempted=True
    from recovery_lookup_handoff import obtain
    reply,generation=obtain(watch=self.watch,lease=self.lease,directory=self.controller_state,run=self.run,
     eligible=lambda:self.lease.held() is True and observed_process_ended(self.live,app_path=self.receiver_app) is True)
+   self.recovery_lookup_reply=reply
    self.recovery_generation=generation;self.recovery_deadline=time.monotonic()+120;self.recovery_live=None
    # Durable O_EXCL request blocks another recovery launch after uncertainty.
    write_recovery_request(self.receiver_state,self.run,int(self.clock()*1000)+120000,prior_process=self.live['process'],gatt_lookup_reply=reply)
@@ -143,6 +160,8 @@ class SupervisorCycle:
   result={'run':self.run,'status':'recovered','modeZeroVerified':True,'oldReceiverExitVerified':True,'journalArchived':True,'generation':self.recovery_generation,'priorReceiptStatus':self.recovery_prior_outcome}
   if archive_recovered(self.receiver_state,self.run,owner_uid=os.getuid()) is not True:raise RuntimeError('recovery handoff archive failed')
   if self.intent.archive_recovered(result,independent_proof=proof) is not True:raise RuntimeError('recovery launch archive failed')
+  if self.lookup_cache is not None:
+   self.lookup_cache.remember(self.recovery_lookup_reply,watch=self.watch,lease=self.lease,generation=self.recovery_generation)
   self.finished=True;return {**result,'launchIntentArchived':True}
  def close(self):
   try:

@@ -19,7 +19,7 @@ def _lease_for(lease,controller_state):
   return (a.st_dev,a.st_ino)==(b.st_dev,b.st_ino) and lease.held() is True
  finally:os.close(fd)
 
-def _context(*,run,controller_state,receiver_state,controller_app,receiver_app,receiver_package,pin,lease,state_uid=5999,group=5000):
+def _context(*,run,controller_state,receiver_state,controller_app,receiver_app,receiver_package,pin,lease,state_uid=5999,group=5000,check_attempt=True):
  if type(run) is not str or not re.fullmatch('[a-f0-9]{32}',run):raise ValueError('invalid run')
  if not _lease_for(lease,controller_state):raise RuntimeError('supervisor lease required')
  intent,intent_stat=_read(lease.dirfd,'receiver-launch-intent.json',os.getuid(),group,0o640,historical=True)
@@ -49,7 +49,8 @@ def _context(*,run,controller_state,receiver_state,controller_app,receiver_app,r
               'recovery-'+run+'-1.json'):
   try:os.lstat(Path(receiver_state)/name)
   except FileNotFoundError:pass
-  else:raise RuntimeError('previous recovery attempt retained')
+  else:
+   if check_attempt:raise RuntimeError('previous recovery attempt retained')
  if not proof():raise RuntimeError('takeover proof changed')
  return proof,prior,current
 
@@ -68,3 +69,15 @@ def prepare(**context):
  if not proof() or read_record(receiver_state,run,name='recovery-controller-start.json',**ownership)['process']!=current:
   raise RuntimeError('published takeover unconfirmed')
  return {'status':'prepared','run':run,'priorOutcome':prior['priorOutcome'],'priorProcess':prior['process'],'requestCreated':False,'receiverLaunched':False}
+
+
+def retire_unentered(**context):
+ """Archive a proven unentered dispatch, keeping the uncertain sensor journal."""
+ import runtime_bundle as bundle
+ if not bundle.active():raise RuntimeError('previous recovery attempt retained')
+ from unentered_recovery import retire
+ proof,prior,_=_context(**context,check_attempt=False)
+ return retire(run=context['run'],controller_state=context['controller_state'],
+  receiver_state=context['receiver_state'],controller_app=context['controller_app'],
+  receiver_app=context['receiver_app'],proof=proof,prior=prior,
+  **{k:context[k] for k in ('state_uid','group') if k in context})

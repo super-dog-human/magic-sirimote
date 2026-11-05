@@ -24,7 +24,7 @@ class TouchClick:
     MAX_PRESSES_PER_SECOND = 4
 
     def __init__(self, writer, *, max_seconds=120, max_clicks=6, clock=time.monotonic,
-                 session_policy=None):
+                 session_policy=None, deferred_output=False):
         from input_session_policy import resolve_session_bounds
         max_seconds, policy_actions = resolve_session_bounds(
             max_seconds, session_policy, default_seconds=30, default_actions=16,
@@ -32,6 +32,12 @@ class TouchClick:
         click_limit = policy_actions if session_policy is not None else 16
         if type(max_clicks) is not int or not 1 <= max_clicks <= click_limit:
             raise ValueError('A finite click budget is required')
+        if type(deferred_output) is not bool:
+            raise ValueError('Deferred output must be boolean')
+        # Deferred semantic sinks hold no native button down while waiting,
+        # so their hold duration is bounded by the session, not the key watchdog.
+        self.deferred_output = deferred_output
+        self.release_forced = False
         self.writer, self.clock = writer, clock
         self.started = self.last_clock = clock()
         if not math.isfinite(self.started):
@@ -52,6 +58,7 @@ class TouchClick:
         packet = struct.pack('=iiHHi',0,0,1,0x110,int(pressed)) + struct.pack('=iiHHi',0,0,0,0,0)
         if pressed:
             self.stats['pressAttempts'] += 1
+        self.release_forced = not pressed and forced
         try:
             if self.writer(packet) != len(packet):
                 raise OSError('Partial button frame; no retry; destroy own device')
@@ -61,6 +68,8 @@ class TouchClick:
             self.generation = None
             self.reason = 'write-uncertain-destroy-own-device'
             raise
+        finally:
+            self.release_forced = False
         self.down = pressed
         if pressed:
             self.stats['pressesWritten'] += 1
@@ -118,7 +127,7 @@ class TouchClick:
         now = self._now()
         if now is None:
             return False
-        if self.down and now - self.pressed_at >= self.MAX_HOLD_SECONDS:
+        if not self.deferred_output and self.down and now - self.pressed_at >= self.MAX_HOLD_SECONDS:
             self.armed = False
             self._write(False,forced=True)
             return True
@@ -132,7 +141,7 @@ class TouchClick:
             self.stats['staleReports'] += 1
             return False
         # A delayed held report cannot bypass the periodic hold watchdog.
-        if self.down and now - self.pressed_at >= self.MAX_HOLD_SECONDS:
+        if not self.deferred_output and self.down and now - self.pressed_at >= self.MAX_HOLD_SECONDS:
             self.tick()
         mask = button_mask(value)
         if mask is None:

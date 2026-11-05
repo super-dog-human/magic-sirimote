@@ -17,6 +17,7 @@ class TV:
     def __init__(self):
         self.calls = []
         self.firmware = ir.SUPPORTED_FIRMWARE
+        self.pnp = bytes.fromhex("014c0066020000")
         self.mode = b'\xa0\x00'
         self.serial = b'TEST_REMOTE'
         self.fail_write = False
@@ -34,18 +35,18 @@ class TV:
         elif method == 'gatt/readCharacteristicValues':
             char = params['characteristics'][0]
             answer['service'] = params['service']
-            data = {ir.SERIAL: self.serial, ir.FIRMWARE: self.firmware, ir.REPORT: self.mode}[char]
+            data = {ir.SERIAL: self.serial, ir.FIRMWARE: self.firmware, ir.REPORT: self.mode, ir.PNP: self.pnp}[char]
             answer['values'] = [{'characteristic': char, 'instanceId': '029', 'value': {'bytes': list(data)}}]
         elif method == 'gatt/readDescriptorValues':
             answer['service'] = ir.HID
             answer['values'] = [{'descriptor': ir.REFERENCE, 'value': {'bytes': list(self.reference)}}]
-        elif method == 'hid/internal/setReport' and params['reportData'][1] in (1, 2) and self.fail_write:
+        elif method == 'hid/internal/setReport' and params['reportData'][1] in (1, 2, 128) and self.fail_write:
             raise TimeoutError('delivery unknown')
         return answer
 
     def writes(self):
         return [p['reportData'] for m, p in self.calls
-                if m == 'hid/internal/setReport' and p['reportData'][1] in (1, 2)]
+                if m == 'hid/internal/setReport' and p['reportData'][1] in (1, 2, 128)]
 
 
 class InfraredTest(unittest.TestCase):
@@ -68,7 +69,7 @@ class InfraredTest(unittest.TestCase):
         for action in ('set', 'delete'):
             tv = TV(); records = []
             def call(*args):
-                if args[0] == 'hid/internal/setReport' and args[1]['reportData'][1] in (1, 2):
+                if args[0] == 'hid/internal/setReport' and args[1]['reportData'][1] in (1, 2, 128):
                     self.assertEqual(records[-1]['status'], 'pending')
                 return tv(*args)
             result = ir.program(VALUES, action, 1, 2, '08', call, records.append, idle=lambda: None)
@@ -101,11 +102,59 @@ class InfraredTest(unittest.TestCase):
             self.assertEqual(result['status'], 'not-sent', field)
             self.assertEqual(tv.writes(), [], field)
 
+    def test_validated_a1962_can_set_and_delete_one_assignment(self):
+        for action in ('set', 'delete'):
+            tv=TV();tv.pnp=bytes.fromhex('014c006d020000');tv.firmware=ir.A1962_FIRMWARE
+            result=ir.program(VALUES,action,16,0,'09',tv,lambda _:None,idle=lambda:None)
+            self.assertEqual(result['status'],'submitted')
+            self.assertEqual(tv.writes(),[list(ir.packet(action,16,0,'09'))])
+
+    def test_product_and_firmware_must_match_before_any_feature_write(self):
+        for pnp,fw in ((bytes.fromhex('014c0066020000'),ir.A1962_FIRMWARE),
+                       (bytes.fromhex('014c006d020000'),ir.SUPPORTED_FIRMWARE),
+                       (bytes.fromhex('014c006e020000'),ir.A1962_FIRMWARE),
+                       (bytes.fromhex('014d006d020000'),ir.A1962_FIRMWARE),
+                       (bytes.fromhex('024c006d020000'),ir.A1962_FIRMWARE),
+                       (b'',ir.A1962_FIRMWARE),
+                       (bytes.fromhex('014c006d020000'),ir.A1962_FIRMWARE+b'0')):
+            tv=TV();tv.pnp=pnp;tv.firmware=fw
+            result=ir.program(VALUES,'set',16,0,'09',tv,lambda _:None,idle=lambda:None)
+            self.assertEqual(result['status'],'not-sent')
+            self.assertFalse(any(m=='hid/internal/setReport' for m,_ in tv.calls))
+
     def test_uncertain_write_is_never_retried_or_rolled_back(self):
         tv = TV(); tv.fail_write = True
         result = ir.program(VALUES, 'delete', 1, 2, '', tv, lambda x: None, idle=lambda: None)
         self.assertEqual(result['status'], 'uncertain')
         self.assertEqual(tv.writes(), [[240, 2, 1, 2]])
+
+    def test_bulk_reset_is_one_guarded_request_for_each_validated_remote(self):
+        for pnp,fw in ((bytes.fromhex('014c0066020000'),ir.SUPPORTED_FIRMWARE),
+                       (bytes.fromhex('014c006d020000'),ir.A1962_FIRMWARE)):
+            tv=TV();tv.pnp=pnp;tv.firmware=fw
+            result=ir.program(VALUES,'reset-all',None,None,'',tv,lambda _:None,idle=lambda:None)
+            self.assertEqual(result['status'],'submitted')
+            self.assertEqual(tv.writes(),[[240,128,170,85]])
+            tv=TV();tv.pnp=pnp;tv.firmware=fw;tv.fail_write=True
+            result=ir.program(VALUES,'reset-all',None,None,'',tv,lambda _:None,idle=lambda:None)
+            self.assertEqual(result['status'],'uncertain')
+            self.assertEqual(tv.writes(),[[240,128,170,85]])
+        for button,delay,code in ((1,None,''),(None,0,''),(None,None,'09')):
+            with self.assertRaises(ValueError):ir.packet('reset-all',button,delay,code)
+
+    def test_bulk_reset_receipts_clear_or_invalidate_all_prior_ir_knowledge(self):
+        import json,os,tv_assignments
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'ir-operation-reset.json'
+            known={'01:00':'ir:7C','01:02':'ir:08','10:00':'ir:09'}
+            for status in ('submitted','pending','uncertain'):
+                path.write_text(json.dumps({'status':status,'action':'reset-all','button':None,'delay':None,'code':None}))
+                value=tv_assignments.ir_knowledge(d,known)
+                self.assertEqual(value, {tv_assignments.slot(b,t):'none' for _,b in ir.BUTTONS for t in (0,2)} if status=='submitted' else {})
+            path.write_text(json.dumps({'status':'submitted','action':'reset-all','button':None,'delay':None,'code':None}))
+            os.utime(path,ns=(1,1))
+            (Path(d)/'ir-operation-new.json').write_text(json.dumps({'status':'submitted','action':'set','button':16,'delay':0,'code':'09'}))
+            self.assertEqual(tv_assignments.ir_knowledge(d,known)['10:00'],'ir:09')
 
     def test_running_runtime_blocks_all_device_access(self):
         tv = TV()

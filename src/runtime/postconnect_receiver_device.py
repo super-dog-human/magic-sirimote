@@ -4,7 +4,8 @@ Uses existing bounded inventory and identity checks. No calls are made on
 import. This does not initiate a connection or send an input/sensor command.
 """
 from runtime_device import registered_name_matches
-import os,stat,subprocess,time
+import json,math,os,stat,subprocess,time
+from pathlib import Path
 import tv_bluetooth
 from hid_input import scan_devices,identity
 from hid_orphan import unregistered
@@ -14,6 +15,34 @@ def paired_target(invoke=subprocess.Popen):
  if type(reply) is not dict or reply.get('returnValue') is not True or type(reply.get('devices')) is not list:return False
  found=[item for item in reply['devices'] if type(item) is dict and str(item.get('address','')).lower()==tv_bluetooth.TARGET and registered_name_matches(item,tv_bluetooth.NAME)]
  return len(found)==1 and found[0].get('paired') is True and found[0].get('blocked') is False and found[0].get('pairing') is False
+
+class RecoveryPairingCheck:
+ """Reuse a status read for at most 250 ms within one connected recovery.
+
+ The live connection/lease guard is still checked on every call. Any failure
+ permanently invalidates this instance; it cannot cross a reconnect. The
+ final recovery confirmation requests a fresh status read explicitly.
+ """
+ def __init__(self,check,control,*,clock=time.monotonic):
+  if not all(callable(x) for x in (check,control,clock)):raise ValueError('invalid pairing check')
+  self.check=check;self.control=control;self.clock=clock
+  self.observed=None;self.previous=None;self.failed=False
+ def __call__(self,*,fresh=False):
+  if self.failed:return False
+  try:
+   now=self.clock()
+   if (type(now) not in (int,float) or not math.isfinite(now)
+       or (self.previous is not None and now<self.previous)
+       or self.control() is not True):raise RuntimeError('pairing control changed')
+   self.previous=now
+   if fresh or self.observed is None or now-self.observed>=.25:
+    if self.check() is not True or self.control() is not True:raise RuntimeError('pairing unconfirmed')
+    after=self.clock()
+    if type(after) not in (int,float) or not math.isfinite(after) or after<now:raise RuntimeError('pairing clock changed')
+    self.previous=after;self.observed=now
+   return True
+  except Exception:
+   self.failed=True;return False
 
 def transient_disappeared(inv):
  if type(inv) is not dict or inv.get('inventoryComplete') is not False or inv.get('allOpenedFdsClosed') is not True:return False
@@ -27,20 +56,28 @@ def transient_disappeared(inv):
   elif n.get('openedReadOnly') is not True or n.get('identityChecked') is not True or n.get('fdClosed') is not True or n.get('inspectionErrno') is not None or n.get('inspectionError') is not None or n.get('closeErrno') is not None:return False
  return True
 
-def open_target(*,inventory=scan_devices,lstat=os.lstat,open_fn=os.open,fstat=os.fstat,identity_fn=identity,close_fn=os.close,allow_retry=None,wait=time.sleep,orphan_check=unregistered):
+def _open_target_once(*,inventory=scan_devices,lstat=os.lstat,open_fn=os.open,fstat=os.fstat,identity_fn=identity,close_fn=os.close,allow_retry=None,wait=time.sleep,orphan_check=unregistered):
  if allow_retry is not None and not callable(allow_retry):raise ValueError('invalid retry guard')
  inv=inventory(timeout=10);orphans=[]
  # Retry only when every incomplete node disappeared before open and all
  # opened descriptors were closed. Never suppress unrelated scan failures.
  if transient_disappeared(inv) and allow_retry is not None and allow_retry() is True:
   first=inv
-  wait(.2)
+  def missing(v):
+   return sorted((n.get('index'),n.get('rdevMajor'),n.get('rdevMinor')) for n in v['nodes'] if n.get('inspectionErrno')=='ENODEV')
+  a=missing(first)
+  # Known unregistered character nodes need no settling delay. Still repeat
+  # the complete inventory and prove their absence again before and after
+  # opening the exact remote. An unknown or registering node keeps the delay.
+  ids=first.get('targetCandidateIndexes')
+  fast=(type(ids) is list and len(ids)==1 and type(ids[0]) is int and 0<=ids[0]<32
+        and all(type(x) is int for row in a for x in row)
+        and all(orphan_check(index=i,major=ma,minor=mi) is True for i,ma,mi in a))
+  if not fast:wait(.2)
   if allow_retry() is True:
    inv=inventory(timeout=10)
    if transient_disappeared(inv) and allow_retry() is True:
-    def missing(v):
-     return sorted((n.get('index'),n.get('rdevMajor'),n.get('rdevMinor')) for n in v['nodes'] if n.get('inspectionErrno')=='ENODEV')
-    a=missing(first);b=missing(inv)
+    b=missing(inv)
     if a==b and all(type(x) is int for row in b for x in row) and all(orphan_check(index=i,major=ma,minor=mi) is True for i,ma,mi in b):
      # These nodes have no registered kernel device; they cannot hide another
      # usable target at the instant checked. Preserve all other strict checks.
@@ -60,6 +97,75 @@ def open_target(*,inventory=scan_devices,lstat=os.lstat,open_fn=os.open,fstat=os
   ident=identity_fn(fd)
   if type(ident) is not dict or ident.get('matches') is not True:raise RuntimeError('target identity mismatch')
   if orphans and (allow_retry() is not True or any(orphan_check(index=i,major=ma,minor=mi) is not True for i,ma,mi in orphans)):raise RuntimeError('orphan proof changed')
+  from touch_surface import bind_product
+  bind_product(ident.get('product'))
   return fd
  except BaseException:
   close_fn(fd);raise
+
+def _kernel_hid_nodes(root=Path('/sys/class/hidraw')):
+ nodes=[]
+ for index in range(32):
+  path=root/('hidraw'+str(index))
+  try:
+   major,minor=path.joinpath('dev').read_text().strip().split(':')
+   nodes.append({'index':index,'major':int(major),'minor':int(minor)})
+  except FileNotFoundError:pass
+  except (OSError,ValueError):nodes.append({'index':index,'unreadable':True})
+ return nodes
+
+def _inventory_evidence(inv):
+ # Whitelist numeric device IDs and error categories. Never copy HID names,
+ # serial numbers, Bluetooth addresses or input reports into the log.
+ result={'complete':inv.get('inventoryComplete') is True,'nodes':[]}
+ for node in inv.get('nodes',[])[:32]:
+  if type(node) is not dict:continue
+  item={key:node[key] for key in ('index','rdevMajor','rdevMinor') if type(node.get(key)) is int}
+  ident=node.get('targetIdentity')
+  item['matches']=type(ident) is dict and ident.get('matches') is True
+  error=node.get('inspectionErrno')
+  if error in ('ENODEV','ENOENT','EACCES','EPERM','EIO'):item['error']=error
+  result['nodes'].append(item)
+ return result
+
+def _report_inventory(inv,scans,outcome):
+ try:
+  value={'stage':'receiver-hid-visibility','pid':os.getpid(),'uptime':round(time.monotonic(),3),
+         'scans':scans,'outcome':outcome,'visible':_inventory_evidence(inv),'registered':_kernel_hid_nodes()}
+  print(json.dumps(value),flush=True)
+ except Exception:pass
+
+def open_target(*,inventory=scan_devices,allow_retry=None,wait=time.sleep,clock=time.monotonic,report=_report_inventory,**kwargs):
+ """Allow asynchronous HID registration after an acknowledged input start.
+
+ Re-scan only a complete inventory with no matching device. Every attempt
+ retains the full identity checks; incomplete or ambiguous scans fail at once.
+ This does not resend input-start or keep a descriptor from a failed attempt.
+ """
+ if allow_retry is not None and not callable(allow_retry):raise ValueError('invalid retry guard')
+ deadline=None;previous=None;last={};scans=0;outcome='failed'
+ def scan(*,timeout):
+  nonlocal last,scans
+  if deadline is not None:timeout=min(timeout,max(.01,deadline-clock()))
+  last=inventory(timeout=timeout);scans+=1
+  return last
+ try:
+  for attempt in range(41):
+   try:
+    fd=_open_target_once(inventory=scan,allow_retry=allow_retry,wait=wait,**kwargs)
+    outcome='opened';return fd
+   except RuntimeError as exc:
+    if str(exc)!='target not present' or allow_retry is None or attempt==40:raise
+    now=clock()
+    if (type(now) not in (int,float) or not math.isfinite(now)
+        or (previous is not None and now<previous) or allow_retry() is not True):raise
+    if deadline is None:deadline=now+2
+    if now>=deadline:raise
+    previous=now;wait(min(.05,deadline-now));after=clock()
+    if (type(after) not in (int,float) or not math.isfinite(after)
+        or after<previous or after>=deadline or allow_retry() is not True):raise
+    previous=after
+ finally:
+  if callable(report) and type(last) is dict:
+   try:report(last,scans,outcome)
+   except Exception:pass

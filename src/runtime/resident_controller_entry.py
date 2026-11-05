@@ -1,6 +1,6 @@
 """Resident TV controller: connect, supervise, stop, and recover verified sessions."""
 import runtime_bundle as bundle
-import json,os,signal,stat,threading,time
+import json,math,os,signal,stat,threading,time
 from pathlib import Path
 from hid_input import ordinary
 from persistent_status_pump import PersistentConnectedStatusPump
@@ -25,10 +25,22 @@ def load_config():
  from pin_transport import call
  return read_pin(lambda uri,payload: call(uri,payload,timeout=8))
 
-def recover_retained_if_connected(*,lease,pin,stop,timeout=90,clock=time.monotonic,trace=lambda _:None):
+def wait_recovery_connection(*,watch,lease,stop,timeout=None,clock=time.monotonic):
+ """Passively await a sleeping remote while the controller still owns recovery."""
+ if timeout is not None and (type(timeout) not in (int,float) or not math.isfinite(timeout) or timeout<=0):
+  raise ValueError('invalid recovery wait timeout')
+ deadline=None if timeout is None else clock()+timeout
+ while not stop.is_set() and lease.held() is True and (deadline is None or clock()<deadline):
+  if watch.is_open() is not True:raise RuntimeError('recovery watch unavailable')
+  if watch.snapshot() is not None:return
+  stop.wait(.25)
+ raise RuntimeError('connected target unavailable')
+
+
+def recover_retained_if_connected(*,lease,pin,stop,timeout=None,clock=time.monotonic,trace=lambda _:None):
  """Prove the old processes ended, reconnect once, then recover once."""
  from orphan_reconcile import _read
- from takeover_prepare import inspect
+ from takeover_prepare import inspect,retire_unentered
  from takeover_recovery import execute
  trace('bootstrap-takeover-start')
  intent,_=_read(lease.dirfd,'receiver-launch-intent.json',os.getuid(),5000,0o640,historical=True)
@@ -39,14 +51,23 @@ def recover_retained_if_connected(*,lease,pin,stop,timeout=90,clock=time.monoton
  # A receiver may be finishing after its controller died. Only re-read this
  # specific uncertain process state; do not reconnect or issue a command
  # until the process-exit and journal checks succeed.
- exit_deadline=clock()+90
+ exit_deadline=clock()+125
  while not stop.is_set() and lease.held() is True and clock()<exit_deadline:
   try:
    if inspect(**context).get('status')!='eligible':raise RuntimeError('prior state not eligible')
    trace('bootstrap-takeover-eligible')
    break
   except RuntimeError as exc:
-   if str(exc)!='prior receiver still present or unverified':raise
+   if str(exc)=='previous recovery attempt retained':
+    try:
+     if retire_unentered(**context) is True:
+      trace('bootstrap-unentered-recovery-archived');continue
+    except RuntimeError as retirement:
+     if str(retirement) not in ('unentered recovery request not expired','unentered recovery proof unavailable'):raise
+    stop.wait(1);continue
+   if str(exc) not in ('prior receiver still present or unverified',
+                       'unentered recovery request not expired',
+                       'unentered recovery proof unavailable'):raise
    stop.wait(1)
  else:raise RuntimeError('prior receiver exit unavailable')
  # Existing bootstrap reserves a durable one-shot HID connect intent and
@@ -55,21 +76,17 @@ def recover_retained_if_connected(*,lease,pin,stop,timeout=90,clock=time.monoton
  trace('bootstrap-takeover-connected' if connected else 'bootstrap-takeover-not-connected')
  pump=PersistentConnectedStatusPump();pump.start()
  try:
-  deadline=clock()+timeout
-  while not stop.is_set() and lease.held() is True and clock()<deadline:
-   if pump.tracker.is_open() is not True:raise RuntimeError('recovery watch unavailable')
-   if pump.tracker.snapshot() is not None:
-    trace('bootstrap-takeover-watch-ready')
-    return execute(run=run,watch=pump.tracker,stop=stop,**{k:v for k,v in context.items() if k!='run'})
-   stop.wait(.25)
-  raise RuntimeError('connected target unavailable')
+  wait_recovery_connection(watch=pump.tracker,lease=lease,stop=stop,timeout=timeout,clock=clock)
+  trace('bootstrap-takeover-watch-ready')
+  return execute(run=run,watch=pump.tracker,stop=stop,**{k:v for k,v in context.items() if k!='run'})
  finally:
   if pump.stop() is not True:raise RuntimeError('recovery watch termination unconfirmed')
 
-def main():
+def main(*,timing=lambda _:None):
  from retired_requests import reject_retired_requests
  reject_retired_requests(STATE)
  ordinary();pin=load_config();stop=threading.Event()
+ timing('controller-config-loaded')
  for sig in (signal.SIGINT,signal.SIGTERM):signal.signal(sig,lambda _s,_f:stop.set())
  lease=SupervisorLease(STATE);pump=None;stop_monitor=None
  try:
@@ -80,6 +97,7 @@ def main():
   stop_monitor=StopMonitor(lease.dirfd,stop,pid=process['pid'],start_ticks=process['startTicks'],instance=instance,**({'owner_uid':os.getuid()} if bundle.active() else {}))
   stop_monitor.start()
   trace=BootTrace()
+  timing('controller-instance-published')
   from orphan_reconcile import reconcile
   try:
    reconcile(controller_state=STATE,receiver_state=bundle.role_path('receiver',ROOT/B)/'state',controller_app=str(bundle.role_path('controller',ROOT/APP)),receiver_app=str(bundle.role_path('receiver',ROOT/B)),receiver_package=str(bundle.package_path(PKG/B)),pin=pin,lease=lease)
@@ -89,12 +107,14 @@ def main():
     if type(result) is not dict or result.get('status')!='recovered':
      trace.add('bootstrap-takeover-result-unconfirmed');trace.publish(lease.dirfd,instance);return 2
    except (OSError,RuntimeError,ValueError) as exc:
-    fixed={'prior receiver still present or unverified':'bootstrap-takeover-receiver-live','prior uncertain sensor journal unavailable':'bootstrap-takeover-journal-ineligible','takeover proof unavailable':'bootstrap-takeover-proof-unavailable','recovery watch unavailable':'bootstrap-takeover-watch-unavailable','connected target unavailable':'bootstrap-takeover-connection-unavailable'}
+    fixed={'prior receiver still present or unverified':'bootstrap-takeover-receiver-live','prior uncertain sensor journal unavailable':'bootstrap-takeover-journal-ineligible','takeover proof unavailable':'bootstrap-takeover-proof-unavailable','recovery watch unavailable':'bootstrap-takeover-watch-unavailable','connected target unavailable':'bootstrap-takeover-connection-unavailable','target connection unavailable':'bootstrap-takeover-snapshot-unavailable','recovery preflight unavailable':'bootstrap-takeover-preflight-unavailable','recovery owner unavailable':'bootstrap-takeover-owner-unavailable','recovery watch unavailable':'bootstrap-takeover-watch-unavailable','recovery connection readiness timed out':'bootstrap-takeover-readiness-timeout','recovery package mismatch':'bootstrap-takeover-package-mismatch','takeover preparation unconfirmed':'bootstrap-takeover-prepare-unconfirmed','takeover proof changed':'bootstrap-takeover-proof-changed','published takeover unconfirmed':'bootstrap-takeover-publish-unconfirmed','previous recovery attempt retained':'bootstrap-takeover-prior-attempt','recovery lookup connection unavailable':'bootstrap-takeover-lookup-changed','settings window did not close before recovery':'bootstrap-takeover-window-open'}
     trace.add(fixed.get(str(exc),'bootstrap-takeover-error-'+type(exc).__name__))
     try:trace.publish(lease.dirfd,instance)
     except (OSError,RuntimeError,ValueError):pass
     return 2
+  timing('prior-state-reconciled')
   connected=bootstrap(lease=lease,stop=stop,deadline=time.monotonic()+120,trace=trace.add,wait_for_ready=True)
+  timing('bootstrap-finished')
   try:trace.publish(lease.dirfd,instance)
   except (OSError,RuntimeError,ValueError):pass
   if not connected:
@@ -103,10 +123,12 @@ def main():
    client=BootstrapClient(pump=lambda:None,guard=lambda:not stop.is_set() and lease.held() is True,clock=time.monotonic,native_app=True)
    if wait_connected(client=client,lease=lease,stop=stop).get('status')!='connected':return 2
    confirm_and_retire(client=client,lease=lease,stop=stop)
+  from recovery_lookup_handoff import RecoveredLookup
+  lookup_cache=RecoveredLookup()
   assist=None;ready_announced=False;reopen_attempts=0
   def cycle():
    import secrets
-   return SupervisorCycle(watch=pump.tracker,lease=lease,controller_state=STATE,receiver_state=bundle.role_path('receiver',ROOT/B)/'state',run=secrets.token_hex(16),controller_process=process,receiver_app=str(bundle.role_path('receiver',ROOT/B)),receiver_package=str(bundle.package_path(PKG/B)),receiver_pin=pin,allow_exe_permission_denied=True)
+   return SupervisorCycle(watch=pump.tracker,lease=lease,controller_state=STATE,receiver_state=bundle.role_path('receiver',ROOT/B)/'state',run=secrets.token_hex(16),controller_process=process,receiver_app=str(bundle.role_path('receiver',ROOT/B)),receiver_package=str(bundle.package_path(PKG/B)),receiver_pin=pin,allow_exe_permission_denied=True,lookup_cache=lookup_cache)
   def emit(event):
    nonlocal ready_announced
    if event=='waiting-for-connection' and not ready_announced:
@@ -138,6 +160,7 @@ def main():
    raise RuntimeError('replacement watch unavailable')
   while not stop.is_set():
    pump=PersistentConnectedStatusPump();pump.start()
+   timing('connection-watch-started')
    if assist is None:assist=AutoConnect(watch=pump.tracker,lease=lease,stop=stop)
    else:assist.watch=pump.tracker  # preserve uncertain connect latch and backoff
    result=run_loop(watch=pump.tracker,lease=lease,cycle_factory=cycle,stop=stop,emit=emit,connect_tick=assist.tick,connection_admitted=assist.admission_observed,reopen_recovery=reopen_recovery)

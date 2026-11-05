@@ -1,12 +1,12 @@
-"""Explicit reset: delete known IR slots, then unpair only the saved remote."""
+"""Explicit reset: clear the IR database, then unpair only the saved remote."""
 from pathlib import Path
 import uuid
 import settings
 from reset_state import read, write, token, retire
 
 FILE = 'reset-pending.json'
-# Clear Hold before Press, so an interrupted reset never creates a hold-only
-# IR row. Include all seven physical buttons, including the surface click.
+# Retain the progress keys so an interrupted reset from an older version
+# remains readable. Acknowledged bulk deletion completes all keys together.
 SLOTS = tuple((button, delay) for button in (1, 2, 4, 8, 16, 32, 128) for delay in (2, 0))
 
 
@@ -43,13 +43,13 @@ def run(state, value, program, call, idle, progress=lambda message: None):
         if settings.load(state) != value['settings']:
             raise RuntimeError('Saved settings changed; reset stopped')
         remote = value['settings']['remoteAddress']; adapter = value['settings']['adapterAddress']
-        for button, delay in SLOTS[len(value['completed']):]:
+        if len(value['completed']) < len(SLOTS):
             idle(); value['phase'] = 'ir'
-            message('Deleting infrared assignments: %d / %d...' % (len(value['completed']), len(SLOTS)))
-            result = program(state, 'delete', button, delay, '')
+            message('Deleting all infrared assignments...')
+            result = program(state, 'reset-all', None, None, '')
             if result.get('status') != 'submitted' or result.get('receiptSaved') is not True:
                 raise RuntimeError(result.get('message') or 'Infrared deletion was not acknowledged')
-            value['completed'].append('%02X:%02X' % (button, delay)); save()
+            value['completed'] = ['%02X:%02X' % slot for slot in SLOTS]; save()
         # An explicit retry first queries the bond; a lost unpair reply is not
         # automatically treated as failure or repeated in the same attempt.
         idle(); value['phase'] = 'unpair'; message('Removing this remote from the TV...')
@@ -83,7 +83,8 @@ def run(state, value, program, call, idle, progress=lambda message: None):
         return value
     except Exception as error:
         value['phase'] = 'failed'
-        message('%d / %d IR deletions acknowledged. %s' % (len(value['completed']), len(SLOTS), str(error)))
+        message(('Infrared deletion acknowledged. ' if len(value['completed']) == len(SLOTS)
+                 else 'Infrared deletion not confirmed. ') + str(error))
         return value
 
 

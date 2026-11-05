@@ -34,7 +34,9 @@ class PrelaunchOwner:
         self.state=Path(controller_state)
         identity={k:cycle.controller_process[k] for k in ('pid','startTicks')}
         self.handoff=InputStartHandoff(run=cycle.run,controller=identity,generation=generation,
-            connection_valid=self.valid,journal=self.record,send_input_start=self.start_input,launch_receiver=self.launch,connection_snapshot=cycle.watch.snapshot)
+            connection_valid=self.valid,journal=self.record,send_input_start=self.start_input,launch_receiver=self.launch,connection_snapshot=cycle.watch.snapshot,
+            connection_observation=lambda:{'open':cycle.watch.is_open(),'snapshot':cycle.watch.snapshot()},
+            owner_valid=cycle.lease.held)
         try:
             self.journal_fd=os.open(self.state/('input-'+cycle.run+'.jsonl'),os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o640)
             os.fchmod(self.journal_fd,0o640)
@@ -93,7 +95,7 @@ class PrelaunchOwner:
 
 
 def lookup_before_input(*,watch,lease,record,requester_factory=BorrowedGattRequester,
-                        clock=time.monotonic,wait=time.sleep):
+                        clock=time.monotonic,wait=time.sleep,verify_ready=None):
     """Obtain the client before binding any input proof to a generation.
 
     This TV emits GATT connecting/disconnected notifications even for a lookup
@@ -113,18 +115,44 @@ def lookup_before_input(*,watch,lease,record,requester_factory=BorrowedGattReque
         BorrowedGattView(reply,generation=initial['generation'],control_valid=guard,discover=lambda _:None)
         if not guard():raise RuntimeError('lookup watch unavailable')
         record('reply',{'reply':reply,'ownership':'unproven'})
-    except BaseException:
-        record('unknown',{'ownership':'unproven'});raise
-    completed=clock();deadline=completed+8;first=None
+    except BaseException as error:
+        fixed={'Native transport unavailable':'transport-unavailable',
+               'Native application identity unverified':'app-identity',
+               'Call guard rejected dispatch':'guard',
+               'lookup watch unavailable':'watch',
+               'invalid borrowed view':'reply-identity'}
+        record('unknown',{'ownership':'unproven','failure':fixed.get(str(error),'other'),
+                          'errorType':type(error).__name__ if type(error).__name__ in ('RuntimeError','LunaCallError','TimeoutError','OSError','ValueError') else 'other'})
+        raise
+    completed=clock();deadline=completed+8;first=None;verified=None;attempted=False
     while clock()<deadline:
         if not guard():raise RuntimeError('lookup watch unavailable')
         current=watch.snapshot()
         if type(current) is dict and current['observedAt']>completed:
+            # A successful target-bound read plus a newer connected observation
+            # replaces the time-only grace period. Never reuse an old read or
+            # accept a generation that changed while the read was in flight.
+            if verify_ready is not None and not attempted:
+                attempted=True
+                try:
+                    proof=verify_ready(reply,watch=watch,lease=lease,clock=clock,record=record)
+                except RuntimeError as error:
+                    if str(error)!='reconnect identity control lost':raise
+                    proof=None
+                if proof is not None:
+                    verified=(proof[1],clock())
+                wait(.05)
+                continue
+            if verified is not None:
+                if current['generation']!=verified[0]:verified=None
+                elif current['observedAt']>verified[1]:
+                    record('stable',{'generation':current['generation'],'source':'verified-read'})
+                    return reply,current['generation']
             if first is not None and current['generation']==first['generation'] and current['observedAt']-first['observedAt']>=.5:
                 record('stable',{'generation':current['generation']})
                 return reply,current['generation']
             if first is None or current['generation']!=first['generation']:first=current
-        else:first=None
+        else:first=None;verified=None
         wait(.05)
     raise RuntimeError('lookup connection did not stabilize')
 

@@ -37,7 +37,7 @@ class CombinedReceiver:
         seconds = 30. if session_policy is None else session_policy.seconds
         self.router = InputRouter(self._emit, clock=clock, max_seconds=seconds,
                                   pose_mode='adaptive-vector-gain85',
-                                  touch_mode='swipe-click', session_policy=session_policy)
+                                  touch_mode='swipe-click', session_policy=session_policy, deferred_center=True)
         self.bridge = GatedHidrawRouter(self.router, sensor_input_verified=sensor_input_verified,
                                         session_policy=session_policy)
 
@@ -49,35 +49,43 @@ class CombinedReceiver:
             return True
         return False
 
-    def _emit(self, action, down):
+    def _emit(self, action, down, *, forced=None):
         if type(down) is not bool:
             raise ValueError('invalid-action-state')
         if down and self.semantic_actions >= self.max_actions:
             self.failed = True
             raise RuntimeError('semantic-action-budget-exhausted')
         if action == 'center':
+            if forced is None:
+                forced = self.router.press.core.release_forced
             if down:
                 if self.center_output is not None:
                     raise RuntimeError('center-overlap')
-                # Latch the destination until release, even if the mode changes.
+                # Preserve the press-time destination, without sending a key down.
                 navigation = getattr(self.router, 'navigation', None)
-                self.center_output = 'focus' if getattr(navigation, 'mode', None) == 'navigation' else 'pointer'
-            elif self.center_output is None:
+                self.center_output = 'focus' if getattr(navigation, 'mode', None) == 'navigation' or getattr(self.outputs,'pointer_ready',True) is False else 'pointer'
+                return len(_frame(BTN_LEFT, 1))
+            if self.center_output is None:
                 raise RuntimeError('center-release-without-down')
             focused = self.center_output == 'focus'
-            packet = _frame(KEY_ENTER if focused else BTN_LEFT, int(down))
+            self.center_output = None
+            # A lost link, stop, invalid clock or another button cancels the
+            # pending click. Only an actual physical release commits it.
+            if self.closed or self.failed or forced:
+                return len(_frame(BTN_LEFT, 0))
+            write = self.outputs.select_frame if focused else self.outputs.click_frame
             try:
-                result = (self.outputs.select_frame if focused else self.outputs.click_frame)(packet)
+                for value in (1, 0):
+                    packet = _frame(KEY_ENTER if focused else BTN_LEFT, value)
+                    if write(packet) != len(packet):
+                        raise OSError('short center frame')
+                    self.actions.append({'kind': 'focus-frame' if focused else 'click-frame', 'bytes': len(packet), 'value': value})
+                    self.action_events += 1
             except BaseException:
                 self.failed = True
                 raise
-            if down:
-                self.semantic_actions += 1
-            self.actions.append({'kind': 'focus-frame' if focused else 'click-frame', 'bytes': len(packet), 'value': int(down)})
-            if not down:
-                self.center_output = None
-            self.action_events += 1
-            return result
+            self.semantic_actions += 1
+            return len(packet)
         if action not in KEYS:
             raise ValueError('unsupported-action')
         if down:

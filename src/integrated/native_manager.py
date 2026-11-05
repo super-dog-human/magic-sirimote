@@ -101,6 +101,7 @@ class RuntimeSetup(Setup):
         self.assignment_results = queue.Queue()
         self.pending_assignments = {}
         self.saved_values = dict(self.values)
+        self.home_shown = False
         self.confirm_action = None
         self.confirm_focus = 0
         self.confirm_boxes = []
@@ -135,7 +136,15 @@ class RuntimeSetup(Setup):
             if not repaired: return
             reply = accepted(self.bus.request('startupPrepare', {}))
         if reply.get('status') != 'create-required': raise RuntimeError('Automatic startup is unavailable')
-        created = accepted(self.bus.create_startup(reply['token']))
+        created = self.bus.create_startup(reply['token'])
+        if (type(created) is dict and created.get('returnValue') is False
+                and created.get('errorText') == 'Activity with that name already exists'):
+            if self.repair_startup():
+                reply = accepted(self.bus.request('startupPrepare', {}))
+                if reply.get('status') != 'create-required':
+                    raise RuntimeError('Automatic startup recovery is incomplete')
+                created = self.bus.create_startup(reply['token'])
+        created = accepted(created)
         activity_id = created.get('activityId')
         if type(activity_id) is not int or activity_id <= 0: raise RuntimeError('Automatic startup registration is unconfirmed')
         accepted(self.bus.request('startupBind', {'token': reply['token'], 'activityId': activity_id}))
@@ -357,8 +366,8 @@ class RuntimeSetup(Setup):
                 self.message = 'Saving settings and restarting. Please wait...'
                 if canvas is not None: self.draw(canvas)
                 values = self.detect_tv({'schema': 1, **self.values})
-                from tv_assignments import plan, displayed_bindings
-                self.pending_assignments = displayed_bindings(self.state, self.button_drafts)
+                from tv_assignments import plan, changed_bindings
+                self.pending_assignments = changed_bindings(self.state, self.button_drafts)
                 plan(self.state, self.pending_assignments)
                 self.prepare_settings('save', values)
             elif action == 'recenter':
@@ -397,6 +406,18 @@ class RuntimeSetup(Setup):
         canvas.present()
 
     def handle(self, event, canvas):
+        self._handle(event, canvas)
+        # Only an explicit UI exit goes Home. Save/restart, installer requests,
+        # background handoffs and system close notifications keep their lifecycle.
+        if self.done and event[0] in ('key', 'click'):
+            try:
+                accepted(self.bus.show_home())
+                self.home_shown = True
+            except (OSError, ValueError, RuntimeError):
+                self.done = False
+                self.message = 'Could not open Home. Use the TV Home button to leave settings.'
+
+    def _handle(self, event, canvas):
         if self.reset is not None and self.reset.visible:
             return self.reset.handle(event)
         if self.pairing is not None and self.pairing.visible:
@@ -477,18 +498,34 @@ def pending_worker():
     return True
 
 
-def main():
+def main(*, started_at=None):
+    started_at = time.monotonic() if started_at is None else started_at
+    startup_steps = {}
+    def mark_startup(step):
+        startup_steps[step] = round((time.monotonic() - started_at) * 1000)
+    mark_startup('importsReadyMs')
     worker = None; canvas = None; app = None; closing = False; log = None; logged = 0
+    lifecycle = []
+    def note(stage, **fields):
+        lifecycle.append({'stage': stage, 'epochMs': round(time.time()*1000), **fields})
+        try: write_status('native-lifecycle.json', {'pid': os.getpid(), 'events': lifecycle[-16:]})
+        except (OSError,ValueError,RuntimeError): pass
+    note('entered')
     stop_signal = [False]
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: stop_signal.__setitem__(0, True))
     try:
         with NativeBus() as bus:
+            mark_startup('busReadyMs')
             app = RuntimeSetup(STATE, bus)
+            mark_startup('settingsLoadedMs')
             try:
                 handoff = pending_worker()
-            except (OSError, ValueError, RuntimeError):
+            except (OSError, ValueError, RuntimeError) as error:
+                note('handoff-rejected', errorType=type(error).__name__, reason=str(error)[:160])
                 handoff = False; app.message = 'Input handoff needs attention. Existing recovery records were retained.'
+            note('handoff-checked', pending=handoff)
+            mark_startup('handoffCheckedMs')
             if not handoff: app.refresh_pairing()
             window_visible = not handoff
             # Input handoffs do not need an SDL surface. Create settings only
@@ -498,15 +535,23 @@ def main():
             if handoff:
                 worker = subprocess.Popen(['/usr/bin/python3', '-I', '-B', str(SERVICE / 'roles/receiver/native_probe.py')],
                                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                mark_startup('workerSpawnedMs')
                 os.set_blocking(worker.stdout.fileno(), False)
                 log = os.open(STATE / ('receiver-output-' + str(os.getpid()) + '.log'), os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640)
                 app.worker = worker
-                write_status('native-status.json', {'status': 'worker-starting', 'pid': os.getpid(), 'workerPid': worker.pid})
+                # Include timings in the existing write, without extra startup I/O.
+                write_status('native-status.json', {'status': 'worker-starting', 'pid': os.getpid(), 'workerPid': worker.pid,
+                                                   'epochMs': round(time.time() * 1000), 'startupSteps': startup_steps})
             if not handoff: app.battery.refresh(worker)
             battery_text = None
             while True:
                 for event, params in bus.events():
                     if event == 'relaunch':
+                        note('relaunch', inputHandoff=type(params) is dict and 'inputHandoff' in params)
+                        # Internal retries must never bring settings to the front
+                        # or spawn a second worker in an existing device namespace.
+                        if type(params) is dict and 'inputHandoff' in params:
+                            continue
                         window_visible = True
                         if canvas is None: canvas = Canvas(APP)
                         else: canvas.restore()
@@ -571,11 +616,17 @@ def main():
                     app.draw(canvas)
                 if app.done:
                     if worker is not None:
-                        app.done = False; window_visible = False; canvas.minimize()
+                        app.done = False; window_visible = False
+                        if not app.home_shown: canvas.minimize()
+                        app.home_shown = False
                     else:
                         break
                 time.sleep(.02)
+    except (OSError,ValueError,RuntimeError) as error:
+        note('failed', errorType=type(error).__name__, reason=str(error)[:160])
+        raise
     finally:
+        note('exiting', workerPresent=worker is not None, stopSignal=stop_signal[0])
         if worker is not None and worker.poll() is None:
             worker.terminate()  # Exact child handles SIGTERM and performs sensor cleanup.
             try: worker.wait(timeout=12)

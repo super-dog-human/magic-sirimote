@@ -3,7 +3,7 @@ import ctypes as C
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, Mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / 'src/integrated'), str(ROOT / 'src/native')]
@@ -23,15 +23,33 @@ class NativeLifecycleTests(unittest.TestCase):
             with self.assertRaises((ValueError, RuntimeError)):
                 lifecycle_event(value)
 
-    def test_relaunch_restores_then_shows_then_raises(self):
+    def window(self):
         window = Canvas.__new__(Canvas)
-        window.window = 123; window.sdl = object()
+        window.window = 123; window.sdl = object(); window.renderer = 456
+        window.show_pending = True; window.restore_pending = False
         calls = []
         window.bind = lambda lib, name, result, args: lambda handle: calls.append((name, handle))
-        window.minimize(); window.restore()
-        self.assertEqual(calls, [(name, 123) for name in ('SDL_MinimizeWindow', 'SDL_RestoreWindow', 'SDL_ShowWindow', 'SDL_RaiseWindow')])
+        window.present_frame = lambda handle: calls.append(('present', handle))
+        return window, calls
 
-    def run_background(self, reopen):
+    def test_initial_window_revealed_only_when_frame_is_ready(self):
+        window, calls = self.window()
+        self.assertEqual(calls, [])
+        window.present()
+        self.assertEqual(calls, [('SDL_ShowWindow', 123), ('present', 456), ('SDL_RaiseWindow', 123)])
+        calls.clear(); window.present()
+        self.assertEqual(calls, [('present', 456)])
+
+    def test_relaunch_does_not_expose_old_frame_before_draw(self):
+        window, calls = self.window()
+        window.show_pending = False
+        window.minimize(); window.restore()
+        self.assertEqual(calls, [('SDL_MinimizeWindow', 123)])
+        window.present()
+        self.assertEqual(calls[1:], [('SDL_RestoreWindow', 123), ('SDL_ShowWindow', 123),
+                                   ('present', 456), ('SDL_RaiseWindow', 123)])
+
+    def run_background(self, reopen, started_at=None):
         import native_manager as manager
         from contextlib import ExitStack
         app = MagicMock()
@@ -45,7 +63,7 @@ class NativeLifecycleTests(unittest.TestCase):
         bus.__enter__.return_value = bus
         def events():
             iteration[0] += 1
-            if iteration[0] == 2 and reopen: return [('relaunch', {})]
+            if iteration[0] == 2 and reopen: return [('relaunch', {'inputHandoff':'a'*32} if reopen == 'internal' else {})]
             return []
         bus.events.side_effect = events
         # A finished hidden receiver must exit to allow a fresh input-device jail.
@@ -58,7 +76,8 @@ class NativeLifecycleTests(unittest.TestCase):
                                 ('Canvas', canvas), ('subprocess.Popen', worker)]:
                 stack.enter_context(patch.object(manager, name, return_value=value) if '.' not in name
                                     else patch('native_manager.' + name, return_value=value))
-            stack.enter_context(patch.object(manager, 'write_status'))
+            status = stack.enter_context(patch.object(manager, 'write_status'))
+            stack.enter_context(patch('native_manager.time.monotonic', side_effect=[100.1,100.2,100.3,100.4,100.5,100.6]))
             stack.enter_context(patch('native_manager.signal.signal'))
             stack.enter_context(patch('native_manager.time.sleep'))
             stack.enter_context(patch('native_manager.os.set_blocking'))
@@ -66,9 +85,17 @@ class NativeLifecycleTests(unittest.TestCase):
             stack.enter_context(patch('native_manager.os.close'))
             stack.enter_context(patch('native_manager.os.read', side_effect=BlockingIOError))
             factory = manager.Canvas
-            manager.main()
-            self.assertEqual(factory.call_count, 1 if reopen else 0)
-        if reopen:
+            manager.main(started_at=started_at)
+            self.assertEqual(factory.call_count, 1 if reopen is True else 0)
+            # Instrumentation must not add another write or change lifecycle.
+            worker_status = [call for call in status.call_args_list if call.args[0] == 'native-status.json']
+            self.assertEqual(len(worker_status), 2)
+            initial = worker_status[0].args[1]
+            self.assertEqual(initial['status'], 'worker-starting')
+            timings = initial['startupSteps']
+            self.assertEqual(list(timings), ['importsReadyMs','busReadyMs','settingsLoadedMs','handoffCheckedMs','workerSpawnedMs'])
+            self.assertEqual(list(timings.values()), sorted(timings.values()))
+        if reopen is True:
             self.assertTrue(app.draw.called)
             self.assertTrue(all(call.args == (canvas,) for call in app.draw.call_args_list))
             app.battery.refresh.assert_called_once_with(worker)
@@ -77,6 +104,15 @@ class NativeLifecycleTests(unittest.TestCase):
             app.battery.refresh.assert_not_called()
             app.battery.text.assert_not_called()
         worker.terminate.assert_not_called()
+        return timings
+
+    def test_internal_launch_retry_does_not_show_settings_or_start_another_worker(self):
+        self.run_background('internal')
+
+    def test_background_timing_keeps_wrapper_import_baseline(self):
+        timings = self.run_background(False, started_at=99.)
+        self.assertEqual(timings['importsReadyMs'],1100)
+        self.assertEqual(timings['workerSpawnedMs'],1500)
 
     def test_background_receiver_never_creates_settings_window(self):
         self.run_background(False)

@@ -43,7 +43,8 @@ class ControllerStatusWatch:
  def _run(self):
   while not self.stop_event.is_set():
    if not self._refresh():return
-   self.stop_event.wait(self.period)
+   self.stop_event.wait(self.poll_period())
+ def poll_period(self):return self.period
  def start(self):
   if self.thread is not None or self.closed:raise RuntimeError('controller watcher already used')
   self.thread=threading.Thread(target=self._run,daemon=True);self.thread.start()
@@ -72,3 +73,53 @@ class ControllerStatusWatch:
    self.thread.join(timeout)
    return not self.thread.is_alive()
   return True
+
+
+def select_connection(value,*,clock=time.monotonic,max_age=3):
+ """A current owner observation; absence of a link grants no control."""
+ if type(value) is not dict or set(value)!={'open','snapshot'} or type(value['open']) is not bool:
+  raise ValueError('invalid reconnect observation')
+ if not value['open'] and value['snapshot'] is not None:raise ValueError('closed reconnect watcher')
+ snapshot=None if value['snapshot'] is None else select_observation(value['snapshot'],clock=clock,max_age=max_age)
+ return {'open':value['open'],'snapshot':snapshot}
+
+
+class ResumingControllerWatch(ControllerStatusWatch):
+ """Keep observing across idle while each sensor session keeps its own generation."""
+ def __init__(self,client,**kwargs):
+  if not callable(getattr(client,'connection',None)):raise ValueError('reconnect observation unavailable')
+  super().__init__(client,**kwargs)
+  self.idle_wait=False
+
+ def start(self):
+  if self.client.check() is not True:raise RuntimeError('input handoff unconfirmed')
+  super().start()
+
+ def mark_active(self):
+  if self.client.active() is not True:return False
+  with self.lock:self.idle_wait=False
+  return True
+
+ def mark_idle(self):
+  if self.client.idle() is not True:return False
+  with self.lock:self.idle_wait=True
+  return True
+
+ def poll_period(self):
+  # Idle reads use only the authenticated local controller socket. They do
+  # not trigger Bluetooth calls or refresh the source observation timestamp.
+  with self.lock:return min(self.period,.1) if self.idle_wait else self.period
+
+ def _refresh(self):
+  try:
+   value=select_connection(self.client.connection(),clock=self.clock,max_age=self.max_age)
+   if value['open'] is not True:
+    self._close();return False
+   with self.lock:
+    if self.closed:return False
+    self.last=value['snapshot']
+    if self.last is not None:
+     self.generation=self.last['generation']
+   return True
+  except Exception:
+   self._close();return False

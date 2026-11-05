@@ -21,7 +21,7 @@ def prior_run(directory,run,*,expected_process=None,state_uid=5999,group=5000):
  d=os.open(Path(directory)/'borrowed-active',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   names=os.listdir(d)
-  if not names or any(not re.fullmatch('borrowed-'+run+r'-[0-9]{2}\.json',name) for name in names):raise RuntimeError('foreign or empty prior journal')
+  if not names or any(not re.fullmatch('borrowed-'+run+r'-[0-9]{2,4}\.json',name) for name in names):raise RuntimeError('foreign or empty prior journal')
  finally:os.close(d)
  # Journal reader independently enforces exact run, file owner/group/modes,
  # directory owner and ordered lifecycle records. No zero is inferred.

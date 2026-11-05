@@ -53,9 +53,14 @@ class PairingScreen:
             self.flow.was_paired = True
             self.flow.verify_identity(existing=True)
             return
+        recovered = not self.app.values.get('remoteAddress')
         self.app.values.update(remoteAddress=address(selected['address']),
-                               adapterAddress=self.flow.adapter, remoteName=selected.get('name') or self.app.values.get('remoteName', ''))
+                               adapterAddress=self.flow.adapter, remoteName=self.flow.serial or selected.get('name') or self.app.values.get('remoteName', ''))
         self.app.paired_serial = self.flow.serial
+        if recovered:
+            # Reinstallation may remove app settings while the TV retains its
+            # bond. Restore input only after product verification, without IR writes.
+            self.app.apply({'schema': 1, **self.app.values})
         self.route = 'settings'; self.close()
 
     def start(self):
@@ -70,7 +75,9 @@ class PairingScreen:
         before = (self.route, self.flow.phase, self.flow.message, len(self.flow.candidates))
         try:
             self.flow.tick()
-            if self.route == 'checking' and self.flow.phase in ('ready', 'existing-verified'): self.route_existing()
+            if self.route == 'checking':
+                if self.flow.phase in ('ready', 'existing-verified'): self.route_existing()
+                elif self.flow.phase == 'failed': self.route = 'error'
             if self.route == 'stopping' and time.monotonic() >= self.next_check:
                 self.next_check = time.monotonic() + 1
                 value = self.app.bus.request('status', {})
@@ -138,6 +145,13 @@ class PairingScreen:
 
     def draw(self, canvas):
         canvas.clear()
+        if self.route == 'checking':
+            # Keep first-run instructions out of the asynchronous status check.
+            canvas.text('Magic Sirimote', 64, 42, 40)
+            canvas.text('Remote settings and button assignments', 66, 94, 23, (114, 191, 227))
+            canvas.text('Checking remote connection...', 66, 168, 25)
+            canvas.present()
+            return
         canvas.text('Pair a Siri Remote', 64, 60, 38)
         canvas.text('Use your LG remote for this setup. A diagnostic cable is not needed.', 66, 122, 25)
         steps = (

@@ -136,6 +136,10 @@ class NativeBus:
             raise ValueError('Unsupported application request')
         return self._request_uri('luna://' + APP + '.service/' + method, params, timeout)
 
+    def show_home(self):
+        return self._request_uri('luna://com.webos.applicationManager/launch',
+                                 {'id': 'com.webos.app.home'}, 8)
+
     def tv_address(self):
         # A failed Bluetooth read must not invalidate the lifecycle/service bus.
         from settings import read_tv_address

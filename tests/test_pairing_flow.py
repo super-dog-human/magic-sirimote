@@ -29,6 +29,39 @@ class PairingTests(unittest.TestCase):
         self.flow = m.PairingFlow(self.bus, lambda value: None)
         self.flow.target = REMOTE; self.flow.adapter = TV
     def reply(self, tag, **kw): self.flow.on_reply(tag, {'returnValue': True, **kw})
+    def test_transient_firmware_read_is_retried_without_writes(self):
+        now=[0.0]; self.flow.clock=lambda:now[0]
+        self.flow.phase='identity';self.flow.product=0x026d
+        self.flow.pending_serial='SERIAL';self.flow.identity_client='1'
+        self.bus.incoming.append(('identity-firmware',{'returnValue':False,'errorCode':174}))
+        self.flow.tick();self.assertFalse(self.bus.sent)
+        now[0]=.25;self.flow.tick()
+        self.assertEqual(self.bus.sent[-1][1],'gatt/readCharacteristicValues')
+        self.assertEqual(self.bus.sent[-1][2]['characteristics'],[uuid('2a26')])
+        self.reply('identity-firmware',address=REMOTE,adapterAddress=TV,service=DIS,
+                   values=[{'characteristic':uuid('2a26'),'value':{'bytes':list(b'0116')}}])
+        self.assertEqual(self.flow.serial,'SERIAL')
+        self.assertEqual(self.flow.firmware,'0116')
+        self.assertEqual(self.flow.phase,'connecting')
+        self.assertFalse(any(method in ('adapter/unpair','hid/internal/setReport') for _,method,_ in self.bus.sent))
+
+    def test_firmware_retry_is_bounded_and_does_not_accept_missing_identity(self):
+        now=[0.0];self.flow.clock=lambda:now[0]
+        self.flow.phase='identity';self.flow.product=0x026d
+        self.flow.pending_serial='SERIAL';self.flow.identity_client='1'
+        for i in range(3):
+            self.bus.incoming.append(('identity-firmware',{'returnValue':False,'errorCode':174,'errorText':'read failed'}))
+            self.flow.tick();now[0]+=1;self.flow.tick()
+        self.assertEqual(self.flow.phase,'failed')
+        self.assertIsNone(self.flow.serial)
+        self.assertEqual(sum(method=='gatt/readCharacteristicValues' for _,method,_ in self.bus.sent),2)
+        self.flow.tick();self.assertEqual(len(self.bus.sent),2)
+
+    def test_other_read_errors_are_not_retried(self):
+        self.flow.phase='identity';self.flow.product=0x026d;self.flow.pending_serial='SERIAL'
+        self.bus.incoming.append(('identity-firmware',{'returnValue':False,'errorCode':1,'errorText':'Denied'}))
+        self.flow.tick();self.assertEqual(self.flow.phase,'failed');self.assertFalse(self.bus.sent)
+
     def test_refuse_active_main(self):
         self.flow.phase = 'scanned'; self.flow.candidates = {REMOTE: {'address':REMOTE,'paired':False}}; self.flow.pair()
         with self.assertRaisesRegex(RuntimeError, 'Stop the main'):
@@ -106,6 +139,17 @@ class PairingTests(unittest.TestCase):
         self.assertIsNone(m.paired_route([remote], TV))
         self.assertIsNone(m.paired_route([{**remote, 'paired': False}], REMOTE))
         self.assertIsNone(m.paired_route([remote, {**remote, 'address': TV}], ''))
+    def test_cached_pair_hint_is_not_a_new_pairing_candidate(self):
+        remote = {'address': REMOTE, 'name': 'DL0000000000', 'paired': True,
+                  'classOfDevice': 0x1F00, 'scanRecord': []}
+        self.assertEqual(m.paired_route([remote], ''), remote)
+        self.assertFalse(m.plausible(remote))
+        for change in ({'paired': False}, {'blocked': True}, {'pairing': True},
+                       {'classOfDevice': 0}, {'name': 'Keyboard'}, {'scanRecord': [1]}):
+            self.assertIsNone(m.paired_route([{**remote, **change}], ''))
+        self.assertIsNone(m.paired_route([remote], TV))
+        self.assertIsNone(m.paired_route([remote, {**remote, 'address': TV}], ''))
+
     def test_exact_target_automatic_attempt_is_once(self):
         self.flow.phase = 'ready'; self.flow.was_paired = False
         self.flow.scan_and_pair()

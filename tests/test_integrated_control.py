@@ -31,7 +31,39 @@ class ControlTests(unittest.TestCase):
             self.assertEqual([call.args[0] for call in bus.request.call_args_list], ['configure', 'startupPrepare'])
             self.assertFalse(app.done)
 
-    def test_first_save_waits_for_clean_stop_before_applying_all_twelve_cells(self):
+    def test_duplicate_registration_uses_service_check_and_native_cancel(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus = Mock(); app = RuntimeSetup(Path(d), bus)
+            bus.request.side_effect = [
+                {'returnValue': True, 'status': 'create-required', 'token': 'a'*48},
+                {'returnValue': True, 'status': 'cancel-required', 'activityId':155, 'resetToken':'b'*48},
+                {'returnValue': True, 'status': 'cancelled'},
+                {'returnValue': True, 'status': 'create-required', 'token': 'c'*48},
+                {'returnValue': True, 'status': 'registered'}]
+            bus.create_startup.side_effect = [
+                {'returnValue':False,'errorText':'Activity with that name already exists'},
+                {'returnValue':True,'activityId':156}]
+            bus.cancel_startup.return_value={'returnValue':True}
+            app.enable_startup()
+            bus.cancel_startup.assert_called_once_with(155)
+            self.assertEqual([c.args[0] for c in bus.request.call_args_list],
+                             ['startupPrepare','startupRepair','startupCancelled','startupPrepare','startupBind'])
+            self.assertEqual(bus.create_startup.call_args.args, ('c'*48,))
+
+    def test_duplicate_registration_never_recreates_after_failed_cancel(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as d:
+            bus=Mock(); app=RuntimeSetup(Path(d),bus)
+            bus.request.side_effect=[{'returnValue':True,'status':'create-required','token':'a'*48},
+                {'returnValue':True,'status':'cancel-required','activityId':155,'resetToken':'b'*48}]
+            bus.create_startup.return_value={'returnValue':False,'errorText':'Activity with that name already exists'}
+            bus.cancel_startup.return_value={'returnValue':False,'errorText':'Busy'}
+            with self.assertRaisesRegex(RuntimeError,'Busy'): app.enable_startup()
+            self.assertEqual(bus.create_startup.call_count,1)
+            self.assertEqual(bus.request.call_count,2)
+
+    def test_save_without_button_edits_waits_for_clean_stop_without_ir_writes(self):
         from unittest.mock import Mock
         values = {'schema': 1, 'remoteAddress': 'aa:bb:cc:dd:ee:10', 'adapterAddress': 'aa:bb:cc:dd:ee:20', 'remoteName': 'Remote', 'gyroEnabled': True}
         with tempfile.TemporaryDirectory() as d:
@@ -46,9 +78,8 @@ class ControlTests(unittest.TestCase):
                 app.next_settings_check = 0
                 bus.request.return_value = {'returnValue': True, 'cleanStop': True, 'processes': found()}
                 self.assertTrue(app.settings_tick(Mock()))
-                apply.assert_not_called()
-                assignments.assert_called_once()
-                self.assertEqual(len(assignments.call_args.args[0]),12)
+                apply.assert_called_once()
+                assignments.assert_not_called()
 
     def test_settings_timeout_never_changes_configuration(self):
         from unittest.mock import Mock
@@ -82,8 +113,8 @@ class ControlTests(unittest.TestCase):
                 bus.request.return_value={'returnValue':True,'cleanStop':True,'processes':found()}
                 order=[];persist.side_effect=lambda *_:order.append('identity');submit.side_effect=lambda *_:order.append('assignments')
                 app.settings_tick(canvas);self.assertEqual(order,['identity','assignments'])
-                from tv_assignments import displayed_bindings
-                submit.assert_called_once_with(displayed_bindings(d, {'20:00':'none'}))
+                from tv_assignments import changed_bindings
+                submit.assert_called_once_with({'20:00':'none'})
 
     def test_installer_cannot_interrupt_an_infrared_write(self):
         from unittest.mock import Mock
@@ -214,7 +245,7 @@ class ControlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             process=Path(d)/'2147483000';process.mkdir();command=process/'cmdline'
             prefix=['/usr/bin/python3','-I','-B']
-            for tail in ([service+'power-read.py'],[service+'activity-read.py'],[service+'control.py','status']):
+            for tail in ([service+'power-read.py'],[service+'power-read.py','--serve'],[service+'activity-read.py'],[service+'control.py','status']):
                 command.write_bytes(b'\0'.join(x.encode() for x in prefix+tail)+b'\0')
                 ir.runtime_idle(Path(d),allow_idle_service=True)
                 with self.assertRaises(RuntimeError):ir.runtime_idle(Path(d))
@@ -246,11 +277,11 @@ class ControlTests(unittest.TestCase):
         from unittest.mock import Mock
         invoke = Mock(return_value=Mock(returncode=0, stdout='{"returnValue":true}'))
         launcher = tv_launch.Launcher('a' * 32, invoke=invoke)
-        with patch.object(tv_launch.bundle, 'active', return_value=True), patch('control_processes.processes', return_value=found()):
+        with patch.object(tv_launch.bundle, 'active', return_value=True), patch('control_processes.processes', return_value=found()), patch('prelaunch_handoff_runtime.write_json_once'):
             self.assertEqual(launcher.launch('B', 'a' * 32), 'accepted')
         payload = json.loads(invoke.call_args.args[0][-1])
         self.assertIs(payload['launchHidden'], True)
-        self.assertEqual(payload['params'], {})
+        self.assertEqual(payload['params'], {'inputHandoff': 'a' * 32})
 
     def test_start_refuses_previous_runtime_before_loading_device_settings(self):
         with patch.object(control, 'processes', return_value=found(legacy=[{'pid': 5}])), patch.object(control, 'load') as load:

@@ -18,16 +18,41 @@ def execute(*,run,watch,lease,stop,controller_state,receiver_state,controller_ap
             wall=time.time,clock=time.monotonic,timeout=120):
  if type(run) is not str or not re.fullmatch('[a-f0-9]{32}',run) or type(timeout) not in (int,float) or not 0<timeout<=120:raise ValueError('invalid recovery context')
  if not all(callable(x) for x in (prepare_fn,write_request,launcher_factory,observe,read_receipt,process_ended,reconcile_fn,wall,clock)):raise ValueError('invalid recovery adapter')
- current=watch.snapshot()
- if type(current) is not dict or type(current.get('generation')) is not int or current['generation']<1:raise RuntimeError('target connection unavailable')
- generation=current['generation'];start=clock();last=start;deadline=start+timeout
+ import runtime_bundle as bundle
+ if bundle.active():
+  from control_processes import processes
+  close_deadline=clock()+min(timeout,15)
+  while processes()['ui']:
+   if stop.is_set() or lease.held() is not True or clock()>=close_deadline:
+    raise RuntimeError('settings window did not close before recovery')
+   stop.wait(.1)
+ start=clock();last=start;deadline=start+timeout
+ # Only observation is repeated here: no takeover record, lookup, request or
+ # launch exists yet. A link update between the caller's ready check and this
+ # entry must not permanently abandon recovery of the prior sensor state.
+ while True:
+  now=clock()
+  if type(now) not in (int,float) or not math.isfinite(now) or now<last:raise RuntimeError('clock invalid')
+  last=now
+  if stop.is_set() or lease.held() is not True:raise RuntimeError('recovery owner unavailable')
+  if watch.is_open() is not True:raise RuntimeError('recovery watch unavailable')
+  if now>=deadline:raise RuntimeError('recovery connection readiness timed out')
+  current=watch.snapshot()
+  if type(current) is dict and type(current.get('generation')) is int and current['generation']>=1:
+   if package.package_matches(receiver_app,receiver_package,pin) is not True:raise RuntimeError('recovery package mismatch')
+   newer=watch.snapshot()
+   if (type(newer) is dict and type(newer.get('generation')) is int
+       and newer['generation']==current['generation']
+       and not stop.is_set() and lease.held() is True and watch.is_open() is True
+       and now<=clock()<deadline):
+    generation=newer['generation'];break
+  stop.wait(.1)
  def guard():
   nonlocal last
   now=clock()
   if type(now) not in (int,float) or not math.isfinite(now) or now<last:raise RuntimeError('clock invalid')
   last=now;sample=watch.snapshot()
   return (now<deadline and not stop.is_set() and lease.held() is True and type(sample) is dict and type(sample.get('generation')) is int and sample['generation']==generation and package.package_matches(receiver_app,receiver_package,pin) is True)
- if not guard():raise RuntimeError('recovery preflight unavailable')
  proof=prepare_fn(run=run,controller_state=controller_state,receiver_state=receiver_state,controller_app=controller_app,receiver_app=receiver_app,receiver_package=receiver_package,pin=pin,lease=lease)
  if type(proof) is not dict or proof.get('status')!='prepared' or proof.get('run')!=run or type(proof.get('priorProcess')) is not dict or not guard():raise RuntimeError('takeover preparation unconfirmed')
  # Lookup itself has a durable O_EXCL intent. Bind the recovery guard only

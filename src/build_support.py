@@ -234,7 +234,7 @@ def package(out, app, version, files, service=None, *, description='Experimental
         'data.tar.gz':tar_gz(content,dirs,modes,owners)})
     parts=read_ar(raw); inventory=inspect_tgz(parts['data.tar.gz'])
     if {i['path'] for i in inventory}!=set(content)|dirs: raise ValueError('Package inventory mismatch')
-    name=f'{app}_{version}_arm.ipk'; (out/name).write_bytes(raw)
+    name=f'{app}_arm.ipk'; (out/name).write_bytes(raw)
     return {'appId':app,'package':name,'packageSha256':digest(raw),
             'pin':{'appId':app,'files':{k:digest(v) for k,v in files.items()},'packageInfoSha256':digest(info)},
             'files':{k:digest(v) for k,v in content.items()}}

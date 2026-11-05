@@ -30,7 +30,11 @@ class ProfileSubscriptionPump:
    self.threads=[threading.Thread(target=self._events,daemon=True),threading.Thread(target=self._poll,daemon=True)]
    for thread in self.threads:thread.start()
   except BaseException:self.stop();raise
- def _fail(self):self.tracker.close();self.stop_event.set()
+ def _wake_poll(self):pass
+ def _profile_event(self,role,obj):
+  if not self.tracker.event(role,obj):return False
+  self._wake_poll();return True
+ def _fail(self):self.tracker.close();self.stop_event.set();self._wake_poll()
  def _events(self):
   try:
    with selectors.DefaultSelector() as selector:
@@ -48,7 +52,7 @@ class ProfileSubscriptionPump:
       count+=len(raw);windows[role]=[start,count]
       if count>1_048_576:raise RuntimeError('subscription rate limit')
       for obj in parsers[role].feed(decoders[role].decode(raw)):
-       if not self.tracker.event(role,obj):raise RuntimeError('subscription invalid')
+       if not self._profile_event(role,obj):raise RuntimeError('subscription invalid')
   except Exception:self._fail()
  def _poll(self):
   deadline=self.clock()+self.ack_timeout
@@ -62,7 +66,7 @@ class ProfileSubscriptionPump:
    self.stop_event.wait(.1 if not self.tracker.acknowledged() else 1)
  def snapshot(self):return None if self.stop_event.is_set() else self.tracker.snapshot()
  def stop(self,timeout=5):
-  self.stop_event.set();self.tracker.close();ok=True
+  self.stop_event.set();self._wake_poll();self.tracker.close();ok=True
   for _,child in self.children:
    if child.poll() is None:
     try:child.terminate();child.wait(timeout=1)

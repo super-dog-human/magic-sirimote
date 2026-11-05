@@ -9,7 +9,7 @@ from rolling_receiver import RollingReceiver
 from hid_input import receive_actions
 from receive_diagnostics import capture
 
-def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=300,read_fn=None,sleep_fn=None,stats=None,on_ready=None,system_key_emit=None,on_progress=None,screen_control=None):
+def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=300,read_fn=None,sleep_fn=None,stats=None,on_ready=None,system_key_emit=None,on_progress=None,screen_control=None,prepared_receiver=None):
  if (type(session) is not BorrowedModeSession or session.state!='active' or type(fd) is not int or fd<0 or (duration is not None and (type(duration) not in (int,float) or not math.isfinite(duration) or not 0<duration<=7200)) or type(segment_seconds) not in (int,float) or not math.isfinite(segment_seconds) or not 30<segment_seconds<=7200 or not callable(abort) or not callable(clock) or (on_ready is not None and not callable(on_ready))):
   raise ValueError('invalid sustained session')
  if on_progress is not None and not callable(on_progress):raise ValueError('invalid progress callback')
@@ -30,12 +30,19 @@ def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=
   except Exception:
    if not control_failure:control_failure['failure']='exception'
    return False
- receiver=RollingReceiver(outputs,continuity=live,mode_verified=live,clock=clock,seconds=segment_seconds)
- if system_key_emit is not None:
-  if not callable(system_key_emit):raise ValueError('system key emitter invalid')
-  from combined_controls import CombinedControls
-  receiver=CombinedControls(receiver,system_key_emit,screen_control=screen_control)
- receiver.start()
+ if prepared_receiver is not None:
+  from early_navigation import EarlyNavigation
+  if type(prepared_receiver) is not EarlyNavigation or system_key_emit is not None or screen_control is not None:
+   raise ValueError('invalid prepared receiver')
+  receiver=prepared_receiver.adopt(session,live=live,outputs=outputs,fd=fd)
+  stats['earlyInput']=dict(prepared_receiver.stats)
+ else:
+  receiver=RollingReceiver(outputs,continuity=live,mode_verified=live,clock=clock,seconds=segment_seconds)
+  if system_key_emit is not None:
+   if not callable(system_key_emit):raise ValueError('system key emitter invalid')
+   from combined_controls import CombinedControls
+   receiver=CombinedControls(receiver,system_key_emit,screen_control=screen_control)
+  receiver.start()
  try:
   if on_ready is not None and on_ready() is not True:raise RuntimeError('ready marker unconfirmed')
   def should_abort():

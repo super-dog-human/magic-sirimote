@@ -21,7 +21,7 @@ class RemoteTests(unittest.TestCase):
         self.state=Path(self.tmp.name);settings.save(self.state,VALUES)
         self.value=reset.create(self.state);self.events=[];self.paired=True
     def program(self,*args):
-        self.events.append(('delete',args[2],args[3]));return {'status':'submitted','receiptSaved':True}
+        self.events.append((args[1],args[2],args[3]));return {'status':'submitted','receiptSaved':True}
     def call(self,method,params,timeout):
         self.events.append((method,params))
         if method=='adapter/getStatus':return {'returnValue':True,'adapters':[{'adapterAddress':VALUES['adapterAddress']}]}
@@ -36,30 +36,37 @@ class RemoteTests(unittest.TestCase):
     def test_all_slots_before_unpair_and_settings_retained_until_commit(self):
         result=self.run_reset()
         self.assertEqual(result['phase'],'clear');self.assertTrue(result['unpaired'])
-        self.assertEqual(self.events[:14],[('delete',b,d) for b,d in reset.SLOTS])
+        self.assertEqual(self.events[0],('reset-all',None,None))
+        self.assertEqual(sum(e[0]=='reset-all' for e in self.events),1)
         self.assertEqual(sum(e[0]=='adapter/unpair' for e in self.events),1)
         self.assertEqual(settings.load(self.state),VALUES)
         reset.finish_local(self.state,result)
         self.assertFalse((self.state/'settings.json').exists())
         self.assertFalse((self.state/reset.FILE).exists())
         self.assertTrue((self.state/('reset-archive-'+result['id'])/'settings.json').exists())
-    def test_hold_removed_before_press_and_old_ir_history_not_used_after_reset(self):
-        for button in (1,2,4,8,16,32,128):
-            self.assertLess(reset.SLOTS.index((button,2)),reset.SLOTS.index((button,0)))
+    def test_old_ir_history_not_used_after_reset(self):
         path=self.state/'ir-operation-old.json'
         path.write_text(json.dumps({'button':1,'delay':2,'status':'submitted','action':'set','code':'08'}))
         result=self.run_reset();reset.finish_local(self.state,result)
         from tv_assignments import ir_knowledge
         self.assertEqual(ir_knowledge(self.state,{}),{})
         self.assertTrue((self.state/('reset-archive-'+result['id'])/path.name).exists())
-    def test_failed_ir_stops_before_unpair_and_resumes_only_remaining_slots(self):
-        program=Mock(side_effect=[{'status':'submitted','receiptSaved':True},{'status':'uncertain','receiptSaved':True,'message':'No reply'}])
+    def test_uncertain_bulk_reset_is_not_retried_or_unpaired(self):
+        program=Mock(return_value={'status':'uncertain','receiptSaved':True,'message':'No reply'})
         result=self.run_reset(program=program)
-        self.assertEqual(result['phase'],'failed');self.assertEqual(len(result['completed']),1)
-        self.assertFalse(self.events)
-        self.value=reset.load(self.state);self.events=[]
-        result=self.run_reset()
-        self.assertEqual(self.events[0],('delete',1,0));self.assertTrue(result['unpaired'])
+        self.assertEqual(result['phase'],'failed');self.assertEqual(result['completed'],[])
+        self.assertEqual(program.call_count,1);self.assertFalse(self.events)
+        self.value=reset.load(self.state)
+        self.assertTrue(self.run_reset()['unpaired'])
+        self.assertEqual(self.events[0],('reset-all',None,None))
+
+    def test_older_partial_deletion_resumes_with_one_bulk_reset(self):
+        self.value['completed']=['%02X:%02X'%s for s in reset.SLOTS[:3]]
+        reset_state.write(self.state/reset.FILE,self.value)
+        self.value=reset.load(self.state)
+        self.assertTrue(self.run_reset()['unpaired'])
+        self.assertEqual(sum(e[0]=='reset-all' for e in self.events),1)
+
     def test_missing_receipt_not_counted_or_unpaired(self):
         result=self.run_reset(program=lambda *_:{'status':'submitted','receiptSaved':False})
         self.assertEqual(result['phase'],'failed');self.assertEqual(result['completed'],[])
@@ -80,7 +87,7 @@ class RemoteTests(unittest.TestCase):
         self.assertTrue((self.state/'settings.json').exists())
         self.value=reset.load(self.state);self.events=[]
         self.assertTrue(self.run_reset()['unpaired'])
-        self.assertFalse(any(e[0] in ('delete','adapter/unpair') for e in self.events))
+        self.assertFalse(any(e[0] in ('reset-all','adapter/unpair') for e in self.events))
     def test_webos_clears_row_adapter_after_unpair_and_retry_does_not_repeat(self):
         def call(method,params,timeout):
             reply=self.call(method,params,timeout)
@@ -93,7 +100,7 @@ class RemoteTests(unittest.TestCase):
         self.value['unpaired']=False;self.events=[]
         result=self.run_reset(call=call)
         self.assertTrue(result['unpaired'])
-        self.assertFalse(any(e[0] in ('delete','adapter/unpair') for e in self.events))
+        self.assertFalse(any(e[0] in ('reset-all','adapter/unpair') for e in self.events))
     def test_blank_adapter_not_accepted_for_a_paired_device(self):
         def call(method,params,timeout):
             reply=self.call(method,params,timeout)

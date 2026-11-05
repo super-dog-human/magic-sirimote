@@ -2,7 +2,7 @@
 const assert = require('assert');
 const {createStartup, APP} = require('../src/integrated/startup');
 const BOOT1 = '11111111-1111-1111-1111-111111111111', BOOT2 = '22222222-2222-2222-2222-222222222222';
-function fixture(saved = null) {
+function fixture(saved = null, now = () => 100000) {
   let state = saved, bootId = BOOT1, count = 0;
   const calls = [];
   const store = {read: () => state && JSON.parse(JSON.stringify(state)), write: value => { state = JSON.parse(JSON.stringify(value)); }};
@@ -12,7 +12,7 @@ function fixture(saved = null) {
     if (method === 'getDetails') return {value: {returnValue: true, activity: {activityId: state.activityId, type: activityType, name: APP + '.startup', creator: {serviceId: wrongCreator ? 'other.app' : APP}, callback: {method: 'luna://' + APP + '.service/startupTick', params: {token: committed ? state.nextToken : state.token}}, state: detailsState, adopters: inUse ? [{}] : [], subscribers: []}}};
     return {value: method === 'complete' && failComplete ? null : {returnValue: true, adopted: true}, request: {cancel() {}}};
   };
-  const instance = () => createStartup({store, activity, boot: () => bootId, now: () => 100000, token: () => (++count).toString(16).padStart(48, '0')});
+  const instance = () => createStartup({store, activity, boot: () => bootId, now, token: () => (++count).toString(16).padStart(48, '0')});
   return {instance, calls, type: value => { activityType = value; }, state: () => store.read(), boot: value => { bootId = value; }, fail: () => { failComplete = true; }, wrongCreator: () => { wrongCreator = true; }, repairable: (kind = 'failed', next = false, busy = false) => { failComplete = false; detailsState = kind; committed = next; inUse = busy; }};
 }
 function bind(s) { const prep = s.prepare(); s.bind({token: prep.token, activityId: 17}); }
@@ -57,7 +57,8 @@ async function main() {
   let power = {state: 'Active'}, found = empty(), starts = 0, stops = 0;
   const deps = {power: async () => power, status: async () => found,
     start: async () => { starts++; return {returnValue: true, status: 'starting'}; }, stop: async () => { stops++; }};
-  await s.poll(deps); assert.equal(starts, 0, 'Require stable power');
+  assert.deepEqual(await s.poll(deps), {pollAfterMs: 150});
+  assert.equal(starts, 0, 'Require a second power observation even on the fast path');
   await s.poll(deps); assert.equal(starts, 1);
   await s.poll(deps); assert.equal(starts, 1, 'No loop after uncertain/failed runtime start');
   const reconstructed = f.instance(); await reconstructed.poll(deps); await reconstructed.poll(deps);
@@ -65,7 +66,10 @@ async function main() {
   found.processes.controller = [{pid: 7}];
   power = {state: 'Screen Off'}; await s.poll(deps); await s.poll(deps);
   assert.equal(stops, 0, 'Screen-only off must preserve input');
-  power = {state: 'Active Standby'}; await s.poll(deps); await s.poll(deps); await s.poll(deps);
+  power = {state: 'Active Standby'};
+  assert.equal(await s.poll(deps), undefined, 'Standby keeps the ordinary debounce interval');
+  assert.equal(stops, 0);
+  await s.poll(deps); await s.poll(deps);
   assert.equal(stops, 1, 'Only one cooperative stop per standby cycle');
   found = empty(); power = {state: 'Active', processing: 'Request Suspend'};
   await s.poll(deps); await s.poll(deps); assert.equal(starts, 1);
@@ -82,6 +86,24 @@ async function main() {
   s.disable(); assert.equal(s.resume().status, 'unchanged');
   power = {state: 'Active'}; await s.poll(deps); await s.poll(deps);
   assert.equal(starts, 4, 'Closing a window cannot cancel installer maintenance');
+  {
+    const f = fixture(), s = f.instance(); bind(s);
+    let starts = 0, recoveries = 0, retired = false, power = {state:'Active'};
+    const deps = {power:async()=>power, status:async()=>empty(),
+      start:async()=>{starts++;return {returnValue:true,status:'starting'};}, stop:async()=>{},
+      recoverUnstarted:async()=>{recoveries++;return retired;}};
+    await s.poll(deps);await s.poll(deps);
+    await s.poll(deps);assert.equal(starts,1,'An unknown exit still cannot reset the attempt');
+    retired=true;await s.poll(deps);
+    assert.equal(starts,1,'Retirement alone cannot authorize input');
+    await s.poll(deps);assert.equal(starts,1,'Fresh Active confirmation is required');
+    await s.poll(deps);assert.equal(starts,2);
+    s.disable();const before=recoveries;await s.poll(deps);
+    assert.equal(recoveries,before,'Maintenance prevents automatic retirement');
+    s.prepare();power={state:'Active Standby'};
+    await s.poll(deps);await s.poll(deps);
+    assert.equal(starts,2,'Retirement cannot wake a standby TV');
+  }
   const g = fixture(), t = g.instance(); bind(t);
   const message = {senderServiceName: () => 'com.webos.service.activitymanager', applicationID: () => APP};
   const payload = {token: g.state().token, $activity: {activityId: 17}};
@@ -162,6 +184,20 @@ async function main() {
   const h = fixture(), early = h.instance(); const p = early.prepare();
   assert.equal((await early.tick(message, {token: p.token, $activity: {activityId: 19}})).returnValue, true, 'Genuine callback recovers lost create acknowledgement');
   assert.equal(early.summary().registered, true);
+  let observedClock = 1000;
+  const timedFixture = fixture(null, () => observedClock), timed = timedFixture.instance(); bind(timed);
+  let timedStarts = 0;
+  const timedDeps = {power: async () => { observedClock += 20; return {state: 'Active'}; },
+    status: async () => { observedClock += 30; return empty(); },
+    start: async () => { timedStarts++; observedClock += 40; return {returnValue: true, status: 'starting'}; }, stop: async () => { throw Error('Unexpected stop'); }};
+  await timed.poll(timedDeps); observedClock += 150; await timed.poll(timedDeps);
+  const expectedTiming = {serviceCreatedAt: 1000, firstActiveReadStartedAt: 1000,
+    firstActiveSampleAt: 1020, activeConfirmedAt: 1190, statusReadStartedAt: 1190,
+    statusReadFinishedAt: 1220, startRequestedAt: 1220, startReturnedAt: 1260};
+  assert.deepEqual(timed.summary().lastStartTiming, expectedTiming);
+  observedClock += 2000; await timed.poll(timedDeps);
+  assert.equal(timedStarts, 1);
+  assert.deepEqual(timed.summary().lastStartTiming, expectedTiming, 'Later polling must preserve the measured start');
   console.log('Integrated startup: authenticated durable scheduling, stable power, manual stop and bounded resume passed');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

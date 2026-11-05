@@ -12,7 +12,7 @@ class PrefixOutputCandidate(CombinedReceiver):
   super().__init__(outputs,clock=clock,sensor_input_verified=sensor_input_verified,session_policy=session_policy,max_actions=max_actions,action_history_limit=action_history_limit)
   from runtime_device import cursor_preferences
   self.gyro_enabled=cursor_preferences()[0]
-  self.router=AdaptivePrefixRouter(self._emit,clock=clock,motion_enabled=sensor_input_verified and self.gyro_enabled,session_policy=session_policy,max_actions=max_actions)
+  self.router=AdaptivePrefixRouter(self._emit,clock=clock,motion_enabled=sensor_input_verified and self.gyro_enabled,session_policy=session_policy,max_actions=max_actions,deferred_center=True)
   self.prefix_sensor_verified=sensor_input_verified
  def feed_raw(self,generation,report):
   if self.closed or self.failed or generation != self.generation or self.generation is None:return False

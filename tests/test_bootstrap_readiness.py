@@ -73,11 +73,22 @@ class BootstrapReadinessTests(unittest.TestCase):
     def test_service_may_be_late_beyond_old_120_second_budget(self):
         s = Scenario(delay=135)
         self.assertTrue(s.run())
-        self.assertEqual(s.connects(), [135])
+        self.assertEqual(len(s.connects()), 1)
+        self.assertGreaterEqual(s.connects()[0], 135)
+        self.assertLess(s.connects()[0], 137)
         self.assertEqual(s.reservations, 1)
         self.assertEqual(s.retirements, 1)
-        self.assertEqual(s.waits, [5] * 27)
+        self.assertEqual(s.waits[:80], [.25] * 80)
+        self.assertTrue(all(n == 2 for n in s.waits[80:]))
         self.assertEqual(s.events.count('bootstrap-inventory-service-error'), 1)
+
+    def test_ready_just_after_poll_is_detected_without_five_second_delay(self):
+        for reason in ('inventory', 'timeout', 'hid', 'gatt'):
+            with self.subTest(reason=reason):
+                s = Scenario(delay=.01, failure=reason)
+                self.assertTrue(s.run())
+                self.assertEqual(s.connects(), [.25])
+                self.assertEqual(s.reservations, 1)
 
     def test_every_retry_revalidates_peer_and_both_profiles(self):
         for reason in ('timeout', 'missing', 'unpaired', 'blocked', 'wrong-name', 'hid', 'gatt', 'wrong-adapter'):
