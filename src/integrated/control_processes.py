@@ -42,7 +42,9 @@ def processes(proc='/proc'):
             if len(uid) != 4 or len(set(uid)) != 1 or not uid[0].isdecimal() or int(uid[0]) <= 0 or status.get('Gid', '').split() != ['5000'] * 4 or status.get('CapEff', '').strip() != '0000000000000000':
                 raise RuntimeError('Unexpected runtime privileges')
             result[role].append({'pid': int(p.name), 'startTicks': start, 'uid': int(uid[0])})
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
+            # procfs can return ESRCH after opening a file for a task that
+            # exits before the read. Other inspection errors still fail closed.
             continue
     return result
 

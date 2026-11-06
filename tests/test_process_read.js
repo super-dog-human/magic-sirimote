@@ -44,8 +44,14 @@ print(json.dumps(p.processes(sys.argv[5])))`, path.resolve(__dirname, '../src/ru
     const io = {...fs, readFileSync(file, encoding) { if (file === cmdPath) throw Object.assign(Error('unavailable'), {code}); return fs.readFileSync(file, encoding); }};
     assert.throws(() => processes(service, {...options, io}), /unavailable/);
   }
-  const missing = {...fs, readFileSync(file, encoding) { if (file === cmdPath) throw Object.assign(Error('gone'), {code: 'ENOENT'}); return fs.readFileSync(file, encoding); }};
-  assert.deepEqual(processes(service, {...options, io: missing}).controller.map(v => v.pid), [8]);
+  for (const code of ['ENOENT', 'ESRCH']) {
+    for (const suffix of ['cmdline', 'stat', 'status']) {
+      const missing = {...fs, readFileSync(file, encoding) { if (file === path.join(proc, '1', suffix)) throw Object.assign(Error('gone'), {code}); return fs.readFileSync(file, encoding); }};
+      const result = processes(service, {...options, io: missing});
+      assert.deepEqual(result.controller.map(v => v.pid), [8]);
+      assert.deepEqual(result.receiver, found.receiver);
+    }
+  }
   let reads = 0;
   const changing = {...fs, readFileSync(file, encoding) { const data = fs.readFileSync(file, encoding); return file === path.join(proc, '1/stat') && ++reads === 2 ? data.replace('1234', '9999') : data; }};
   assert.throws(() => processes(service, {...options, io: changing}), /identity changed/);

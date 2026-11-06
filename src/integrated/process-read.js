@@ -43,7 +43,8 @@ function processes(serviceDirectory, {procDirectory = '/proc', appDirectory = '/
           || status.CapEff !== '0000000000000000' || !Number.isSafeInteger(pid) || pid <= 0) throw Error('Unexpected runtime privileges');
       result[role].push({pid, startTicks, uid: Number(uids[0])});
     } catch (error) {
-      if (error.code === 'ENOENT') continue;
+      // procfs also reports ESRCH when the task exits after its file is opened.
+      if (error.code === 'ENOENT' || error.code === 'ESRCH') continue;
       throw error;
     }
   }

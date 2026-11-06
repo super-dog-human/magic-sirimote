@@ -60,11 +60,16 @@ def runtime_idle(proc=Path('/proc'), *, allow_idle_service=False):
             continue
         try:
             command = (path / 'cmdline').read_bytes()
-        except FileNotFoundError:
+        except (FileNotFoundError, ProcessLookupError):
+            # A procfs file opened just before task exit can report ESRCH.
             continue
         except PermissionError:
             # An app whose command cannot be inspected might be a controller.
-            if path.stat().st_uid >= 5000:
+            try:
+                uid = path.stat().st_uid
+            except (FileNotFoundError, ProcessLookupError):
+                continue
+            if uid >= 5000:
                 raise RuntimeError('Cannot check whether another input app is running.')
             continue
         if allow_idle_service:
