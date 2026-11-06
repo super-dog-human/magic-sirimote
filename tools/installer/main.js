@@ -137,8 +137,14 @@ class Installer {
     this.cli('ares-launch', ['--device',this.device,APP,'--params',JSON.stringify({installerRequest:nonce})]);
     let stopped = false;
     for (let i = 0; i < 15; i++) {
+      const receipt = this.remote({action:'maintenance-result', nonce});
+      if (receipt.status === 'attention') throw Error('The app could not stop: '+(receipt.errorText || 'check its screen')+'. No package was changed.');
+      // The app consumes installer requests on relaunch, not initial startup.
+      // Retry only an unreceived request, with the same nonce so it executes once.
+      if (receipt.status === 'not-received' && i > 0)
+        this.cli('ares-launch', ['--device',this.device,APP,'--params',JSON.stringify({installerRequest:nonce})]);
       const state = this.remote({action:'status'});
-      if (state.returnValue && state.cleanStop && state.startup?.enabled === false) { stopped = true; break; }
+      if (receipt.status === 'accepted' && receipt.action === 'stop' && state.returnValue && state.cleanStop && state.startup?.enabled === false) { stopped = true; break; }
       await this.wait(2000);
     }
     if (!stopped) throw Error('The app has not finished stopping. Wake Siri Remote and try again. No package was replaced.');

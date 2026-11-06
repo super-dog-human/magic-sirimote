@@ -44,6 +44,25 @@ def maintenance(action, nonce):
     return {'staged': True}
 
 
+def maintenance_result(nonce):
+    import re
+    if re.fullmatch('[a-f0-9]{32}', nonce) is None:
+        raise ValueError('Invalid maintenance request')
+    path = APP_DIR/'state'/('install-result-'+nonce+'.json')
+    try:
+        fd = os.open(path, os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    except FileNotFoundError:
+        return {'status': 'not-received'}
+    with os.fdopen(fd, 'rb') as source:
+        info = os.fstat(source.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid <= 0 or info.st_gid != 5000 or not 0 < info.st_size <= 4096:
+            raise RuntimeError('Invalid maintenance result file')
+        value = json.loads(source.read(4097))
+    if value.get('status') not in ('pending', 'accepted', 'attention'):
+        raise RuntimeError('Invalid maintenance result')
+    return {key: value.get(key) for key in ('status', 'action', 'errorText')}
+
+
 def status():
     """Read the app's own status over LS2, using an anonymous client."""
     import ctypes as C
@@ -110,5 +129,6 @@ def dispatch(request):
     if action=='probe':return probe()
     if action=='status':return status()
     if action=='maintenance':return maintenance(request['operation'],request['nonce'])
+    if action=='maintenance-result':return maintenance_result(request['nonce'])
     if action=='verify':return verify(request['files'])
     raise ValueError('Unknown installer operation')

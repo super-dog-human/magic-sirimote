@@ -31,6 +31,7 @@ function fixture({answers=['192.168.1.20','9922','n'], devices=[], appPresent=fa
         else if(code.includes('"action\\":\\"removal-info')) output=JSON.stringify({appPresent});
         else if(code.includes('"action\\":\\"verify')) output=JSON.stringify(verification || {verifiedFiles:1,mismatch:[]});
         else if(code.includes('"action\\":\\"status')) output=JSON.stringify(state || {returnValue:true,cleanStop:true,startup:{enabled:false},processes:{controller:[],receiver:[],native:[],legacy:[]}});
+        else if(code.includes('"action\\":\\"maintenance-result')) output=JSON.stringify({status:'accepted',action:'stop'});
         else output=JSON.stringify({staged:true});
       }
       if(program==='tar') output=Buffer.from([0,255,1,254]);
@@ -97,6 +98,31 @@ test('updating waits for cooperative stop before replacing app',async()=>{
   const f=fixture({appPresent:true,answers:['192.168.1.20','9922','','n']}); await f.instance.run('1');
   const close=f.calls.findIndex(c=>c.program==='ares-launch' && c.args.includes('--close'));
   assert.ok(close>=0 && close<f.calls.findIndex(c=>c.program==='ares-install'));
+});
+test('cold app launch retries only unreceived maintenance with the same nonce',async()=>{
+  let replies=0;
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','','n'],fail:(p,a)=>{
+    if(p==='ares-novacom' && a.at(-1).includes('"action\\":\\"maintenance-result'))
+      return {ok:true,output:JSON.stringify(replies++<2?{status:'not-received'}:{status:'accepted',action:'stop'})};
+  }});
+  await f.instance.run('1');
+  const launches=f.calls.filter(c=>c.program==='ares-launch' && c.args.includes('--params'));
+  assert.equal(launches.length,2);assert.equal(launches[0].args.at(-1),launches[1].args.at(-1));assert.ok(installed(f));
+});
+test('pending maintenance is not submitted again',async()=>{
+  let replies=0;
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','','n'],fail:(p,a)=>{
+    if(p==='ares-novacom' && a.at(-1).includes('"action\\":\\"maintenance-result'))
+      return {ok:true,output:JSON.stringify(replies++===0?{status:'pending'}:{status:'accepted',action:'stop'})};
+  }});
+  await f.instance.run('1');assert.equal(f.calls.filter(c=>c.program==='ares-launch' && c.args.includes('--params')).length,1);
+});
+test('maintenance rejection stops before changing the package',async()=>{
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922',''],fail:(p,a)=>{
+    if(p==='ares-novacom' && a.at(-1).includes('"action\\":\\"maintenance-result'))
+      return {ok:true,output:JSON.stringify({status:'attention',errorText:'Finish the pending reset first'})};
+  }});
+  await assert.rejects(f.instance.run('1'),/pending reset/);assert.ok(!installed(f));
 });
 test('update failure to stop leaves existing package untouched',async()=>{
   const f=fixture({appPresent:true,answers:['192.168.1.20','9922',''],state:{returnValue:true,cleanStop:false,startup:{enabled:true}}});
