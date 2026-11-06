@@ -24,7 +24,9 @@ This is an experimental community project with limited hardware testing. Reconne
 | webOS platform version | **11.2.0** (`sdkVersion`) |
 | TV firmware | **43.21.96** |
 
-The webOS platform version and TV firmware version are different values. You can check your TV's values during the connection step below. You do not need to look up the remote's firmware before starting; the app verifies its identity during setup. Firmware version numbers do not restrict support for A1513 or A1962.
+These are tested examples, not a model or firmware allowlist. The app and TV-side fix do not require these specific LG versions. The installer checks the runtime features needed by the supplied package and explains any missing requirement. This ARM package currently needs a 32-bit ARM Python 3.10+ runtime, Luna Service 2, GLib, SDL2 and SDL2_ttf on the TV; input also depends on the TV's Bluetooth and input-device APIs. Other webOS environments may need a matching build or platform support.
+
+The webOS platform version and TV firmware version are different values. You do not need to look up the remote's firmware before starting; the app verifies its identity during setup.
 
 Both models have been tested for pairing, infrared assignments, swipes, touch-surface clicks, and gyro pointer control. Later, silver Siri Remote generations are not supported.
 
@@ -34,153 +36,47 @@ Both models have been tested for pairing, infrared assignments, swipes, touch-su
 
 Do not pair Siri Remote with the Mac. The Mac installs the app; the TV app pairs directly with Siri Remote. You will enter the TV's network IP address on the Mac.
 
-### 1. Create an LG Developer account
+### 1. Install the Mac tools
 
-Open the [LG webOS TV Developer website](https://webostv.developer.lge.com/), select **Sign In**, and create an account if necessary. Complete the registration and any verification requested by LG. You will use that account in the TV's Developer Mode app.
+Install the current **LTS version of [Node.js with npm](https://nodejs.org/en/download)**, then reopen Terminal. Node.js 20 or newer is required by the webOS command-line tools.
 
-### 2. Enable Developer Mode on the TV
-
-1. Open the TV's app store and search for **Developer Mode**.
-2. Install and open LG's Developer Mode app.
-3. Sign in with your LG Developer account.
-4. Turn **Dev Mode Status** on and let the TV restart.
-5. Reopen Developer Mode. Note the displayed **IP address**; you will use it to connect the Mac to the TV.
-
-If Dev Mode Status is already on, leave it on. LG documents this process in its [Developer Mode guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app).
-
-### 3. Install the Mac tools
-
-Open **Terminal** on a Mac with [Node.js and npm](https://nodejs.org/en/download) installed.
-
-Run these commands to check whether Node.js and npm are installed:
-
-```sh
-node --version
-npm --version
-```
-
-Install LG's command-line tools and select the TV profile:
+The installer checks for LG's **[webOS CLI](https://github.com/webos-tools/cli)** and offers to install it automatically with npm if it is missing. If you prefer to install it beforehand:
 
 ```sh
 npm install --global @webos-tools/cli
 ```
 
-```sh
-ares -V
-ares-config --profile tv
-```
+The other tools (`curl`, `tar`, and, for the optional TV-side fix, `ssh`) are included with macOS. Missing tools and installation failures are explained before continuing.
 
-`ares -V` should print a version number. If installation reports a permissions error, use the guidance linked from [LG's CLI installation page](https://webostv.developer.lge.com/develop/tools/cli-installation) before continuing.
+### 2. Prepare Developer Mode on the TV
 
-### 4. Connect the Mac tools to your TV
+1. Create an account on the [LG webOS TV Developer website](https://webostv.developer.lge.com/) if you do not have one.
+2. Install **Developer Mode** from the TV's app store, open it and sign in.
+3. Turn **Dev Mode Status** on. Initial activation requires the TV restart requested by LG. **If it is already on, leave it on.**
+4. Open Developer Mode and turn **Key Server** on. Keep its **IP address** and **passphrase** available for the installer.
+5. Connect the Mac and TV to the same local network.
 
-Connect the Mac and TV to the same local network, using Wi-Fi or Ethernet. In Terminal, run:
+See [LG's Developer Mode guide](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app) if the TV needs help completing this step.
 
-```sh
-ares-setup-device
-```
+### 3. Run the installer
 
-Use the arrow keys to choose **add**, then press Return. Enter the following values when prompted:
-
-| Prompt | What to enter |
-| --- | --- |
-| Device name | `my-tv` — this is a nickname used in the commands below |
-| Device IP address | The actual IP address shown in Developer Mode on your TV |
-| Device port | `9922` |
-| SSH user | `prisoner` |
-| Description | Any description you like, such as `Living room TV` |
-| Password, if asked | Leave empty; do not enter your LG account password |
-| Set default / Save | Confirm saving; making it the default is optional |
-
-If you already registered this TV, choose **modify** instead and check its IP address. If you use a different nickname, replace `my-tv` in every command below with that nickname.
-
-On the TV, turn **Key Server** on in Developer Mode. Then run:
+Paste this into Terminal to download and run the interactive installer:
 
 ```sh
-ares-novacom --device my-tv --getkey
+curl --fail --location --output install.sh https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/install.sh && sh install.sh
 ```
 
-When prompted for a passphrase, type the characters displayed in the TV's Developer Mode app, exactly as shown. This is separate from your LG account password. Do not put the passphrase in a public screenshot or issue report.
+Choose **Install/update app**. Enter the TV's IP address when asked; press Return to accept the suggested port. The installer reuses a matching saved connection or creates one. If a key is needed, enter the passphrase shown in Developer Mode, **not your LG account password**.
 
-Check the connection:
+The installer checks compatibility, verifies the download, installs the IPK and verifies the installed files. When updating, it first asks you to close unsaved settings and wake Siri Remote so the running app can stop cleanly.
 
-```sh
-ares-device --system-info --device my-tv
-```
+During installation, you can also apply the **TV-side input-device fix**. This prevents input loss after repeated Bluetooth reconnections. It requires an **existing root SSH connection**; the installer asks for its port and optional key file. It does not obtain root access, and the Developer Mode passphrase is not a root password. If you have no root connection, answer **n** to continue installing the app.
 
-**Continue when this prints the TV's system information.** If it cannot connect, fix the connection first; installing the app will otherwise fail too. The commands follow LG's [CLI guide](https://webostv.developer.lge.com/develop/tools/cli-dev-guide) and [TV connection instructions](https://webostv.developer.lge.com/develop/getting-started/developer-mode-app#connecting-with-cli).
+The fix changes LG's handling of A1513/A1962 outside this app as well; other remote models pass through. Applying or removing it briefly restarts the input service, **not the TV**. It checks the service's interfaces and storage rather than requiring a particular TV model or firmware. Without the fix, the repeated-reconnection problem may recur. See [Reset or uninstall](#reset-or-uninstall) to remove it.
 
-### 5. Prevent input loss after repeated reconnections
+When installation finishes, Magic Sirimote opens on the TV. The installer does not reboot the TV. You can run the same `sh install.sh` again to update or uninstall.
 
-This prevents Siri Remote from connecting over Bluetooth but losing input after repeated reconnections.
-
-**This step requires an existing root SSH connection to the TV.** The Developer Mode `prisoner` connection cannot run it. If you do not have root access, continue to step 6; the app can be installed, but this reconnection problem may recur. The commands below do not enable root access.
-
-On the Mac, set your TV's address and its root SSH port, then download and check the installer:
-
-```sh
-TV_IP=192.168.1.100       # Replace with your TV's address.
-TV_ROOT_PORT=22          # Replace with your root SSH port, not Developer Mode port 9922.
-SIRIMOTE_FIX_DIR=$(mktemp -d)
-curl --fail --location --output "$SIRIMOTE_FIX_DIR/source.tar.gz" \
-  https://github.com/super-dog-human/magic-sirimote/archive/refs/tags/v0.4.0.tar.gz
-tar -xzf "$SIRIMOTE_FIX_DIR/source.tar.gz" -C "$SIRIMOTE_FIX_DIR"
-cd "$SIRIMOTE_FIX_DIR/magic-sirimote-0.4.0/tools/hid-guard"
-shasum -a 256 -c SHA256SUMS
-```
-
-After all checks show `OK`, transfer and apply it:
-
-```sh
-scp -P "$TV_ROOT_PORT" -r . root@"$TV_IP":/tmp/magic-sirimote-hid-guard
-ssh -p "$TV_ROOT_PORT" root@"$TV_IP" \
-  '/usr/bin/python3 -I -B /tmp/magic-sirimote-hid-guard/install.py --check && /usr/bin/python3 -I -B /tmp/magic-sirimote-hid-guard/install.py --apply'
-```
-
-The installer stops if the TV software is incompatible. It changes LG's handling of A1513/A1962 system-wide, rather than only inside this app; other device types pass through. Applying it briefly restarts the input service, not the TV. To undo it, see [Reset or uninstall](#reset-or-uninstall).
-
-### 6. Download and install Magic Sirimote
-
-An **IPK** is the app's installation file.
-
-The following commands create a folder under Downloads and download the package and its checksum. Copy each command into Terminal and wait for it to finish before continuing:
-
-```sh
-mkdir -p "$HOME/Downloads/magic-sirimote"
-cd "$HOME/Downloads/magic-sirimote"
-```
-
-```sh
-curl --fail --location --output org.magicsirimote.app_arm.ipk \
-  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/org.magicsirimote.app_arm.ipk
-```
-
-```sh
-curl --fail --location --output SHA256SUMS \
-  https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/releases/SHA256SUMS
-```
-
-Check the download:
-
-```sh
-shasum -a 256 -c SHA256SUMS
-```
-
-The result should end with `org.magicsirimote.app_arm.ipk: OK`. If it does not, download both files again before installing.
-
-Keep the TV on, then install and open the app:
-
-```sh
-ares-install --device my-tv org.magicsirimote.app_arm.ipk
-```
-
-```sh
-ares-launch --device my-tv org.magicsirimote.app
-```
-
-Wait for the installation command to report success before running the launch command. **Magic Sirimote** should open on the TV. You can open it later from the TV's Home screen, like other apps.
-
-### 7. Pair Siri Remote with the TV
+### 4. Pair Siri Remote with the TV
 
 Open **Magic Sirimote** on the TV. If it is not already open, select this icon from the TV's Home screen:
 
@@ -188,7 +84,7 @@ Open **Magic Sirimote** on the TV. If it is not already open, select this icon f
 
 ![Pairing start screen](assets/screenshots/pairing.png)
 
-The app shows **Pair a Siri Remote**. If it opens the settings screen instead, continue to [Choose all of your button assignments](#8-choose-all-of-your-button-assignments).
+The app shows **Pair a Siri Remote**. If it opens the settings screen instead, continue to [Choose all of your button assignments](#5-choose-all-of-your-button-assignments).
 
 1. On the TV, choose **Start pairing** with the LG remote.
 2. Wait until the app starts searching. **Start the search before pressing the pairing buttons.**
@@ -212,7 +108,7 @@ These pairing illustrations are rendered from the v0.4.0 UI code.
 
 If the app reports an error or no candidate appears, see [Pairing problems](#pairing-problems).
 
-### 8. Choose all of your button assignments
+### 5. Choose all of your button assignments
 
 Reopen **Magic Sirimote** from the TV's Home screen using the LG remote. Choose **Button Assignments**.
 
@@ -254,7 +150,7 @@ The screenshot below uses the suggested assignments above.
 
 Choose every cell you want to use before your first save. The app cannot recover an unknown infrared assignment after you overwrite or delete it.
 
-### 9. Save your settings
+### 6. Save your settings
 
 1. Press **Back** to return to the first settings screen. Your button edits remain pending.
 2. Leave **Gyro cursor** on if you want pointer control.
@@ -278,17 +174,13 @@ Periodically open **Developer Mode** on the TV and check **Remain Session**. Whi
 
 ### The Mac cannot connect to the TV
 
-Confirm that the TV is on, Dev Mode Status is on, and both devices are on the same local network. Recheck the IP address shown by the TV: it can change after a restart. Run `ares-setup-device`, choose **modify**, and update `my-tv` if needed. Then retry `ares-device --system-info --device my-tv`.
+Confirm that the TV is on, Dev Mode Status is on, and both devices are on the same local network. Run `sh install.sh` again and enter the current IP address shown by the TV; a previously saved address may have changed.
 
-If key authentication fails, enable Key Server and repeat `ares-novacom --device my-tv --getkey` with the current on-screen passphrase. Do not switch Developer Mode off and on merely to refresh an IP address or key.
+If key authentication fails, turn Key Server on and let the installer retrieve the key with the current on-screen passphrase. Do not switch Developer Mode off and on merely to refresh an IP address or key.
 
 ### The app does not open
 
-Check that installation reported success, then run this command on the Mac to open the app:
-
-```sh
-ares-launch --device my-tv org.magicsirimote.app
-```
+Open Magic Sirimote from the TV's Home screen. If installation reported an error, rerun `sh install.sh` and follow its message before retrying.
 
 ### Pairing problems
 
@@ -329,7 +221,7 @@ Recovery is not guaranteed for every Bluetooth failure. If the problem keeps ret
 
 ### Bluetooth connects, but input remains unavailable
 
-After repeated reconnections, LG's input manager can retain old input-device references until Siri Remote receives a device number that the app cannot access. Follow [step 5](#5-prevent-input-loss-after-repeated-reconnections) to apply the TV-side fix. Updating the app IPK alone does not apply it.
+After repeated reconnections, LG's input manager can retain old input-device references until Siri Remote receives a device number that the app cannot access. Run the [installer](#3-run-the-installer) and choose the TV-side fix when offered. Updating the app IPK alone does not apply it.
 
 Without root access, a full TV restart is a temporary recovery option: when the TV is not updating, turn it off, unplug it for about 30 seconds, reconnect power, and turn it on. This does not prevent recurrence. **Reset app is not needed for this recovery.**
 
@@ -358,7 +250,7 @@ To start over:
 2. Open Magic Sirimote and choose **Reset app**.
 3. Read the confirmation. Choose **Cancel** to leave things unchanged, or **Reset everything** to proceed.
 4. Let the reset finish. If it stops partway through, read the error; reopening the app may offer **Continue reset** to finish the remaining steps. Some IR assignments may already be deleted.
-5. When **Start pairing** appears, follow [Pair Siri Remote with the TV](#7-pair-siri-remote-with-the-tv), then configure and save your button assignments again.
+5. When **Start pairing** appears, follow [Pair Siri Remote with the TV](#4-pair-siri-remote-with-the-tv), then configure and save your button assignments again.
 
 <details>
 <summary>Reset confirmation screen</summary>
@@ -370,17 +262,10 @@ To start over:
 To uninstall Magic Sirimote:
 
 1. If you also want to remove its remote pairing and infrared assignments, complete **Reset app** first.
-2. If you applied the TV-side fix in step 5, run the following on your Mac using the same root SSH connection:
+2. Run `sh install.sh` on the Mac and choose **Remove app**. It also offers to remove the TV-side fix using your root SSH connection.
 
-   ```sh
-   TV_IP=192.168.1.100       # Replace with your TV's address.
-   TV_ROOT_PORT=22          # Replace with your root SSH port.
-   ssh -p "$TV_ROOT_PORT" root@"$TV_IP" \
-     '/usr/bin/python3 -I -B /var/lib/magic-sirimote-hid-guard/rollback.py'
-   ```
+You can instead delete Magic Sirimote using **Edit App List → Delete** on the TV's Home screen. Wait for deletion to finish before reinstalling.
 
-3. Open **Edit App List** on the TV's Home screen, select Magic Sirimote, and choose **Delete**. Wait for deletion to finish before reinstalling.
-
-Deleting or resetting the app does not remove the TV-side fix. If you already deleted the app, you can still run the command above. It removes the TV-side fix and restarts only the input service; the TV is not rebooted.
+**Deleting or resetting the app does not remove the TV-side fix:** the app's uninstall process cannot perform its root cleanup. To remove it separately, run `sh install.sh` and choose **Remove TV-side fix only**, even if you already deleted the app. Only the input service is restarted; the TV is not rebooted.
 
 Uninstalling the app alone should not be treated as unpairing the remote or deleting its stored IR settings. Reset clears the active configuration but may retain inactive local recovery records; it is not secure erasure of diagnostic history.

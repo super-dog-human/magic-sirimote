@@ -11,15 +11,18 @@ from pathlib import Path
 import stat
 import subprocess
 import time
+import re
+import sys
+
+# -I ignores the script directory; load only the sibling compatibility module.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from compat import check_runtime
 
 FIX_DIR=Path('/var/lib/magic-sirimote-hid-guard')
 FIX_LIB=FIX_DIR/'libsirimote-hid-guard.so'
 ENV_FILE=Path('/var/systemd/system/env/bthidmanager.env')
 ENV_CONTENT='LD_PRELOAD='+str(FIX_LIB)+'\n'
-BINARY_SHA='c1cd44fa5ea7d3a22cf4d05472021622e223762fab0722e9bd28824879e56272'
-UNIT_SHA='8f36be4849018e2566275c76325ae7537b2fc76a45671d3f5fd0696fcca0b1a4'
 UNIT='bthidmanager.service'
-LIBRARY_SHA='bdab4c27472e3c7a0f07e262d2190b4e39e75a596ec7a5b9e159812cf6071fff'
 
 
 def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -27,7 +30,7 @@ def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def props():
     fields=['MainPID','ActiveState','SubState','PartOf','BoundBy','ConsistsOf',
-            'PropagatesStopTo','EnvironmentFiles','DropInPaths']
+            'PropagatesStopTo','EnvironmentFiles','Environment','DropInPaths']
     p=subprocess.run(['/bin/systemctl','show',UNIT]+['--property='+x for x in fields],
                      capture_output=True,text=True,timeout=5,check=True)
     return dict(x.split('=',1) for x in p.stdout.splitlines() if '=' in x)
@@ -36,26 +39,28 @@ def props():
 def validate_properties(p):
     if p.get('ActiveState')!='active' or not p.get('MainPID','').isdigit() or int(p['MainPID'])<=1:
         raise RuntimeError('Service is not active')
-    if any(p.get(k) for k in ['PartOf','BoundBy','ConsistsOf','PropagatesStopTo','DropInPaths']):
-        raise RuntimeError('Unexpected restart dependencies or overrides')
-    if p.get('EnvironmentFiles')!=str(ENV_FILE)+' (ignore_errors=yes)':
-        raise RuntimeError('Vendor EnvironmentFile changed')
+    if any(p.get(k) for k in ['BoundBy','ConsistsOf','PropagatesStopTo']):
+        raise RuntimeError('Restarting the input service would also stop other services; this installer cannot isolate the restart')
+    if str(ENV_FILE) not in re.findall(r'(\S+) \(ignore_errors=(?:yes|no)\)', p.get('EnvironmentFiles','')):
+        raise RuntimeError('The input service does not read the environment file required by this fix: '+str(ENV_FILE))
+    if re.search(r'(?:^|[\s\"])LD_PRELOAD=', p.get('Environment','')):
+        raise RuntimeError('The input service already sets LD_PRELOAD; refusing to replace another configuration')
 
 
 def persistent_var(mountinfo):
-    matches=[line.split() for line in mountinfo.splitlines() if len(line.split())>6 and line.split()[4]=='/var']
-    # /var may have the original overlay and a later persistent bind mount stacked on it.
-    if not matches:raise RuntimeError('/var mount missing')
-    row=matches[-1]; sep=row.index('-')
-    if row[sep+1]!='ext4' or 'rw' not in row[5].split(','):
-        raise RuntimeError('/var is not persistent writable ext4')
-    for line in mountinfo.splitlines():
-        fields=line.split()
-        if len(fields)<6:continue
-        path=fields[4]
-        if path in ('/var/lib',str(FIX_DIR),'/var/systemd') or path.startswith(str(FIX_DIR)+'/') or path.startswith('/var/systemd/'):
-            raise RuntimeError('Unexpected nested mount below target persistence path')
-    return {'device':row[2],'root':row[3],'filesystem':row[sep+1]}
+    rows=[line.split() for line in mountinfo.splitlines() if ' - ' in line]
+    result={}
+    for target in (str(FIX_DIR),str(ENV_FILE.parent)):
+        candidates=[r for r in rows if target==r[4] or target.startswith(r[4].rstrip('/')+'/')]
+        if not candidates:raise RuntimeError('Cannot identify storage for '+target)
+        # Longest matching mount, with the last entry winning for stacked mounts.
+        row=max(enumerate(candidates),key=lambda item:(len(item[1][4]),item[0]))[1]
+        sep=row.index('-'); filesystem=row[sep+1]
+        persistent=filesystem in ('ext2','ext3','ext4','f2fs','btrfs','xfs','jfs','reiserfs','ubifs','jffs2','zfs')
+        if not persistent or 'rw' not in row[5].split(',') or 'rw' not in row[sep+3].split(','):
+            raise RuntimeError('The fix requires persistent writable storage at '+target+' (found '+filesystem+')')
+        result[target]={'device':row[2],'root':row[3],'filesystem':filesystem}
+    return result
 
 
 def secure_dirs(path, created):
@@ -88,8 +93,7 @@ def restart():
 
 def preflight():
     if os.geteuid()!=0:raise RuntimeError('TV root required')
-    if digest('/usr/sbin/bthidmanager')!=BINARY_SHA:raise RuntimeError('Firmware executable changed')
-    if digest('/etc/systemd/system/bthidmanager.service')!=UNIT_SHA:raise RuntimeError('Vendor unit changed')
+    check_runtime(Path(__file__).resolve().parent)
     persistence=persistent_var(Path('/proc/self/mountinfo').read_text())
     before=props();validate_properties(before)
     if os.path.realpath('/proc/'+before['MainPID']+'/exe')!='/usr/sbin/bthidmanager':
@@ -106,7 +110,7 @@ def install_fix(bundle, report):
         raise RuntimeError('Existing configuration: refusing to overwrite')
     data=base64.b64decode(bundle['libraryBase64'],validate=True)
     if hashlib.sha256(data).hexdigest()!=bundle['librarySha256']:raise RuntimeError('Bundle mismatch')
-    # This bundle contains the exact library previously tested on the reviewed TV.
+    # Record payload integrity; the TV executable is checked by interface, not hash.
     report['librarySha256']=bundle['librarySha256']
     activated=False
     created_files=[]
@@ -130,8 +134,7 @@ def install_fix(bundle, report):
         if stable['MainPID']!=after['MainPID'] or stable.get('ActiveState')!='active':
             raise RuntimeError('Service not stable')
         report['sameBoot']=Path('/proc/sys/kernel/random/boot_id').read_text().strip()==report['bootId']
-        record={'version':1,'librarySha256':bundle['librarySha256'],'binarySha256':BINARY_SHA,
-                'unitSha256':UNIT_SHA,'environmentFile':str(ENV_FILE),'environmentContent':ENV_CONTENT,
+        record={'version':2,'librarySha256':bundle['librarySha256'],'environmentFile':str(ENV_FILE),'environmentContent':ENV_CONTENT,
                 'createdDirectories':report['createdDirectories'],'rollbackSha256':hashlib.sha256(bundle['rollbackSource'].encode()).hexdigest()}
         write_new(FIX_DIR/'installed.json',(json.dumps(record,indent=2)+'\n').encode(),0o600)
         report['status']='installed';report['persistentFiles']=[str(FIX_LIB),str(ENV_FILE),str(FIX_DIR/'rollback.py'),str(FIX_DIR/'installed.json')]
@@ -156,32 +159,34 @@ def install_fix(bundle, report):
 
 def main():
     import argparse
-    parser=argparse.ArgumentParser(description='Optional TV-root workaround for reviewed LG G3 firmware 43.21.96.')
+    parser=argparse.ArgumentParser(description='Optional TV-root input-device fix; checks required interfaces, not TV model or firmware.')
     mode=parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--check',action='store_true',help='Validate compatibility without changing the TV')
     mode.add_argument('--apply',action='store_true',help='Install and restart only bthidmanager')
     args=parser.parse_args()
     here=Path(__file__).resolve().parent
+    for line in (here/'SHA256SUMS').read_text().splitlines():
+        match=re.fullmatch(r'([0-9a-f]{64})  ([A-Za-z0-9][A-Za-z0-9_.-]*)',line)
+        if not match or digest(here/match[2])!=match[1]:
+            raise RuntimeError('Installer download verification failed; download it again')
     data=(here/'libsirimote-hid-guard.so').read_bytes()
-    if hashlib.sha256(data).hexdigest()!=LIBRARY_SHA:
-        raise RuntimeError('Library differs from the hardware-tested release')
+    library_sha=hashlib.sha256(data).hexdigest()
     before,_=preflight()
     if FIX_DIR.exists() or FIX_DIR.is_symlink() or ENV_FILE.exists() or ENV_FILE.is_symlink():
         record=json.loads((FIX_DIR/'installed.json').read_text())
-        if (digest(FIX_LIB)!=LIBRARY_SHA or ENV_FILE.read_text()!=ENV_CONTENT
-                or record['librarySha256']!=LIBRARY_SHA
-                or record['binarySha256']!=BINARY_SHA or record['unitSha256']!=UNIT_SHA
+        if (digest(FIX_LIB)!=library_sha or ENV_FILE.read_text()!=ENV_CONTENT
+                or record['librarySha256']!=library_sha
                 or digest(FIX_DIR/'rollback.py')!=record['rollbackSha256']
                 or str(FIX_LIB) not in Path('/proc/'+before['MainPID']+'/maps').read_text()):
             raise RuntimeError('Existing configuration differs or guard is not loaded; inspect before continuing')
         print('Already installed and loaded; no changes made.')
         return
     if args.check:
-        print('Compatible with the reviewed release; no changes made.')
+        print('Required input-service interfaces are available; no changes made.')
         return
     report={}
     install_fix({'libraryBase64':base64.b64encode(data).decode(),
-                 'librarySha256':LIBRARY_SHA,'rollbackSource':(here/'rollback.py').read_text()},report)
+                 'librarySha256':library_sha,'rollbackSource':(here/'rollback.py').read_text()},report)
     print('Installed and loaded. Only bthidmanager was restarted. TV was not rebooted.')
 
 
