@@ -80,6 +80,28 @@ class ScreenTests(unittest.TestCase):
         self.screen.tick()
         self.assertEqual(self.screen.route,'stopping')
         self.assertFalse(any(method=='le/startScan' for _,method,_ in self.bus.sent))
+    def test_first_run_start_pairs_on_discovery_without_second_button(self):
+        self.app.values['remoteAddress'] = ''
+        self.screen.flow.target = None; self.screen.flow.adapter = TV
+        self.screen.flow.phase = 'ready'; self.screen.route = 'start'
+        self.screen.choose('Start pairing')
+        self.app.bus.request.return_value = {'returnValue':True,'cleanStop':True,'startup':{'enabled':False}}
+        self.screen.tick()
+        self.assertEqual(self.screen.flow.phase, 'scanning')
+        self.assertEqual(self.screen.labels(), ['Close'])
+        ad = [3,2,18,24,15,255,76,0,138,7,102,2,2,170,187,204,221,238,255,8]
+        self.screen.flow.on_reply('scan', {'returnValue':True,'device':{'address':REMOTE,'scanRecord':ad}})
+        self.assertEqual(self.screen.flow.phase, 'pair-preflight')
+        self.assertEqual(self.screen.flow.target, REMOTE)
+        canvas=Mock();self.screen.draw(canvas)
+        self.assertFalse(any('Pair selected remote' in call.args[0] for call in canvas.text.call_args_list))
+
+    def test_close_during_search_cancels_discovery(self):
+        self.screen.flow.phase='ready'; self.screen.route='pairing'; self.screen.flow.scan()
+        self.screen.choose('Close')
+        self.assertTrue(self.app.done)
+        self.assertFalse(self.bus.jobs)
+
     def test_success_configures_once_without_assignments(self):
         self.screen.flow.phase = 'success'; self.screen.route = 'pairing'; self.screen.flow.adapter = TV
         self.screen.tick(); self.screen.tick()

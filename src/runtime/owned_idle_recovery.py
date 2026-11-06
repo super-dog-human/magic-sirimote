@@ -28,15 +28,17 @@ def eligible(result):
     if type(failure) is dict:
         return (failure.get('stage') == 'read'
                 and failure.get('type') == 'OSError' and failure.get('errno') == 5)
-    # The connection observer can report idle before read() returns EIO.
-    # Admit that ordering only; stale status, lost ownership and policy errors
-    # still leave the journal for external recovery. Waiting itself requires
-    # live ownership, and resumption still needs a new generation and zero proof.
+    # A disconnect invalidates the old generation before read() returns EIO.
+    # Depending on notification order the guard sees either a missing snapshot
+    # or a changed generation. Both end this input session; neither permits old
+    # input to resume. Keep the worker waiting for fresh connection admission
+    # and zero-mode proof. Stale status, lost ownership and other policy errors
+    # still leave the journal for external recovery.
     return ('receiveFailure' not in diagnostic and stats.get('aborted') is True
             and diagnostic.get('endReason') == 'control-or-policy-ended'
             and diagnostic.get('receiverStopReason') == 'control-lost'
             and diagnostic.get('controlFailure') == 'snapshot'
-            and diagnostic.get('watchState') == 'missing')
+            and diagnostic.get('watchState') in ('missing', 'generation-changed'))
 
 
 

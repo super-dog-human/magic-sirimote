@@ -72,7 +72,7 @@ class PairingTests(unittest.TestCase):
         self.reply('scan', devices=[{'address': REMOTE, 'name': 'Siri Remote', 'scanRecord': AD}])
         self.assertEqual(self.flow.candidates[REMOTE]['source'], 'scan-list')
         self.reply('scan', device={'address': REMOTE, 'name': 'Siri Remote', 'scanRecord': AD})
-        self.flow.stop_scan(); self.flow.pair()
+        self.assertEqual(self.flow.phase, 'pair-preflight')
         self.assertEqual(self.bus.sent[-1][1], 'main/status')
     def test_pair_already_paired_is_rejected(self):
         self.flow.phase = 'scanned'; self.flow.candidates = {REMOTE: {'address': REMOTE, 'paired': True}}
@@ -157,6 +157,43 @@ class PairingTests(unittest.TestCase):
         self.assertFalse(self.flow.auto_pair)
         self.assertEqual(self.flow.phase, 'pair-preflight')
         self.assertEqual(sum(x[1] == 'main/status' for x in self.bus.sent), 1)
+
+    def test_first_available_supported_remote_is_automatically_paired_once(self):
+        self.flow.target = None; self.flow.phase = 'ready'; self.flow.scan()
+        self.reply('scan', devices=[
+            {'address': TV, 'name': 'Siri Remote'},
+            {'address': TV, 'paired': True, 'scanRecord': AD},
+            {'address': TV, 'blocked': True, 'scanRecord': AD},
+            {'address': TV, 'pairing': True, 'scanRecord': AD},
+            {'address': REMOTE, 'paired': False, 'scanRecord': AD},
+            {'address': TV, 'paired': False, 'scanRecord': AD}])
+        self.assertEqual(self.flow.target, REMOTE)
+        self.assertEqual(self.flow.phase, 'pair-preflight')
+        self.assertNotIn('scan', self.bus.jobs)
+        # Queued events, including a late timeout, must not start another pair.
+        self.reply('scan', device={'address': TV, 'scanRecord': AD})
+        self.flow.on_reply('scan', {'returnValue':False,'errorText':'Request timed out'})
+        self.assertEqual(self.flow.phase, 'pair-preflight')
+        self.assertEqual(sum(method == 'main/status' for _,method,_ in self.bus.sent), 1)
+        self.assertFalse(any(method == 'adapter/pair' for _,method,_ in self.bus.sent))
+        self.reply('pair-idle', cleanStop=True, startup={'enabled':False})
+        self.reply('pair-fresh', devices=[{'address':REMOTE,'paired':False}])
+        self.assertEqual(self.bus.sent[-1], ('pair','adapter/pair',{'address':REMOTE,'subscribe':True}))
+
+    def test_saved_target_is_not_replaced_by_other_advertisement(self):
+        self.flow.phase = 'ready'; self.flow.scan_and_pair()
+        self.reply('scan', device={'address':TV,'scanRecord':AD})
+        self.assertEqual(self.flow.phase, 'scanning')
+        self.assertFalse(self.flow.candidates)
+        self.assertEqual(self.flow.target, REMOTE)
+
+    def test_timeout_allows_a_new_automatic_search(self):
+        self.flow.target = None; self.flow.phase = 'ready'; self.flow.scan()
+        self.flow.on_reply('scan', {'returnValue':False,'errorText':'Request timed out'})
+        self.assertEqual(self.flow.phase, 'scanned')
+        self.flow.scan()
+        self.reply('scan', device={'address':REMOTE,'scanRecord':AD})
+        self.assertEqual(self.flow.phase, 'pair-preflight')
 
     def test_blank_name_still_routes_saved_paired_address(self):
         self.assertIsNotNone(m.paired_route([{'address':REMOTE,'name':'','paired':True}], REMOTE))

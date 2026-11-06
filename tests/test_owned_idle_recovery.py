@@ -67,9 +67,43 @@ class OwnedRecoveryTests(unittest.TestCase):
   k['recover'].assert_called_once()
   self.assertTrue(k['recover'].call_args.kwargs['session_closed']())
 
+ def test_actual_disconnect_generation_change_retains_idle_worker(self):
+  from connected_status_watch import ConnectedStatusWatch
+  watch=ConnectedStatusWatch(clock=lambda:100)
+  connected={'returnValue':True,'address':TARGET,'adapterAddress':ADAPTER,
+             'connected':True,'connecting':False,'connectRequest':False,'subscribed':True}
+  for role in ('hid','gatt'):watch.event(role,connected)
+  self.assertTrue(watch.commit_poll(watch.begin_poll(),connected,connected))
+  generation=watch.snapshot()['generation']
+  watch.event('hid',{**connected,'connected':False})
+  self.assertIsNone(watch.snapshot())
+  diagnostic=watch.diagnostic(generation)
+  self.assertEqual(diagnostic['watchState'],'generation-changed')
+  k=self.setup_path();k['result']=copy.deepcopy(DISCONNECTED)
+  k['result']['readStats']['receiveDiagnostics'].update(diagnostic)
+  self.assertTrue(eligible(k['result']))
+  out=wait_and_recover(**k)
+  self.assertEqual(validate_receipt(out)['generation'],2)
+  k['recover'].assert_called_once()
+  self.assertTrue(k['recover'].call_args.kwargs['session_closed']())
+
+ def test_changed_generation_still_requires_ownership_cleanup_and_new_zero_proof(self):
+  for reason in ('owner','stop','cleanup','zero','same-generation'):
+   k=self.setup_path();k['result']=copy.deepcopy(DISCONNECTED)
+   k['result']['readStats']['receiveDiagnostics']['watchState']='generation-changed'
+   if reason=='owner':k['lease'].held.return_value=False
+   elif reason=='stop':k['stop'].is_set.return_value=True
+   elif reason=='cleanup':k['result']={'reason':'resource-close-unverified','errors':['target-close-error'],'sessionResult':k['result']}
+   elif reason=='zero':k['recover'].return_value={'status':'attention'}
+   else:
+    k['watch'].snapshot.return_value={'generation':1}
+    k['stop'].is_set.side_effect=[False,False,True]
+   self.assertNotIn('localRecovery',wait_and_recover(**k),reason)
+   if reason!='zero':k['recover'].assert_not_called()
+
  def test_other_control_failures_cannot_take_idle_path(self):
   for field,value in (('watchState','stale'),('watchState','closed'),
-   ('watchState','generation-changed'),('controlFailure','lease'),
+   ('controlFailure','lease'),
    ('controlFailure','external'),('endReason','stop-requested'),
    ('receiverStopReason','requested'),('receiveFailure',None)):
    k=self.setup_path();k['result']=copy.deepcopy(DISCONNECTED)

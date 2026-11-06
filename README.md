@@ -11,6 +11,7 @@ This is an experimental community project with limited hardware testing. Reconne
 - [Compatibility and requirements](#compatibility-and-requirements)
 - [Set up from a Mac](#set-up-from-a-mac)
 - [Troubleshooting](#troubleshooting)
+- [Optional TV-side input-device fix](#optional-tv-side-input-device-fix)
 - [Reset or uninstall](#reset-or-uninstall)
 
 ## Compatibility and requirements
@@ -164,10 +165,9 @@ The app shows **Pair a Siri Remote**. If it opens the settings screen instead, c
 1. On the TV, choose **Start pairing** with the LG remote.
 2. Wait until the app starts searching. **Start the search before pressing the pairing buttons.**
 3. Hold Siri Remote near the TV. Press and hold **MENU and Volume Up (+) together for about five seconds**, then release both.
-4. After the search detects your remote, it appears in the candidate list. Use **Up/Down** to select it. The list is empty until a remote is detected; its name may contain a serial number.
-5. Select **Pair selected remote** and press OK. Use Left/Right to move between the bottom buttons if necessary. **Appearing in the list does not mean pairing is complete.** If the app already knows this remote, it may select and pair it automatically.
-6. Wait while the app verifies the remote and prepares input. On success, it saves the connection information and closes the window to start reception.
-7. Press Siri Remote's touch surface once to wake it. Try swiping to move the TV's selection, then pressing and releasing the surface to select an item.
+4. The app automatically pairs with the first available supported Siri Remote it finds. **Put only the remote you want to use into pairing mode.** If this app already has a saved remote, the search stays restricted to that remote. No **Pair selected remote** step is needed in v0.4.0.
+5. Wait while the app verifies the remote and prepares input. On success, it saves the connection information and closes the window to start reception. If the search expires, choose **Search again** and repeat the pairing-button sequence.
+6. Press Siri Remote's touch surface once to wake it. Try swiping to move the TV's selection, then pressing and releasing the surface to select an item.
 
 <details>
 <summary>Connection check and search screens</summary>
@@ -175,6 +175,10 @@ The app shows **Pair a Siri Remote**. If it opens the settings screen instead, c
 ![Checking the remote connection](assets/screenshots/checking.png)
 
 ![Searching for a Siri Remote](assets/screenshots/searching.png)
+
+![Automatic pairing and verification](assets/screenshots/automatic-pairing.png)
+
+These pairing illustrations are rendered from the v0.4.0 UI code.
 
 </details>
 
@@ -263,7 +267,7 @@ ares-launch --device my-tv org.magicsirimote.app
 - Start searching in the app **before** holding MENU + Volume Up. Release both buttons after about five seconds and keep the remote near the TV.
 - Charge the remote if necessary, then disconnect its cable before testing input.
 - If no candidate appears, choose **Search again** when offered and repeat the sequence.
-- If a candidate appears, select it and choose **Pair selected remote**. Discovery and pairing are separate steps.
+- Pairing starts automatically when a supported, available remote is found. Put only your intended remote into pairing mode; wait for identity verification to finish. If the search expires, choose **Search again**.
 - If remote identification fails, record the exact message. A name resembling “Siri Remote” is not sufficient for acceptance.
 
 The pairing used by Magic Sirimote may not appear in the TV's ordinary Bluetooth-controller list. An empty list there does not by itself mean pairing failed. Use Magic Sirimote's own screen and test input instead.
@@ -297,9 +301,11 @@ Recovery is not guaranteed for every Bluetooth failure. If the problem keeps ret
 
 ### Bluetooth connects, but input remains unavailable
 
-On the TV used for testing, Developer Mode apps can access input devices numbered **0–31** (`/dev/hidraw0` through `/dev/hidraw31`). After repeated reconnections, Siri Remote was assigned number 33: Bluetooth connected, but Magic Sirimote could not receive its input. These are OS input-device numbers, not saved pairing slots. The cause of the increasing numbers is still under investigation.
+On the TV used for testing, Developer Mode apps can access input devices numbered **0–31** (`/dev/hidraw0` through `/dev/hidraw31`). Repeated reconnections eventually assigned Siri Remote a number outside that range: Bluetooth connected, but Magic Sirimote could not receive input. These are OS input-device numbers, not saved pairing slots.
 
-If waking the remote and reopening the app do not restore input, fully restart the TV: when it is not updating, turn it off, unplug it for about 30 seconds, reconnect power, and turn it on. This restored an accessible number in our test without deleting the pairing. **Reset app is not needed for this recovery.**
+The investigation found that LG's `bthidmanager` process retained 41 disconnected input-device references. Linux retains a device's number until its last open reference is released (see the [Linux hidraw implementation](https://github.com/torvalds/linux/blob/v6.12/drivers/hid/hidraw.c)). An optional, firmware-specific [TV-side fix](#optional-tv-side-input-device-fix) prevents this retention for supported Siri Remotes. **Updating the app IPK alone does not install this fix.**
+
+Without TV root access, a full restart remains a temporary recovery option: when the TV is not updating, turn it off, unplug it for about 30 seconds, reconnect power, and turn it on. This restored an accessible number in an earlier test without deleting the pairing, but does not prevent recurrence. **Reset app is not needed for this recovery.** The root-only fix below was applied without rebooting the TV.
 
 ### Swipes work but the pointer does not
 
@@ -315,6 +321,101 @@ Check that Gyro cursor is on and saved. Lift your finger completely off the touc
 ### Voice input
 
 Voice input is not supported.
+
+## Optional TV-side input-device fix
+
+This is a separate system workaround for the retained-device problem above. It is **not an app feature or an automatic IPK install step**. It has been tested only on **LG G3 OLED55G3PJA, firmware 43.21.96**, with Siri Remote **A1513 / A1962**. The installer checks the exact LG executable and service hashes and refuses other versions. Do not bypass those checks for another TV or firmware.
+
+### What changes on the TV
+
+The helper intercepts `open64` only inside `/usr/sbin/bthidmanager`. When that LG process opens a hidraw device, it reads the device's bus/vendor/product identifiers. For Bluetooth Apple `004c:0266` or `004c:026d`, it immediately closes that process's reference and reports `ENODEV`. It also releases the reference if the device disappears during the identity check. Other devices pass through. Magic Sirimote continues receiving Siri Remote input through its own process.
+
+The installer creates these files:
+
+| TV path | Purpose |
+| --- | --- |
+| `/var/lib/magic-sirimote-hid-guard/libsirimote-hid-guard.so` | Small helper library |
+| `/var/lib/magic-sirimote-hid-guard/installed.json` | Installed hashes and rollback information |
+| `/var/lib/magic-sirimote-hid-guard/rollback.py` | Restore the original service behavior |
+| `/var/systemd/system/env/bthidmanager.env` | `LD_PRELOAD` setting for this service only |
+
+The existing LG service already reads that environment-file path. Its unit and executable are not edited. The files are root-owned and stored on the TV's persistent `/var` filesystem. No global preload, root login server, firmware replacement, pairing reset, or IR assignment change is installed. The helper does not read input reports and has no background polling or delay loop.
+
+Only `bthidmanager` is restarted during installation or rollback. Bluetooth remote operation may pause briefly; the TV itself is not rebooted. If Siri Remote is still unresponsive afterward, open Magic Sirimote with the LG remote, choose **Restart**, and wake Siri Remote. Both remotes worked after this step in the hardware test, and the LG process no longer held Siri Remote's input reference.
+
+These files are intended to survive a TV restart; persistence and the existing service loading path were checked, but **a reboot test has not been performed**. Firmware updates require a new compatibility review. This workaround does not guarantee recovery from unrelated Bluetooth failures.
+
+### Requirements and installation
+
+You must already have a way to run commands **as root on the TV**. The ordinary Developer Mode connection uses `prisoner`; `ares-install`, `ares-novacom`, and running `sudo` on the Mac do not turn that into TV root. The implementation used during this investigation ran once through a temporary privileged service, then removed that registration. It did not leave a root SSH connection available. This release supplies the installer, not a root-access method.
+
+On the Mac, obtain the tagged source:
+
+```sh
+git clone --branch v0.4.0 --depth 1 https://github.com/super-dog-human/magic-sirimote.git
+cd magic-sirimote/tools/hid-guard
+shasum -a 256 -c SHA256SUMS
+```
+
+Transfer this directory to `/tmp/magic-sirimote-hid-guard` on the TV using your existing root-access method. For example, **only if root SSH is already configured**, use its actual IP address and port:
+
+```sh
+TV_IP=192.168.1.100       # Replace with your TV's address.
+TV_ROOT_PORT=22          # Replace with your existing root SSH port.
+scp -P "$TV_ROOT_PORT" -r . root@"$TV_IP":/tmp/magic-sirimote-hid-guard
+ssh -p "$TV_ROOT_PORT" root@"$TV_IP"
+```
+
+Do not use the Developer Mode port `9922` as though it provided root. If no root-access method is available, stop here; normal app installation can still proceed.
+
+Run the following **in the TV's root shell**, first checking without making changes:
+
+```sh
+id -u
+/usr/bin/python3 -I -B /tmp/magic-sirimote-hid-guard/install.py --check
+```
+
+`id -u` must print `0`, and the check must report compatibility. Then apply:
+
+```sh
+/usr/bin/python3 -I -B /tmp/magic-sirimote-hid-guard/install.py --apply
+```
+
+The installer refuses to overwrite another configuration, checks that the service loads the helper and stays running, and attempts to restore the original service if activation fails. If the same fix is already installed and loaded, it reports that and makes no changes. It does not restart the whole TV. After success, the transferred `/tmp/magic-sirimote-hid-guard` directory can be removed; keep the installed files under `/var`.
+
+### Remove the TV-side fix
+
+Run this **as root on the TV**:
+
+```sh
+/usr/bin/python3 -I -B /var/lib/magic-sirimote-hid-guard/rollback.py
+```
+
+Rollback verifies the recorded library hash and environment contents before removing the service setting, restarting only `bthidmanager`, and deleting the installed helper files. If those files have been changed independently, it stops for inspection. **Uninstalling or resetting Magic Sirimote does not remove this separate TV-side fix.**
+
+### Source, tests, and timing
+
+Source and isolated tests are in [`tools/hid-guard`](tools/hid-guard). The shipped library is the exact binary tested on the TV. Host tests and a TV-side isolated test exercised 1,200 simulated Siri Remote opens, including both supported product IDs and pass-through for other hardware. The fake backend is test-only and must never be loaded into the real LG service.
+
+To rebuild separately with Zig 0.13.0 and run the host C tests, from the repository root:
+
+```sh
+python3 tools/hid-guard/build.py --zig /path/to/zig --out build/hid-guard
+python3 -m unittest discover -s tools/hid-guard -p 'test_*.py'
+```
+
+The installer accepts the pinned, hardware-tested library; a newly built binary with a different hash needs review and hardware testing before release. It is not automatically substituted into the installer.
+
+The helper adds a device-information check when LG opens a hidraw device, and closes the reference for Siri Remote. It adds **no intentional wait or retry to normal connection or wake-up**. Before/after connection latency has not been measured. The few seconds of stability checks in the installer happen only during installation. The app's separate disconnect-notification ordering fix also adds no new wait interval; it keeps the existing recovery worker alive when notifications arrive in a different order. A1962's first button press after a full sleep disconnect remains unverified.
+
+For the app's host checks and IPK build, from the repository root:
+
+```sh
+python3 src/check.py
+python3 src/build_integrated.py --out build/app --bytecode-python /path/to/python3.12
+```
+
+Use a new output directory. CPython 3.12 matches the tested TV's import cache; omitting `--bytecode-python` builds source-only. These checks do not establish compatibility with an untested TV.
 
 ## Reset or uninstall
 

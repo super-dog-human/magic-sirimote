@@ -121,13 +121,13 @@ class PairingFlow:
         self.send('adapter', 'adapter/getStatus', {'subscribe': False})
 
     def scan_and_pair(self):
-        if not self.target or self.was_paired: raise ValueError('A known unpaired target is required')
+        if self.was_paired: raise ValueError('An unpaired target is required')
         self.auto_pair = True
         self.scan()
 
     def scan(self):
         if self.phase not in ('ready', 'scanned'): return
-        self.candidates = {}; self.selected = 0
+        self.candidates = {}; self.selected = 0; self.auto_pair = True
         self.phase = 'scanning'; self.message = 'Hold MENU + Volume Up for 5 seconds. Searching for 45 seconds...'
         self.send('scan', 'le/startScan', {'subscribe': True}, timeout=45, subscription=True)
 
@@ -144,7 +144,7 @@ class PairingFlow:
     def stop_scan(self):
         if self.phase == 'scanning':
             self.bus.cancel('scan'); self.phase = 'scanned'
-            self.message = 'Select the remote, then Pair.' if self.candidates else 'No matching remote. Scan again.'
+            self.message = 'No available Siri Remote found. Put it in pairing mode and search again.'
             self.save()
 
     def profile_ok(self, value):
@@ -153,6 +153,8 @@ class PairingFlow:
                 and value.get('connected') is True and value.get('connecting') is False)
 
     def on_reply(self, tag, value):
+        # Cancellation can leave an already queued scan event or timeout.
+        if tag == 'scan' and self.phase != 'scanning': return
         # No raw advertising payloads, link keys, PINs or input packets are logged.
         if tag != 'scan' or value.get('returnValue') is not True: self.note(tag, {k: value[k] for k in ('returnValue', 'errorCode', 'errorText', 'request',
                    'address', 'adapterAddress', 'connected', 'connecting') if k in value})
@@ -206,14 +208,15 @@ class PairingFlow:
             for device, provenance in rows:
                 if not device.get('address'): continue
                 addr = address(device['address'])
-                if plausible(device) and not device.get('blocked') and (not self.target or self.target == addr):
+                if (plausible(device) and not device.get('blocked') and not device.get('pairing')
+                        and device.get('paired', False) is False and (not self.target or self.target == addr)):
                     candidate = {'address': addr, 'name': str(device.get('name') or advertising(device).get('name') or ('Siri Remote (' + PRODUCTS[advertising(device)['product']] + ')'))[:48],
                                  'paired': device.get('paired', False), 'rssi': device.get('rssi'),
                                  'source': provenance, 'product': advertising(device)['product']}
                     if self.candidates.get(addr) != candidate:
                         self.candidates[addr] = candidate
                         self.note('candidate', candidate)
-                    if self.auto_pair and addr == self.target and candidate['paired'] is False:
+                    if self.auto_pair:
                         self.auto_pair = False
                         self.stop_scan(); self.pair(); break
         elif tag == 'pair':

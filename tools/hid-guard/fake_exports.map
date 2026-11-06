@@ -1,0 +1,1 @@
+{ global: readlink; open64; close; ioctl; guard_test_model; guard_test_closed; guard_test_opened; local: *; };

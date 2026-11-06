@@ -104,8 +104,7 @@ class PairingScreen:
     def labels(self):
         if self.route == 'start': return ['Start pairing', 'Close']
         if self.route == 'checking' or self.route == 'stopping': return ['Close']
-        if self.flow.phase in ('scanning', 'scanned'):
-            return (['Pair selected remote', 'Close'] if self.flow.candidates else ['Search again', 'Close'])
+        if self.flow.phase == 'scanned': return ['Search again', 'Close']
         return ['Close']
 
     def choose(self, label):
@@ -119,9 +118,6 @@ class PairingScreen:
             elif label == 'Search again':
                 if self.flow.phase == 'scanning': self.flow.stop_scan()
                 self.flow.scan()
-            elif label == 'Pair selected remote':
-                if self.flow.phase == 'scanning': self.flow.stop_scan()
-                self.flow.pair()
             self.focus = 0
         except (OSError, ValueError, RuntimeError) as error:
             self.flow.fail(error); self.route = 'error'
@@ -132,14 +128,9 @@ class PairingScreen:
         if kind == 'close' or kind == 'key' and value in (27, 461, 1073742094): self.choose('Close')
         elif kind == 'key':
             if value in (1073741904, 1073741903): self.focus = (self.focus + 1) % len(labels)
-            elif value in (1073741906, 1073741905) and self.flow.candidates:
-                self.flow.selected = (self.flow.selected + (1 if value == 1073741905 else -1)) % min(4, len(self.flow.candidates))
             elif value in (13, 1073741912): self.choose(labels[self.focus])
         elif kind == 'click':
             x, y = value
-            if self.route == 'pairing' and self.flow.phase in ('scanning', 'scanned') and 64 <= x < 1192 and 344 <= y < 536 and self.flow.candidates:
-                index = (y - 344) // 48
-                if index < min(4, len(self.flow.candidates)): self.flow.selected = index
             for index, (bx, by, w, h) in enumerate(self.boxes):
                 if bx <= x < bx + w and by <= y < by + h: self.choose(labels[index]); break
 
@@ -157,23 +148,18 @@ class PairingScreen:
         steps = (
             '1. Choose Start pairing below to begin searching.',
             '2. When searching starts, hold MENU + Volume Up for about 5 seconds.',
-            '3. Use Up/Down to select your remote, then choose Pair selected remote.',
+            '3. Pairing starts automatically when a supported Siri Remote is found.',
         )
         active = 0 if self.route == 'start' else None
         if self.route == 'pairing' and self.flow.phase in ('scanning', 'scanned'):
-            active = 2 if self.flow.candidates else 1
+            active = 1
+        elif self.route == 'pairing' and self.busy: active = 2
         for index, text in enumerate(steps):
             canvas.text(text, 66, 174 + index * 36, 23,
                         (114, 191, 227) if index == active else (155, 170, 190), max_width=1148)
         message = self.flow.message
-        if active == 2:
-            message = 'Finding a device does not pair it. Select it below to continue.'
         canvas.text(message, 66, 300, 23, max_width=1148)
-        if self.route == 'pairing' and self.flow.phase in ('scanning', 'scanned'):
-            for i, d in enumerate(list(self.flow.candidates.values())[:4]):
-                y = 344 + 48 * i
-                canvas.rectangle((64, y, 1128, 42), (30, 113, 156) if i == self.flow.selected else (36, 48, 65))
-                canvas.text(d['name'] + '   ' + d['address'], 82, y + 8, 23)
+        canvas.text('Put only the Siri Remote you want to use into pairing mode.', 66, 358, 23, (155, 170, 190))
         labels = self.labels(); self.focus = min(self.focus, len(labels) - 1)
         self.boxes = [(64 + i * 576, 582, 552, 68) for i in range(len(labels))]
         for i, label in enumerate(labels):
