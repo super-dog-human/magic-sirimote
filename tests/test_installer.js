@@ -37,6 +37,7 @@ function fixture({answers=['192.168.1.20','9922','n'], devices=[], appPresent=fa
       if(program==='tar') output=Buffer.from([0,255,1,254]);
       return {ok:true,output};
     }});
+  instance.rootMethod='ssh'; // Existing SSH cases; temporary access has its own cases below.
   return {instance,calls,logs,pending};
 }
 const installed=f=>f.calls.some(c=>c.program==='ares-install' && !c.args.includes('--remove'));
@@ -203,6 +204,21 @@ test('app removal is not complete until registration disappears',async()=>{
 test('remove fix only does not touch app',async()=>{
   const f=fixture({answers:['192.168.1.20','9922','22','']}); await f.instance.run('3');
   assert.ok(!f.calls.some(c=>['ares-install','ares-launch'].includes(c.program)));
+});
+test('temporary access is the default and uses no root SSH credentials',async()=>{
+  const f=fixture({answers:['']}); f.instance.rootMethod=null;
+  const actions=[]; f.instance.temporary=()=>({run:async action=>{actions.push(action);return {state:'installed'};}});
+  await f.instance.tvFix('apply'); await f.instance.guard('inspect');
+  assert.deepEqual(actions,['apply','inspect']); assert.equal(f.instance.rootMethod,'temporary');
+  assert.ok(!f.calls.some(c=>c.program==='ssh')); assert.equal(f.pending.length,0);
+});
+test('temporary removal failure preserves the installed app',async()=>{
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','y','y','']});
+  f.instance.rootMethod='temporary'; f.instance.temporary=()=>({run:async action=>{
+    if(action==='remove')throw Error('Temporary cleanup failed');return {state:'installed'};
+  }});
+  await assert.rejects(f.instance.run('2'),/Temporary cleanup failed/);
+  assert.ok(!f.calls.some(c=>c.args.includes('--remove')));
 });
 (async()=>{
   try { for (const [name,body] of cases) { await body(); console.log('OK '+name); } console.log(`${cases.length} installer tests passed`); }

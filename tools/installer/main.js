@@ -3,6 +3,7 @@
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
 const cp = require('node:child_process'), net = require('node:net'), os = require('node:os');
 const readline = require('node:readline/promises');
+const {TemporaryRoot} = require('./temporary-root');
 const ROOT = path.resolve(__dirname, '../..');
 const APP = 'org.magicsirimote.app';
 const CLI = ['ares-config', 'ares-setup-device', 'ares-novacom', 'ares-device', 'ares-install', 'ares-launch'];
@@ -57,9 +58,11 @@ function run(program, args, {interactive = false, allowFailure = false, timeout 
   return {ok: true, output: result.stdout || ''};
 }
 class Installer {
-  constructor({root = ROOT, prompt = ask, execute = run, find = executable, log = console.log, wait = sleep} = {}) {
+  constructor({root = ROOT, prompt = ask, execute = run, find = executable, log = console.log, wait = sleep,
+    temporary = installer => new TemporaryRoot(installer)} = {}) {
     Object.assign(this, {root, prompt, execute, find, log, wait});
     this.device = null; this.ip = null; this.rootConnection = null;
+    this.temporary = temporary; this.rootMethod = null;
   }
   async yes(question, fallback = 'n') {
     for (;;) {
@@ -180,12 +183,24 @@ class Installer {
     this.rootConnection = args;
     return args;
   }
+  async rootMode() {
+    if (this.rootMethod) return this.rootMethod;
+    this.log('1: Temporary access through Developer Mode (no root SSH setup).');
+    this.log('2: Use an existing root SSH connection.');
+    this.log('Temporary access depends on TV capabilities and may be blocked by a firmware update. It does not install permanent root access.');
+    for (;;) {
+      const choice = await this.prompt('TV access method', '1');
+      if (['1','2'].includes(choice)) return this.rootMethod = choice === '1' ? 'temporary' : 'ssh';
+      this.log('Choose 1 or 2.');
+    }
+  }
   async tvFix(action) {
     if (action === 'remove') {
       const result = await this.guard('remove');
       if (result.state === 'installed') throw Error('TV-side fix is still installed.');
       return result;
     }
+    if (await this.rootMode() === 'temporary') return this.temporary(this).run('apply');
     const args = await this.rootAccess();
     const directory = path.join(this.root, 'tools/hid-guard');
     verifyFiles(directory);
@@ -196,6 +211,7 @@ class Installer {
     this.execute(this.find('ssh'), ['-o','BatchMode=yes',...args,command], {input:packed, timeout:120000});
   }
   async guard(action) {
+    if (await this.rootMode() === 'temporary') return this.temporary(this).run(action);
     const args = await this.rootAccess();
     const source = fs.readFileSync(path.join(this.root,'tools/installer/guard_remove.py'),'utf8') +
       '\ntry:\n print(json.dumps(dispatch('+JSON.stringify(action)+')))'+
@@ -213,10 +229,10 @@ class Installer {
   async uninstall() {
     this.log('This removes Magic Sirimote and its TV-side input-device fix if installed. Remote pairing and IR assignments are kept; use Reset app first to erase them.');
     if (!await this.yes('Remove the app and its TV-side fix from this TV?')) return;
-    this.log('Developer Mode may hide TV-side system files. Root SSH is needed to check and remove the fix reliably.');
+    this.log('Developer Mode can hide TV-side system files. Temporary root access or existing root SSH is needed to check and remove the fix reliably.');
     let guard;
     try {
-      if (!await this.yes('Use an existing root SSH connection to check the TV-side fix?', 'y')) throw Error('TV-side fix was not checked.');
+      if (!await this.yes('Check and clean up the TV-side fix with root access?', 'y')) throw Error('TV-side fix was not checked.');
       guard = await this.guard('inspect');
     } catch (error) {
       this.log('TV-side cleanup could not be prepared: '+error.message);
@@ -235,7 +251,7 @@ class Installer {
     if (present) this.cli('ares-install',['--device',this.device,'--remove',APP],{interactive:true,timeout:120000});
     for (let attempt=0; attempt<15; attempt++) {
       if (!this.appRegistered() && !this.remote({action:'removal-info'}).appPresent) {
-        if (!guard) throw Error('App removed. TV-side cleanup is INCOMPLETE: its presence could not be verified. Run sh uninstall.sh again when root SSH is available.');
+        if (!guard) throw Error('App removed. TV-side cleanup is INCOMPLETE: its presence could not be verified. Run sh uninstall.sh again when temporary root or root SSH is available.');
         this.log('Uninstall complete: app removed; TV-side fix removed or confirmed absent. The TV was not rebooted.');
         return;
       }
@@ -275,7 +291,7 @@ class Installer {
     this.log('App installed and verified.');
     this.log('\nOptional: prevent input loss after repeated Bluetooth reconnections. This changes LG\'s handling of A1513/A1962 outside the app and briefly restarts the input service, not the TV.');
     let fix = 'not requested (an existing fix, if any, was left unchanged)';
-    if (await this.yes('Apply the TV-side fix using an existing root SSH connection?')) {
+    if (await this.yes('Apply the TV-side fix?')) {
       try { await this.tvFix('apply'); fix = 'applied'; }
       catch (error) { fix = 'not completed'; this.log('The app is installed, but the optional TV-side fix failed:\n'+error.message+'\nYou can rerun this installer later.'); }
     }

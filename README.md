@@ -2,7 +2,7 @@
 
 **This project was developed through Vibe Coding:** an AI coding agent wrote and revised the code, with a human directing the work and testing it on real hardware.
 
-Thank you to the open-source Siri Remote and LG webOS communities for the tools, code and discoveries that made this possible. In particular, this project owes much to [open-appleremote](https://github.com/a-funk/open-appleremote), [SiriRemote-Linux](https://github.com/Yanndroid/SiriRemote-Linux), [Clean Your TV](https://github.com/Razdva122/clean-your-tv-lg-webos), and [webOSbrew](https://www.webosbrew.org/).
+Thank you to the open-source Siri Remote and LG webOS communities for the tools, code and discoveries that made this possible. In particular, this project owes much to [open-appleremote](https://github.com/a-funk/open-appleremote), [SiriRemote-Linux](https://github.com/Yanndroid/SiriRemote-Linux), [Clean Your TV](https://github.com/Razdva122/clean-your-tv-lg-webos), [webOSbrew](https://www.webosbrew.org/), and the temporary LS2 access research in [webos-ls2-root](https://github.com/bbo76/webos-ls2-root).
 
 Magic Sirimote lets a first-generation Siri Remote control an LG webOS TV. Install one app on the TV, pair the remote in that app, and choose your button assignments. **Your Mac does not need to stay on after setup. No Apple TV is needed.**
 
@@ -70,7 +70,9 @@ Choose **Install/update app**. Enter the TV's IP address when asked; press Retur
 
 The installer checks compatibility, verifies the download, installs the IPK and verifies the installed files. When updating, it first asks you to close unsaved settings and wake Siri Remote so the running app can stop cleanly.
 
-During installation, you can also apply the **TV-side input-device fix**. This prevents input loss after repeated Bluetooth reconnections. It requires an **existing root SSH connection**; the installer asks for its port and optional key file. It does not obtain root access, and the Developer Mode passphrase is not a root password. If you have no root connection, answer **n** to continue installing the app.
+The **TV-side input-device fix** prevents input loss after repeated Bluetooth reconnections. When offered, choose the fix, then **1: Temporary access**. Keep the Mac and TV on while setup runs; allow local network access if macOS asks. The installer obtains temporary access, applies the fix and removes its temporary service automatically. It does not install permanent root access.
+
+Temporary access depends on the TV’s available browser and service permissions, so it cannot work on every webOS version. If unavailable, use **2: Existing root SSH** if you already have it, or skip the fix and install only the app. The Developer Mode passphrase is not a root SSH password. No model or firmware allowlist is used.
 
 The fix changes LG's handling of A1513/A1962 outside this app as well; other remote models pass through. Applying or removing it briefly restarts the input service, **not the TV**. It checks the service's interfaces and storage rather than requiring a particular TV model or firmware. Without the fix, the repeated-reconnection problem may recur. See [Reset or uninstall](#reset-or-uninstall) to remove it.
 
@@ -267,7 +269,7 @@ curl --fail --location --output uninstall.sh https://raw.githubusercontent.com/s
 
 Use the same [Mac tools](#1-install-the-mac-tools) as for installation. Enter the TV's IP address and confirm removal. The uninstaller checks for the TV-side fix and removes it automatically if present, then removes the app and verifies the result. It also works if you already deleted the app from the Home screen.
 
-**Checking and removing the TV-side fix requires an existing root SSH connection.** Developer Mode can hide its system files, so the uninstaller asks for the root SSH port and optional key file. Without root, you can explicitly choose app-only removal; it reports TV-side cleanup as **incomplete**, not successful. If the fix's files have changed or cleanup fails, it stops and explains what remains.
+**Choose 1: Temporary access** to check and remove the TV-side fix without setting up root SSH. If temporary access is unavailable, choose **2: Existing root SSH**. Without either method, you can explicitly choose app-only removal; TV-side cleanup is reported as **incomplete**. If setup was interrupted, run the script again to finish removing its temporary service. If the fix’s files have changed or cleanup fails, the script explains what remains.
 
 If you also want to erase the remote's pairing and infrared assignments, complete **Reset app** before uninstalling. Uninstalling alone preserves those assignments.
 

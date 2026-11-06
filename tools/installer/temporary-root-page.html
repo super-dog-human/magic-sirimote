@@ -1,0 +1,66 @@
+<!doctype html><meta charset="utf-8"><title>Magic Sirimote setup</title>
+<body style="background:#161616;color:white;font:28px sans-serif">
+<p>Magic Sirimote setup — keep the TV and computer on.</p><p id="status">Connecting…</p>
+<script>
+(function () {
+  'use strict';
+  var C = __CONFIG__, handles = [], removing = false, removed = false, attempts = 0;
+  var retiring = false, registrationPending = false;
+  var params = {prefix:C.dir, dirpath:'manifests'};
+  function event(kind, detail) {
+    document.getElementById('status').textContent = kind === 'removed' ? 'Cleanup complete.' : 'Please wait…';
+    var x = new XMLHttpRequest(); x.open('POST', '/' + C.token + '/event', true);
+    x.setRequestHeader('Content-Type', 'application/json');
+    x.send(JSON.stringify({run:C.run, kind:kind, detail:detail}));
+  }
+  function call(uri, params, callback) {
+    var Bridge = typeof webOSServiceBridge === 'function' ? webOSServiceBridge : PalmServiceBridge;
+    var bridge = new Bridge(), done = false; handles.push(bridge);
+    bridge.onservicecallback = function (raw) {
+      if (done) return; done = true;
+      try { callback(JSON.parse(raw)); } catch (e) { event('error', String(e)); }
+    };
+    bridge.call(uri, JSON.stringify(params));
+  }
+  function remove() {
+    retiring = true;
+    if (removed || removing || attempts >= 3) return;
+    removing = true; attempts++;
+    // Retry even when the platform never delivers a callback.
+    setTimeout(function () { removing = false; if (!removed) remove(); }, 3000);
+    try {
+      call('luna://com.webos.service.bus/removeManifestsDir', params, function (reply) {
+        removing = false;
+        if (reply.returnValue === true && !registrationPending) { removed = true; event('removed', reply); }
+        else event('remove-failed', reply);
+      });
+    } catch (e) { removing = false; event('error', String(e)); }
+  }
+  // Independent of HTTP callbacks: cleanup still runs if the Mac disappears.
+  setTimeout(remove, 65000);
+  function poll() {
+    if (removed) return;
+    var x = new XMLHttpRequest(); x.open('GET', '/' + C.token + '/status', true); x.timeout = 2000;
+    x.onload = function () { try { if (JSON.parse(x.responseText).finish) remove(); } catch (e) {} };
+    x.send(); setTimeout(poll, 1000);
+  }
+  try {
+    if (C.cleanupOnly) { remove(); return; }
+    poll();
+    call('luna://com.webos.service.bus/removeManifestsDir', params, function (reply) {
+      event('preflight', reply);
+      if (reply.returnValue !== true) { event('not-registered', {}); return; }
+      if (retiring) { remove(); return; }
+      registrationPending = true;
+      call('luna://com.webos.service.bus/addManifestsDir', params, function (reply) {
+        registrationPending = false;
+        event('registered', reply);
+        if (retiring) { attempts = 0; removing = false; remove(); return; }
+        if (reply.returnValue === true)
+          call('luna://' + C.service + '/collect', {}, function (reply) { event('triggered', reply); });
+        else remove();
+      });
+    });
+  } catch (e) { event('error', String(e)); remove(); }
+})();
+</script>
