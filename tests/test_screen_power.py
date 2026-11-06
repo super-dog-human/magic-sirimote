@@ -14,6 +14,25 @@ class Client:
   return {'returnValue':True,'state':self.state}
 
 class Tests(unittest.TestCase):
+ def test_screensaver_keeps_input_live_without_sending_power_commands(self):
+  now=[0.];w=ScreenPowerWorker(clock=lambda:now[0]);client=Client();w._step(client)
+  o=Outputs();r=RollingReceiver(o,continuity=lambda:True,mode_verified=lambda:True,clock=lambda:now[0],seconds=31)
+  c=CombinedControls(r,lambda _:True,screen_control=w);c.start()
+  c.feed_raw(1,b'\xfc\x00\x00');child=r.receiver
+  client.state='Screen Saver';w._step(client);c.tick()
+  self.assertFalse(w.blocked());self.assertFalse(r.paused);self.assertIs(r.receiver,child)
+  c.feed_raw(1,b'\xfc\x00\x80')
+  self.assertEqual(r.receiver.router.press.core.stats['physicalClickPairs'],0)
+  c.feed_raw(1,b'\xfc\x00\x00')
+  self.assertEqual(r.receiver.router.press.core.stats['physicalClickPairs'],1)
+  self.assertEqual(client.calls,['getPowerState','getPowerState'])
+ def test_screensaver_stale_or_transitioning_still_blocks(self):
+  now=[0.];w=ScreenPowerWorker(clock=lambda:now[0]);w._step(Client('Screen Saver'))
+  now[0]=4.;self.assertTrue(w.blocked())
+  self.assertIsNone(w._state({'returnValue':True,'state':'Screen Saver','processing':'Request Suspend'}))
+ def test_explicit_screen_toggle_restores_screensaver_once(self):
+  w=ScreenPowerWorker();c=Client('Screen Saver');w._step(c);w.toggle();w._step(c)
+  self.assertEqual(c.calls.count('turnOnScreen'),1);self.assertFalse(w.blocked())
  def test_toggle_twice_uses_tv_state_and_one_write_per_press(self):
   w=ScreenPowerWorker();c=Client();w._step(c);self.assertFalse(w.blocked())
   self.assertTrue(w.toggle());self.assertTrue(w.blocked());self.assertFalse(w.toggle())

@@ -79,6 +79,10 @@ class AbsoluteOutputs(VerifiedOutputs):
    self._write_exact(self.mouse_fd,visible_frame(*target,self.limits));self.motion_writes+=1
    self.motion_remainder=remainder;self.last_target=target
   except BaseException:self.failed=True;raise
+ @property
+ def cursor_visible(self):
+  from cursor_visibility_probe import current_visibility
+  return current_visibility()
  def click_frame(self,packet):
   return self._button_frame(self.mouse_fd,BTN_LEFT,packet,'LGE-MRCU-BTN_LEFT')
  def summary(self):

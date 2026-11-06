@@ -27,6 +27,13 @@ class Tests(unittest.TestCase):
   args,_=self.fixture(Mock(return_value={**EMPTY,'targetCandidateIndexes':[2]}))
   self.assertEqual(open_target(**args),7);args['wait'].assert_not_called()
 
+ def test_preinitialization_absence_does_not_wait_for_registration(self):
+  args,now=self.fixture(Mock(return_value=copy.deepcopy(EMPTY)))
+  with self.assertRaisesRegex(RuntimeError,'target not present'):
+   open_target(**args,wait_for_target=False)
+  args['inventory'].assert_called_once();args['wait'].assert_not_called()
+  args['open_fn'].assert_not_called();self.assertEqual(now[0],0.)
+
  def test_missing_target_times_out_without_opening_any_descriptor(self):
   args,now=self.fixture(Mock(return_value=copy.deepcopy(EMPTY)))
   with self.assertRaisesRegex(RuntimeError,'target not present'):open_target(**args)

@@ -8,12 +8,12 @@ from swipe_click import SwipeClick
 from navigation_mode import NavigationMode
 
 class AdaptivePrefixRouter:
- def __init__(self, emit, *, clock, motion_enabled=True, session_policy=None, max_actions=12, deferred_center=False):
+ def __init__(self, emit, *, clock, motion_enabled=True, session_policy=None, max_actions=12, session_bounded_hold=False):
   if type(motion_enabled) is not bool:raise ValueError('explicit motion gate required')
   self.motion_enabled=motion_enabled;self.clock=clock;self.pose=AdaptivePrefixPose(sensitivity=cursor_preferences()[1]);self.generation=None;self.closed=False
   self.navigation=NavigationMode();self.emit=emit
   seconds=30. if session_policy is None else session_policy.seconds
-  self.press=SwipeClick(self._semantic,surface_regions(),clock=clock,max_seconds=seconds,max_actions=max_actions,session_policy=session_policy,deferred_center=deferred_center)
+  self.press=SwipeClick(self._semantic,surface_regions(),clock=clock,max_seconds=seconds,max_actions=max_actions,session_policy=session_policy,session_bounded_hold=session_bounded_hold)
  def _semantic(self,action,down):
   if down and action in ('up','down','left','right'):
    self.navigation.select_navigation(self.clock());self.pose._clear_tracking()

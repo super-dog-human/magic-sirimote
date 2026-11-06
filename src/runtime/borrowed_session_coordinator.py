@@ -33,6 +33,12 @@ def create_session(*,watch,view,lease,paired,call,write_mode,read_stop_mode,exte
  reader=BorrowedModeReader(call,exclusive_feature_guard=feature_guard,clock=reader_clock)
  reader.bind_borrowed(link={'remote':TARGET,'adapter':ADAPTER,'generation':bound.generation,'connected':True,'connecting':False,'paired':True},client_id=view.client_id,control_valid=feature_guard)
  def read_stop():
+  # Preparation can be cancelled before start() performs its first read.
+  # Establish the reference then use the independent stop read. Never retry
+  # a selector/reference operation that was already attempted or failed.
+  if (reader.reference_verified is not True and not reader.closed
+      and reader.selector_attempts==0 and feature_guard() is True):
+   reader.read(bound.generation)
   if reader.reference_verified is not True or feature_guard() is not True:raise RuntimeError('stop reference unavailable')
   return read_stop_mode(reader)
  session=BorrowedModeSession(view,read_mode=lambda:reader.read(bound.generation)['mode'],read_stop_mode=read_stop,write_mode=write_mode,control_valid=feature_guard,record=record)

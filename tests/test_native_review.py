@@ -73,7 +73,27 @@ class ReviewTests(unittest.TestCase):
             if not frames: return 0
             ctypes.memmove(buffer, frames.pop(0), 64); return 1
         canvas.poll = poll
-        self.assertEqual(list(canvas.events()), [('key', 13), ('key', 1073741905)])
+        self.assertEqual(list(canvas.events()), [('key', 1073741905)])
+        release = bytearray(64); release[:4] = (0x301).to_bytes(4, 'little')
+        release[24:28] = (13).to_bytes(4, 'little', signed=True)
+        frames.append(bytes(release))
+        self.assertEqual(list(canvas.events()), [('key', 13)])
+        frames.append(bytes(release))
+        self.assertEqual(list(canvas.events()), [])
+
+    def test_confirm_release_after_focus_loss_does_not_activate(self):
+        frames = []
+        for kind in (0x300, 0x200, 0x301):
+            event = bytearray(64); event[:4] = kind.to_bytes(4, 'little')
+            if kind == 0x200: event[12] = 13
+            else: event[24:28] = (13).to_bytes(4, 'little', signed=True)
+            frames.append(bytes(event))
+        canvas = Canvas.__new__(Canvas)
+        def poll(buffer):
+            if not frames: return 0
+            ctypes.memmove(buffer, frames.pop(0), 64); return 1
+        canvas.poll = poll
+        self.assertEqual(list(canvas.events()), [('window-active', False)])
 
     def test_fifo_settings_fail_promptly_instead_of_hanging(self):
         for module, name in (('settings', 'settings.json'), ('tv_assignments', 'tv-assignments.json')):

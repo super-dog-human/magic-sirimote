@@ -14,6 +14,9 @@ from preborrow_guard import PreBorrowGuard
 from native_mode_session import NativeModeClient, ack
 from partial_activation_stop import PumpingGattPartialStopClient
 
+class RecoveryTargetUnavailable(RuntimeError):
+ pass
+
 class RecoveryBorrowedModeWriter:
  def __init__(self, stop, *, guard, identity_verified):
   if not all(callable(f) for f in (stop,guard,identity_verified)):raise ValueError('recovery proofs required')
@@ -26,11 +29,12 @@ class RecoveryBorrowedModeWriter:
 def _recover_zero(*,watch,lease,generation,paired_check,external_feature_guard,record,
                  prior_inactive,gatt_lookup_reply,clock=time.monotonic,pump=lambda:None,
                  requester_factory=BorrowedGattRequester,reader_factory=BorrowedModeReader,
-                 activation_factory=NativeModeClient,stop_factory=PumpingGattPartialStopClient):
+                 activation_factory=NativeModeClient,stop_factory=PumpingGattPartialStopClient,
+                 notification_preparer=None):
  pre=PreBorrowGuard(watch,lease,generation=generation,external_feature_guard=external_feature_guard,clock=clock)
  from postconnect_receiver_device import RecoveryPairingCheck
  admit=RecoveryPairingCheck(paired_check,lambda:pre() is True and prior_inactive() is True,clock=clock)
- if admit() is not True:raise RuntimeError('recovery target unavailable')
+ if admit() is not True:raise RecoveryTargetUnavailable('recovery target unavailable')
  if record({'stage':'recovery-gatt-lookup-intent','generation':generation}) is not True:raise RuntimeError('lookup intent unrecorded')
  from recovery_lookup_handoff import validate_reply
  validate_reply(gatt_lookup_reply)
@@ -40,6 +44,13 @@ def _recover_zero(*,watch,lease,generation,paired_check,external_feature_guard,r
   bound=BoundConnectedView(watch,view.client_id)
   guard=BorrowedControlGuard(generation=generation,client_id=view.client_id,lease=lease,profiles=bound.snapshot,clock=clock)
   def control():return admit() is True and guard() is True
+  if notification_preparer is not None:
+   notification=notification_preparer(view.client_id,pump=pump,guard=control,record=record)
+   if not control():raise RuntimeError('notification-control-unavailable')
+   if record({'stage':'recovery-notification-verified','uptime':clock(),
+              'beforeFlags':notification['beforeFlags'],
+              'writeAttempted':notification['writeAttempted']}) is not True:
+    raise RuntimeError('notification-proof-unrecorded')
   activation=activation_factory(generation=generation,client_id=view.client_id,pump=pump,guard=control)
   stop=stop_factory(generation=generation,client_id=view.client_id,pump=pump,guard=control,native_app=True)
   reader=reader_factory(activation,exclusive_feature_guard=control,clock=clock)
@@ -61,7 +72,16 @@ def recover_zero(*,old_receiver_exited,**kwargs):
  return {**result,'oldReceiverExitVerified':True}
 
 
-def recover_owned_zero(*,session_closed,**kwargs):
- """The same worker has closed every input/output resource before waiting."""
- result=_recover_zero(prior_inactive=session_closed,**kwargs)
+def recover_owned_zero(*,session_closed,notification_preparer=None,**kwargs):
+ """Prepare input notifications before recovery selectors on an idle wake.
+
+ The existing worker owns the feature lease and has closed its input/output
+ session. Notifications are the existing desired setting; this does not send
+ input-start, enable sensors, synthesize input, or extend the idle timeout.
+ """
+ if notification_preparer is None:
+  from input_notifications import ensure_notifications
+  notification_preparer=ensure_notifications
+ result=_recover_zero(prior_inactive=session_closed,
+                      notification_preparer=notification_preparer,**kwargs)
  return {**result,'priorSessionClosedVerified':True}

@@ -19,6 +19,9 @@ class HexKeypadTests(unittest.TestCase):
         for key,mod,repeat in ((48,0,0),(57,0,0),(13,0,0),(13,0,1),(59,1,0),(8,0,0)):
             e=KeyboardEvent();e.type=768;e.keysym.sym=key;e.keysym.mod=mod;e.repeat=repeat
             frames.append(bytes(e).ljust(64,b'\0'))
+            if key == 13 and repeat:
+                e.type=769; e.repeat=0
+                frames.append(bytes(e).ljust(64,b'\0'))
         c=Canvas.__new__(Canvas)
         def poll(buffer):
             if not frames:return 0

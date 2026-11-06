@@ -18,6 +18,9 @@ def decode(pairs):
         raw = bytearray(64); raw[:4] = (0x300).to_bytes(4, 'little')
         raw[16] = 1; raw[17] = repeat; raw[24:28] = key.to_bytes(4, 'little', signed=True)
         frames.append(bytes(raw))
+        if key in (13, 1073741912) and not repeat:
+            raw[:4] = (0x301).to_bytes(4, 'little'); raw[16] = 0
+            frames.append(bytes(raw))
     canvas = Canvas.__new__(Canvas)
     def poll(buffer):
         if not frames: return 0
@@ -40,6 +43,9 @@ class RemoteNavigationTests(unittest.TestCase):
             raw[20:24] = scan.to_bytes(4,'little')
             raw[24:28] = key.to_bytes(4,'little',signed=True)
             frames.append(bytes(raw))
+            if key == 13:
+                raw[:4] = (0x301).to_bytes(4, 'little'); raw[16] = 0
+                frames.append(bytes(raw))
         canvas = Canvas.__new__(Canvas)
         def poll(buffer):
             if not frames: return 0

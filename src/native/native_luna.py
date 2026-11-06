@@ -67,11 +67,13 @@ class Luna:
                           'hid/internal/setReport', 'gatt/disconnect') or not 0 < timeout <= 12:
             raise ValueError('Unsupported configuration request.')
         replies = []
+        # Discovery includes unpaired nearby devices and can exceed 64 KiB.
+        reply_limit = 1048576 if method == 'device/getStatus' else 65536
         @self.callback_type
         def receive(handle, message, data):
             try:
                 raw = self.payload(message)
-                if raw is None or len(raw) > 65536:
+                if raw is None or len(raw) > reply_limit:
                     raise ValueError('Unexpected reply size')
                 replies.append(json.loads(raw))
             except Exception:

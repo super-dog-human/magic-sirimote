@@ -64,6 +64,9 @@ class MediaAwareSink:
  def __init__(self,sink,snapshot):
   if not callable(getattr(sink,'pulse',None)) or not all(callable(getattr(snapshot,n,None)) for n in ('consume','ticket','cancel_consumed')):raise ValueError('invalid sink')
   self.sink=sink;self.snapshot=snapshot;self.skipped=0
+ def ready(self,action):
+  # Readiness never consumes playback state or sends a key.
+  return action!='playpause' or self.snapshot.choose() is not None
  def pulse(self,action):
   toggle=action=='playpause';ticket=None
   if toggle:

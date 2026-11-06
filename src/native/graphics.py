@@ -146,7 +146,13 @@ class Canvas:
             raw = event.raw
             kind = int.from_bytes(raw[:4], 'little')
             if kind == 0x100 or (kind == 0x200 and raw[12] == 14):
+                self.confirm_key = None
                 yield ('close', None)
+            elif kind == 0x200 and raw[12] in (2, 7, 12, 13):
+                # Hidden/minimized/focus changes also arrive when Home does not
+                # produce a native-bus pause notification. No input is emitted.
+                self.confirm_key = None
+                yield ('window-active', raw[12] == 12)
             elif kind == 0x300:
                 keyboard = KeyboardEvent.from_buffer_copy(raw)
                 key = keyboard.keysym.sym
@@ -154,10 +160,19 @@ class Canvas:
                 # https://github.com/webosbrew/SDL-webOS/blob/webOS-2.30.x/include/SDL_scancode.h
                 if keyboard.keysym.scancode == 482:
                     key = 461
+                if key in (13, 1073741912):
+                    if not keyboard.repeat:
+                        self.confirm_key = key
+                    continue
                 # A held OK/Back must not activate controls repeatedly.
                 if not keyboard.repeat or key in (1073741906, 1073741905, 1073741904, 1073741903):
                     character = hex_character(key, keyboard.keysym.mod)
                     yield ('text', character) if character is not None else ('key', key)
+            elif kind == 0x301:
+                key = KeyboardEvent.from_buffer_copy(raw).keysym.sym
+                if key in (13, 1073741912) and key == getattr(self, 'confirm_key', None):
+                    self.confirm_key = None
+                    yield ('key', key)
             elif kind == 0x303:
                 yield ('text', TextInputEvent.from_buffer_copy(raw).text.decode('utf-8', 'replace'))
             elif kind == 0x402 and raw[16] == 1:  # Left mouse button release.

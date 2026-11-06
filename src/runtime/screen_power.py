@@ -63,7 +63,10 @@ class ScreenPowerWorker:
   self.state=None;self.sampled=None;self.pending=False;self.requested=False
  def blocked(self):
   with self.lock:
-   return self.pending or self.state!='Active' or self.sampled is None or not 0<=self.clock()-self.sampled<=3
+   return self.pending or self.state not in ('Active','Screen Saver') or self.sampled is None or not 0<=self.clock()-self.sampled<=3
+ def initializing(self):
+  with self.lock:
+   return self.sampled is None and not self.pending and not self.stop_event.is_set()
  def toggle(self):
   with self.lock:
    if self.pending or self.stop_event.is_set():return False
@@ -75,7 +78,7 @@ class ScreenPowerWorker:
  def _state(self,reply):
   if type(reply) is dict and reply.get('returnValue') is True and reply.get('processing','')=='':
    state=reply.get('state')
-   if state in ('Active','Screen Off'):return state
+   if state in ('Active','Screen Saver','Screen Off'):return state
   return None
  def _step(self,client):
   with self.lock:
@@ -84,7 +87,7 @@ class ScreenPowerWorker:
   # observes Active before the subsequent screen-off write.
   state=self._state(client.call('getPowerState'))
   if requested and not self.stop_event.is_set():
-   method={'Active':'turnOffScreen','Screen Off':'turnOnScreen'}.get(state)
+   method={'Active':'turnOffScreen','Screen Saver':'turnOnScreen','Screen Off':'turnOnScreen'}.get(state)
    if method is not None:
     client.call(method)  # one attempt for this physical press
     state=self._state(client.call('getPowerState'))

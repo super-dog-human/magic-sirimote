@@ -1,7 +1,8 @@
 """Validated HID identity, bounded discovery, and the shared input read loop."""
 from runtime_device import identity as device_identity
 import errno,fcntl,os,stat,struct,time
-TARGET=device_identity().remote;NAME=device_identity().name;MAX=32
+from hid_nodes import indexes
+TARGET=device_identity().remote;NAME=device_identity().name
 READ_BACKOFF_SECONDS=0.01
 READ_SUCCESS_YIELD_SECONDS=0.001
 
@@ -23,16 +24,19 @@ def identity(fd):
  name=ioctl(fd,(2<<30)|(256<<16)|(ord('H')<<8)|4,bytearray(256));uniq=ioctl(fd,(2<<30)|(256<<16)|(ord('H')<<8)|8,bytearray(256))
  return {'matches':(bus,vid)==(5,0x004c) and pid in (0x0266,0x026d) and cstr(name) in ('', NAME) and cstr(uniq).lower()==TARGET,'bus':bus,'vendor':vid,'product':pid,'name':cstr(name),'uniq':cstr(uniq).lower()}
 
-def scan_devices(root='/dev',lstat_fn=None,open_fn=None,fstat_fn=None,identity_fn=None,close_fn=None,clock=time.monotonic,timeout=10):
+def scan_devices(root='/dev',lstat_fn=None,open_fn=None,fstat_fn=None,identity_fn=None,close_fn=None,clock=time.monotonic,timeout=10,listdir_fn=None):
  lstat_fn=os.lstat if lstat_fn is None else lstat_fn;open_fn=os.open if open_fn is None else open_fn;fstat_fn=os.fstat if fstat_fn is None else fstat_fn;identity_fn=identity if identity_fn is None else identity_fn;close_fn=os.close if close_fn is None else close_fn
  nodes=[];errors={};matches=[];complete=True;deadline=clock()+timeout
- for i in range(MAX):
+ try:ids=indexes(root,listdir=listdir_fn)
+ except OSError as e:ids=[];complete=False;errors[errno.errorcode.get(e.errno,'OTHER')]=1
+ for i in ids:
   if clock()>deadline:complete=False;break
   p=os.path.join(root,'hidraw'+str(i))
   try:st=lstat_fn(p)
   except OSError as e:
    k=errno.errorcode.get(e.errno,'OTHER');errors[k]=errors.get(k,0)+1
-   if e.errno!=errno.ENOENT:complete=False
+   complete=False
+   if e.errno==errno.ENOENT:errors['INVENTORY_CHANGED']=1
    continue
   if stat.S_ISLNK(st.st_mode) or not stat.S_ISCHR(st.st_mode):
    nodes.append({'index':i,'fileType':'other','mode':oct(stat.S_IMODE(st.st_mode))});complete=False;continue
@@ -54,7 +58,11 @@ def scan_devices(root='/dev',lstat_fn=None,open_fn=None,fstat_fn=None,identity_f
     except OSError as e:entry['closeErrno']=errno.errorcode.get(e.errno,'OTHER');complete=False
   if entry['openedReadOnly'] and (not entry['identityChecked'] or not entry['fdClosed']):complete=False
   nodes.append(entry)
- return {'nodes':nodes,'errnoBuckets':errors,'targetCandidateIndexes':matches,'inventoryComplete':complete,'range':[0,MAX-1],'allOpenedFdsClosed':all(not n.get('openedReadOnly') or n.get('fdClosed') for n in nodes)}
+ try:
+  if ids!=indexes(root,listdir=listdir_fn):complete=False;errors['INVENTORY_CHANGED']=1
+ except OSError as e:complete=False;errors[errno.errorcode.get(e.errno,'OTHER')]=1
+ if clock()>deadline:complete=False;errors['ETIMEDOUT']=1
+ return {'nodes':nodes,'errnoBuckets':errors,'targetCandidateIndexes':matches,'inventoryComplete':complete,'scannedIndexes':ids,'allOpenedFdsClosed':all(not n.get('openedReadOnly') or n.get('fdClosed') for n in nodes)}
 
 def receive_actions(fd,pipeline,generation=1,duration=60,read_fn=None,clock=None,sleep_fn=None,abort_fn=None,stats=None):
  from receive_diagnostics import record_shape,record_failure

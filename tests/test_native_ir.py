@@ -8,6 +8,10 @@ sys.path[:0] = [str(ROOT / 'src/native'), str(ROOT / 'src')]
 import ir_programmer as ir
 from ir_screen import InfraredScreen, PRESETS, CHOICES, CUSTOM
 
+A1513_FIRMWARE = b'01004102200070033000070131001800B000410240001508'
+A1962_FIRMWARE = b'B000750001001601300030022000040431001800C1000100'
+FIRMWARE_CHARACTERISTIC = '00002a26-0000-1000-8000-00805f9b34fb'
+
 VALUES = {'schema': 1, 'remoteAddress': '02:aa:bb:cc:dd:01',
           'adapterAddress': '02:aa:bb:cc:dd:02', 'remoteName': 'TEST_REMOTE'}
 
@@ -16,7 +20,7 @@ class TV:
     """Realistic LS2 response shapes with injected identity and delivery failures."""
     def __init__(self):
         self.calls = []
-        self.firmware = ir.SUPPORTED_FIRMWARE
+        self.firmware = A1513_FIRMWARE
         self.pnp = bytes.fromhex("014c0066020000")
         self.mode = b'\xa0\x00'
         self.serial = b'TEST_REMOTE'
@@ -35,7 +39,7 @@ class TV:
         elif method == 'gatt/readCharacteristicValues':
             char = params['characteristics'][0]
             answer['service'] = params['service']
-            data = {ir.SERIAL: self.serial, ir.FIRMWARE: self.firmware, ir.REPORT: self.mode, ir.PNP: self.pnp}[char]
+            data = {ir.SERIAL: self.serial, FIRMWARE_CHARACTERISTIC: self.firmware, ir.REPORT: self.mode, ir.PNP: self.pnp}[char]
             answer['values'] = [{'characteristic': char, 'instanceId': '029', 'value': {'bytes': list(data)}}]
         elif method == 'gatt/readDescriptorValues':
             answer['service'] = ir.HID
@@ -94,8 +98,8 @@ class InfraredTest(unittest.TestCase):
         self.assertTrue(connected)
         self.assertEqual(len(tv.writes()),2)
 
-    def test_bad_identity_firmware_active_sensor_or_report_blocks_write(self):
-        for field, value in [('serial', b'OTHER'), ('firmware', b'OTHER'), ('mode', b'\xa0\x01'),
+    def test_bad_identity_active_sensor_or_report_blocks_write(self):
+        for field, value in [('serial', b'OTHER'), ('mode', b'\xa0\x01'),
                              ('reference', b'\xf1\x03'), ('wrong_adapter', True)]:
             tv = TV(); setattr(tv, field, value)
             result = ir.program(VALUES, 'set', 2, 0, '02', tv, lambda x: None, idle=lambda: None)
@@ -104,23 +108,32 @@ class InfraredTest(unittest.TestCase):
 
     def test_validated_a1962_can_set_and_delete_one_assignment(self):
         for action in ('set', 'delete'):
-            tv=TV();tv.pnp=bytes.fromhex('014c006d020000');tv.firmware=ir.A1962_FIRMWARE
+            tv=TV();tv.pnp=bytes.fromhex('014c006d020000');tv.firmware=A1962_FIRMWARE
             result=ir.program(VALUES,action,16,0,'09',tv,lambda _:None,idle=lambda:None)
             self.assertEqual(result['status'],'submitted')
             self.assertEqual(tv.writes(),[list(ir.packet(action,16,0,'09'))])
 
-    def test_product_and_firmware_must_match_before_any_feature_write(self):
-        for pnp,fw in ((bytes.fromhex('014c0066020000'),ir.A1962_FIRMWARE),
-                       (bytes.fromhex('014c006d020000'),ir.SUPPORTED_FIRMWARE),
-                       (bytes.fromhex('014c006e020000'),ir.A1962_FIRMWARE),
-                       (bytes.fromhex('014d006d020000'),ir.A1962_FIRMWARE),
-                       (bytes.fromhex('024c006d020000'),ir.A1962_FIRMWARE),
-                       (b'',ir.A1962_FIRMWARE),
-                       (bytes.fromhex('014c006d020000'),ir.A1962_FIRMWARE+b'0')):
-            tv=TV();tv.pnp=pnp;tv.firmware=fw
+    def test_unsupported_product_blocks_any_feature_write(self):
+        for pnp in (bytes.fromhex('014c006e020000'), bytes.fromhex('014d006d020000'),
+                    bytes.fromhex('024c006d020000'), b''):
+            tv=TV();tv.pnp=pnp
             result=ir.program(VALUES,'set',16,0,'09',tv,lambda _:None,idle=lambda:None)
             self.assertEqual(result['status'],'not-sent')
             self.assertFalse(any(m=='hid/internal/setReport' for m,_ in tv.calls))
+
+    def test_every_revision_can_program_supported_models_without_firmware_read(self):
+        for product in (0x0266, 0x026d):
+            for action in ('set', 'delete', 'reset-all'):
+                with self.subTest(product=product, action=action):
+                    tv=TV();tv.pnp=b'\x01\x4c\x00'+product.to_bytes(2,'little')+b'\xff\xff'
+                    def call(method,params,timeout):
+                        if method=='gatt/readCharacteristicValues':
+                            self.assertNotIn(FIRMWARE_CHARACTERISTIC,params['characteristics'])
+                        return tv(method,params,timeout)
+                    button,delay,code=(None,None,'') if action=='reset-all' else (16,0,'09')
+                    result=ir.program(VALUES,action,button,delay,code,call,lambda _:None,idle=lambda:None)
+                    self.assertEqual(result['status'],'submitted')
+                    self.assertEqual(tv.writes(),[list(ir.packet(action,button,delay,code))])
 
     def test_uncertain_write_is_never_retried_or_rolled_back(self):
         tv = TV(); tv.fail_write = True
@@ -129,8 +142,8 @@ class InfraredTest(unittest.TestCase):
         self.assertEqual(tv.writes(), [[240, 2, 1, 2]])
 
     def test_bulk_reset_is_one_guarded_request_for_each_validated_remote(self):
-        for pnp,fw in ((bytes.fromhex('014c0066020000'),ir.SUPPORTED_FIRMWARE),
-                       (bytes.fromhex('014c006d020000'),ir.A1962_FIRMWARE)):
+        for pnp,fw in ((bytes.fromhex('014c0066020000'),A1513_FIRMWARE),
+                       (bytes.fromhex('014c006d020000'),A1962_FIRMWARE)):
             tv=TV();tv.pnp=pnp;tv.firmware=fw
             result=ir.program(VALUES,'reset-all',None,None,'',tv,lambda _:None,idle=lambda:None)
             self.assertEqual(result['status'],'submitted')

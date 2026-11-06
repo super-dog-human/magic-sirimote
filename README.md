@@ -24,7 +24,7 @@ This is an experimental community project with limited hardware testing. Reconne
 | webOS platform version | **11.2.0** (`sdkVersion`) |
 | TV firmware | **43.21.96** |
 
-The webOS platform version and TV firmware version are different values. You can check your TV's values during the connection step below. You do not need to look up the remote's firmware before starting; the app checks its identity and firmware during setup.
+The webOS platform version and TV firmware version are different values. You can check your TV's values during the connection step below. You do not need to look up the remote's firmware before starting; the app verifies its identity during setup. Firmware version numbers do not restrict support for A1513 or A1962.
 
 Both models have been tested for pairing, infrared assignments, swipes, touch-surface clicks, and gyro pointer control. Later, silver Siri Remote generations are not supported.
 
@@ -157,6 +157,8 @@ Open **Magic Sirimote** on the TV. If it is not already open, select this icon f
 
 ![Magic Sirimote app icon](assets/app-icon.png)
 
+![Pairing start screen](assets/screenshots/pairing.png)
+
 The app shows **Pair a Siri Remote**. If it opens the settings screen instead, continue to [Choose all of your button assignments](#7-choose-all-of-your-button-assignments).
 
 1. On the TV, choose **Start pairing** with the LG remote.
@@ -167,11 +169,22 @@ The app shows **Pair a Siri Remote**. If it opens the settings screen instead, c
 6. Wait while the app verifies the remote and prepares input. On success, it saves the connection information and closes the window to start reception.
 7. Press Siri Remote's touch surface once to wake it. Try swiping to move the TV's selection, then pressing and releasing the surface to select an item.
 
+<details>
+<summary>Connection check and search screens</summary>
+
+![Checking the remote connection](assets/screenshots/checking.png)
+
+![Searching for a Siri Remote](assets/screenshots/searching.png)
+
+</details>
+
 If the app reports an error or no candidate appears, see [Pairing problems](#pairing-problems).
 
 ### 7. Choose all of your button assignments
 
 Reopen **Magic Sirimote** from the TV's Home screen using the LG remote. Choose **Button Assignments**.
+
+![Remote settings](assets/screenshots/settings.png)
 
 The six rows are **Menu**, **TV / Control Center** (the button with a TV picture), **Siri** (the microphone button), **Play/Pause**, **Volume Up**, and **Volume Down**. Touch-surface clicks and swipes are separate and do not need button assignments.
 
@@ -187,6 +200,19 @@ Here is a useful starting configuration. **It is a suggestion, not a preset appl
 | Play/Pause | Play / Pause | Do nothing |
 | Volume Up | Volume + (IR) | Do nothing |
 | Volume Down | Volume - (IR) | Do nothing |
+
+The screenshot below uses the suggested assignments above.
+
+![Example button assignments](assets/screenshots/assignments.png)
+
+<details>
+<summary>Action choices and custom IR code entry</summary>
+
+![Choosing a button action](assets/screenshots/action-picker.png)
+
+![Entering a custom IR code](assets/screenshots/custom-ir.png)
+
+</details>
 
 **What “IR” means:** the remote itself sends infrared light to the TV. Point its front end toward the TV's infrared receiver. Configured IR power and volume can work even when the app's Bluetooth input is unavailable. Choices without “(IR)” are handled by the app running on the TV.
 
@@ -204,6 +230,13 @@ Choose every cell you want to use before your first save. The app cannot recover
 4. Wait for the window to close, then use Siri Remote.
 
 If saving fails partway through, some assignments may already have changed. Read the displayed result and press Siri Remote's touch surface once to wake it before retrying. Selecting a choice or leaving the editor with Back does not itself save anything. **Close** asks whether to discard unsaved edits, then returns to Home. Back from the first settings screen also returns to Home.
+
+<details>
+<summary>Unsaved changes confirmation</summary>
+
+![Discarding unsaved changes](assets/screenshots/discard.png)
+
+</details>
 
 ## Troubleshooting
 
@@ -231,13 +264,24 @@ ares-launch --device my-tv org.magicsirimote.app
 - Charge the remote if necessary, then disconnect its cable before testing input.
 - If no candidate appears, choose **Search again** when offered and repeat the sequence.
 - If a candidate appears, select it and choose **Pair selected remote**. Discovery and pairing are separate steps.
-- If product or firmware verification fails, record the exact message. A name resembling “Siri Remote” is not sufficient for acceptance.
+- If remote identification fails, record the exact message. A name resembling “Siri Remote” is not sufficient for acceptance.
 
 The pairing used by Magic Sirimote may not appear in the TV's ordinary Bluetooth-controller list. An empty list there does not by itself mean pairing failed. Use Magic Sirimote's own screen and test input instead.
 
 ### The remote does not respond after being idle
 
 Siri Remote can go to sleep after a period of inactivity. **Press the touch surface down once to wake it**, then swipe or move the remote. Simply touching or swiping the surface may not wake it. Allow a moment for Bluetooth to reconnect. If it still does not respond, follow the checks below.
+
+### Restart Siri Remote
+
+If the remote remains unresponsive, restart the remote itself:
+
+1. Disconnect its charging or diagnostic cable.
+2. Press and hold **TV / Control Center** (the TV-picture button) and **Volume Down (−)** together for about **five seconds**.
+3. Release both buttons and wait **5–10 seconds**.
+4. Press the touch surface once, allow Bluetooth to reconnect, and try swiping again.
+
+This is the remote-restart button sequence documented by [Apple](https://support.apple.com/en-us/102569). Apple TV status-light and connection messages in that guide do not apply to an LG TV. This is separate from Magic Sirimote's destructive **Reset app** command; do not choose Reset app just to restart the remote.
 
 ### Only power or volume works
 
@@ -251,9 +295,22 @@ Infrared and Bluetooth operate independently. Working IR buttons do not confirm 
 
 Recovery is not guaranteed for every Bluetooth failure. If the problem keeps returning, report it rather than repeatedly resetting pairings or deleting app files. Include whether swipes, surface clicks, cursor movement and IR still work, and whether the problem followed sleep, power-on or saving settings.
 
+### Bluetooth connects, but input remains unavailable
+
+On the TV used for testing, Developer Mode apps can access input devices numbered **0–31** (`/dev/hidraw0` through `/dev/hidraw31`). After repeated reconnections, Siri Remote was assigned number 33: Bluetooth connected, but Magic Sirimote could not receive its input. These are OS input-device numbers, not saved pairing slots. The cause of the increasing numbers is still under investigation.
+
+If waking the remote and reopening the app do not restore input, fully restart the TV: when it is not updating, turn it off, unplug it for about 30 seconds, reconnect power, and turn it on. This restored an accessible number in our test without deleting the pairing. **Reset app is not needed for this recovery.**
+
 ### Swipes work but the pointer does not
 
 Check that Gyro cursor is on and saved. Lift your finger completely off the touch surface and move the remote more deliberately. If movement is misdirected, lay the remote flat with its touch surface up and front end toward the TV. Choose **Reset cursor orientation**, confirm **Restart**, and leave the remote still until reception resumes. A working swipe does not necessarily mean orientation setup has completed yet.
+
+<details>
+<summary>Cursor orientation reset confirmation</summary>
+
+![Resetting cursor orientation](assets/screenshots/orientation.png)
+
+</details>
 
 ### Voice input
 
@@ -270,6 +327,13 @@ To start over:
 3. Read the confirmation. Choose **Cancel** to leave things unchanged, or **Reset everything** to proceed.
 4. Let the reset finish. If it stops partway through, read the error; reopening the app may offer **Continue reset** to finish the remaining steps. Some IR assignments may already be deleted.
 5. When **Start pairing** appears, follow [Pair Siri Remote with the TV](#6-pair-siri-remote-with-the-tv), then configure and save your button assignments again.
+
+<details>
+<summary>Reset confirmation screen</summary>
+
+![Resetting Magic Sirimote](assets/screenshots/reset.png)
+
+</details>
 
 To uninstall Magic Sirimote, open **Edit App List** on the TV's Home screen, select Magic Sirimote, and choose **Delete**. If you also want to remove its remote pairing and infrared assignments, complete **Reset app** before uninstalling.
 

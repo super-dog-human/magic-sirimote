@@ -13,7 +13,7 @@ from touch_coordinates import decode_touch
 class InputRouter:
     """No native I/O. Emits semantic press actions through an injected sink."""
     def __init__(self, emit, *, clock=time.monotonic, max_seconds=30., pose_mode='direct',
-                 touch_mode='press-position', session_policy=None, deferred_center=False):
+                 touch_mode='press-position', session_policy=None, session_bounded_hold=False):
         from input_session_policy import resolve_session_bounds
         max_seconds, action_limit = resolve_session_bounds(max_seconds, session_policy)
         self.clock = clock
@@ -46,7 +46,7 @@ class InputRouter:
         if touch_mode=='swipe-click':
             from swipe_click import SwipeClick
             press_options = {'clock': clock, 'max_seconds': max_seconds,
-                             'max_actions': action_limit, 'deferred_center': deferred_center}
+                             'max_actions': action_limit, 'session_bounded_hold': session_bounded_hold}
             if session_policy is not None:
                 press_options['session_policy'] = session_policy
             self.press=SwipeClick(self._emit,regions,**press_options)

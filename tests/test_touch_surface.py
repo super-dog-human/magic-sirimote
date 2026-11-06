@@ -17,19 +17,32 @@ class TouchSurfaceTests(unittest.TestCase):
   for x,y,state in ((*start,3),(*end,4),(*end,7)):
    c.step();r.feed(1,touch(x,y,state=state))
   c.step(.07);r.tick()
- def test_a1962_published_edge_coordinates_are_not_discarded(self):
-  r,c,e=self.recognizer(0x026d)
-  for start,end,direction in (((-1700,584),(-1000,584),'right'),((-300,-1058),(-1000,-1058),'left'),((-1813,-850),(-1813,100),'up'),((-182,400),(-182,-400),'down')):
-   self.swipe(r,c,start,end)
-   self.assertEqual(e[-2:],[(direction,True),(direction,False)])
-  self.assertEqual(r.stats['cancelReasons']['bounds'],0)
- def test_a1513_original_geometry_and_swipe_remain(self):
-  r,c,e=self.recognizer(0x0266)
-  self.assertEqual((r.regions.x_min,r.regions.x_max,r.regions.y_min,r.regions.y_max),(-1768,-200,-1032,440))
-  self.swipe(r,c,(-1500,-300),(-900,-300));self.assertEqual(e,[('right',True),('right',False)])
-  self.swipe(r,c,(-1500,584),(-900,584));self.assertEqual(len(e),2)
+ def test_measured_edges_are_accepted_on_both_remotes(self):
+  # Four-direction swipes at the measured outer edges, not just the centre.
+  for product in (0x0266,0x026d):
+   with self.subTest(product=product):
+    touch_surface._product=None;r,c,e=self.recognizer(product)
+    for start,end,direction in (((-1700,598),(-1000,598),'right'),((-300,-1074),(-1000,-1074),'left'),((-1818,-850),(-1818,100),'up'),((-182,400),(-182,-400),'down')):
+     self.swipe(r,c,start,end)
+     self.assertEqual(e[-2:],[(direction,True),(direction,False)])
+    self.assertEqual(r.stats['cancelReasons']['bounds'],0)
+ def test_same_geometry_and_swipe_threshold_for_both_models(self):
+  results=[]
+  for product in (0x0266,0x026d):
+   touch_surface._product=None;r,c,e=self.recognizer(product)
+   self.assertEqual((r.regions.x_min,r.regions.x_max,r.regions.y_min,r.regions.y_max),(-1850,-150,-1100,650))
+   # The 18% threshold has the same physical meaning on either model.
+   self.swipe(r,c,(-1500,0),(-1200,0));self.assertFalse(e)
+   self.swipe(r,c,(-1500,0),(-1190,0));self.assertEqual(e,[('right',True),('right',False)])
+   self.swipe(r,c,(-1000,-700),(-1000,-390));self.assertEqual(len(e),2)
+   self.swipe(r,c,(-1000,-700),(-1000,-380));self.assertEqual(e[-2:],[('up',True),('up',False)])
+   results.append(e)
+  self.assertEqual(results[0],results[1])
  def test_corrupt_coordinate_does_not_become_swipe(self):
-  r,c,e=self.recognizer(0x026d);self.swipe(r,c,(-1000,0),(1800,0));self.assertFalse(e)
+  for product in (0x0266,0x026d):
+   for start,end in (((-1000,0),(1800,0)),((-1700,651),(-1000,651)),((-1000,-1101),(-300,-1101))):
+    touch_surface._product=None;r,c,e=self.recognizer(product)
+    self.swipe(r,c,start,end);self.assertFalse(e)
  def test_product_cannot_change_in_existing_process(self):
   touch_surface.bind_product(0x026d);touch_surface.bind_product(0x026d)
   with self.assertRaises(RuntimeError):touch_surface.bind_product(0x0266)

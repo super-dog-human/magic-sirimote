@@ -10,7 +10,7 @@ from recovery_receipt import write_recovery_start,write_recovery_receipt
 from local_feature_lease import LocalFeatureLease
 from persistent_status_pump import PersistentConnectedStatusPump
 from postconnect_receiver_device import paired_target
-from borrowed_recovery_runtime import recover_zero
+from borrowed_recovery_runtime import recover_zero,RecoveryTargetUnavailable
 from recovery_records import RecoveryRecords,archive_uncertain
 from local_attestation import _start_ticks
 
@@ -42,7 +42,17 @@ def run_recovery(*,state,controller_app,controller_package,pin,stop):
   while pump.snapshot() is None and not stop.is_set() and time.monotonic()<deadline:stop.wait(.1)
   current=pump.snapshot()
   if stop.is_set() or current is None:raise RuntimeError('recovery reconnect unavailable')
-  proof=recover_zero(watch=pump.tracker,lease=feature,generation=current['generation'],paired_check=paired_target,external_feature_guard=lambda:not stop.is_set() and feature.held() is True,record=records,old_receiver_exited=old_exit,gatt_lookup_reply=accepted['request']['gattLookupReply'])
+  # Retry only a preflight rejection, before any GATT read or device command.
+  # The borrowed lookup remains tied to this connection generation.
+  preflight_deadline=time.monotonic()+3
+  while True:
+   try:
+    proof=recover_zero(watch=pump.tracker,lease=feature,generation=current['generation'],paired_check=paired_target,external_feature_guard=lambda:not stop.is_set() and feature.held() is True,record=records,old_receiver_exited=old_exit,gatt_lookup_reply=accepted['request']['gattLookupReply'])
+    break
+   except RecoveryTargetUnavailable:
+    newer=pump.snapshot()
+    if stop.is_set() or time.monotonic()>=preflight_deadline or type(newer) is not dict or newer.get('generation')!=current['generation']:raise
+    stop.wait(.1)
   def valid():
    now=pump.snapshot()
    return not stop.is_set() and old_exit() and feature.held() is True and type(now) is dict and now.get('generation')==current['generation']

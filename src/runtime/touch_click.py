@@ -24,7 +24,7 @@ class TouchClick:
     MAX_PRESSES_PER_SECOND = 4
 
     def __init__(self, writer, *, max_seconds=120, max_clicks=6, clock=time.monotonic,
-                 session_policy=None, deferred_output=False):
+                 session_policy=None, session_bounded_hold=False):
         from input_session_policy import resolve_session_bounds
         max_seconds, policy_actions = resolve_session_bounds(
             max_seconds, session_policy, default_seconds=30, default_actions=16,
@@ -32,11 +32,11 @@ class TouchClick:
         click_limit = policy_actions if session_policy is not None else 16
         if type(max_clicks) is not int or not 1 <= max_clicks <= click_limit:
             raise ValueError('A finite click budget is required')
-        if type(deferred_output) is not bool:
-            raise ValueError('Deferred output must be boolean')
-        # Deferred semantic sinks hold no native button down while waiting,
-        # so their hold duration is bounded by the session, not the key watchdog.
-        self.deferred_output = deferred_output
+        if type(session_bounded_hold) is not bool:
+            raise ValueError('Session-bounded hold must be boolean')
+        # Integrated input releases on physical release, disconnect or session end.
+        # Diagnostic sinks retain the short hold watchdog by default.
+        self.session_bounded_hold = session_bounded_hold
         self.release_forced = False
         self.writer, self.clock = writer, clock
         self.started = self.last_clock = clock()
@@ -127,7 +127,7 @@ class TouchClick:
         now = self._now()
         if now is None:
             return False
-        if not self.deferred_output and self.down and now - self.pressed_at >= self.MAX_HOLD_SECONDS:
+        if not self.session_bounded_hold and self.down and now - self.pressed_at >= self.MAX_HOLD_SECONDS:
             self.armed = False
             self._write(False,forced=True)
             return True
@@ -141,7 +141,7 @@ class TouchClick:
             self.stats['staleReports'] += 1
             return False
         # A delayed held report cannot bypass the periodic hold watchdog.
-        if not self.deferred_output and self.down and now - self.pressed_at >= self.MAX_HOLD_SECONDS:
+        if not self.session_bounded_hold and self.down and now - self.pressed_at >= self.MAX_HOLD_SECONDS:
             self.tick()
         mask = button_mask(value)
         if mask is None:
@@ -155,6 +155,19 @@ class TouchClick:
             return wrote
         if not self.armed or self.down:
             return False
+        return self._press(now)
+
+    def begin_wake_press(self, generation):
+        # Only the caller's validated queued response can enter this path.
+        # A live click pipeline that has already acted cannot be re-armed.
+        now = self._now()
+        if (now is None or type(generation) is not int or generation != self.generation
+                or self.down or self.stats['pressAttempts'] != 0):
+            return False
+        self.armed = True
+        return self._press(now)
+
+    def _press(self, now):
         while self.presses and self.presses[0] <= now - 1:
             self.presses.popleft()
         if self.stats['pressAttempts'] >= self.max_clicks or len(self.presses) >= self.MAX_PRESSES_PER_SECOND:

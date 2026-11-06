@@ -278,12 +278,24 @@ class PairingTests(unittest.TestCase):
             self.reply('identity-product',address=REMOTE,adapterAddress=TV,service=DIS,
                 values=[{'characteristic':uuid('2a50'),'value':{'bytes':[1,76,0,109,2,0,0]}}])
 
-    def test_a1962_requires_nonempty_firmware_but_a1513_keeps_exact_gate(self):
-        for product, firmware in ((0x026d,b''),(0x026d,b'\x00'),(0x026d,b'x'*129),(0x0266,b'test-firmware')):
+    def test_firmware_metadata_rejects_malformed_response(self):
+        for product, firmware in ((p,fw) for p in (0x0266,0x026d) for fw in (b'',b'\x00',b'x'*129)):
             self.flow.product=product
             with self.assertRaises(ValueError):
                 self.reply('identity-firmware',address=REMOTE,adapterAddress=TV,service=DIS,
                     values=[{'characteristic':uuid('2a26'),'value':{'bytes':list(firmware)}}])
+
+    def test_both_models_accept_new_and_unknown_firmware_versions(self):
+        for product in (0x0266,0x026d):
+            for firmware in (b'0257',b'0118',b'future-revision'):
+                with self.subTest(product=product,firmware=firmware):
+                    self.flow.product=product;self.flow.pending_serial='TEST_REMOTE'
+                    self.flow.existing_only=False
+                    self.reply('identity-firmware',address=REMOTE,adapterAddress=TV,service=DIS,
+                        values=[{'characteristic':uuid('2a26'),'value':{'bytes':list(firmware)}}])
+                    self.assertEqual(self.flow.firmware,firmware.decode('ascii'))
+                    self.assertEqual(self.flow.phase,'connecting')
+                    self.assertEqual(self.bus.sent[-1][1],'hid/getStatus')
 
 
 if __name__ == '__main__': unittest.main()

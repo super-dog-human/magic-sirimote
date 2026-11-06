@@ -123,4 +123,69 @@ class Tests(unittest.TestCase):
     self.assertEqual(result['reason'],'resource-close-unverified')
 
 
+ def test_resumed_input_queue_exists_before_initialization_response(self):
+  import os
+  args,outputs,sink=self.fixture();reader,writer=os.pipe();opened=[]
+  def opening(**kwargs):
+   self.assertEqual(kwargs,{'wait_for_target':False});opened.append(True);return reader
+  def initialize(**kwargs):
+   self.assertEqual(opened,[True])
+   os.write(writer,bytes.fromhex('fce00800'))
+   return object()
+  def session(*a,**k):
+   self.assertEqual(os.read(reader,4),bytes.fromhex('fce00800'))
+   return {'status':'complete'}
+  args.update(open_target=opening,close_target=os.close,open_before_input=True,gatt_lookup_reply={})
+  try:
+   with patch.object(entry.borrowed_runtime,'initialize_input',side_effect=initialize),patch.object(entry,'run_once',side_effect=session):
+    result=entry.run_connected_once(**args)
+   self.assertEqual(result['status'],'complete')
+   with self.assertRaises(OSError):os.fstat(reader)
+  finally:os.close(writer)
+
+ def test_resumed_open_failure_sends_no_input_initialization(self):
+  args,outputs,sink=self.fixture()
+  args.update(open_before_input=True,gatt_lookup_reply={})
+  args['open_target'].side_effect=RuntimeError('target inventory incomplete')
+  with patch.object(entry.borrowed_runtime,'initialize_input') as init,patch.object(entry,'run_once') as session:
+   result=entry.run_connected_once(**args)
+  init.assert_not_called();session.assert_not_called();args['close_target'].assert_not_called()
+  self.assertEqual(result['diagnostic'],'target-inventory-incomplete')
+
+ def test_resumed_initialization_failure_closes_preopened_input(self):
+  args,outputs,sink=self.fixture();args.update(open_before_input=True,gatt_lookup_reply={})
+  with patch.object(entry.borrowed_runtime,'initialize_input',side_effect=RuntimeError('failed')):
+   result=entry.run_connected_once(**args)
+  self.assertEqual(result['status'],'attention');args['close_target'].assert_called_once_with(3)
+
+ def test_missing_preopen_initializes_once_then_opens_normally(self):
+  args,outputs,sink=self.fixture();events=[]
+  args.update(open_before_input=True,gatt_lookup_reply={})
+  def opening(**options):
+   events.append(('open',options))
+   if options:raise RuntimeError('target not present')
+   return 3
+  def initialize(**kwargs):events.append(('initialize',{}));return object()
+  args['open_target']=opening
+  with patch.object(entry.borrowed_runtime,'initialize_input',side_effect=initialize) as init,patch.object(entry,'run_once',return_value={'status':'complete'}):
+   result=entry.run_connected_once(**args)
+  self.assertEqual(result['status'],'complete');init.assert_called_once()
+  self.assertEqual(events,[('open',{'wait_for_target':False}),('initialize',{}),('open',{})])
+  args['close_target'].assert_called_once_with(3)
+
+ def test_missing_preopen_does_not_ignore_stop(self):
+  args,outputs,sink=self.fixture();args.update(open_before_input=True,gatt_lookup_reply={},abort=lambda:True)
+  args['open_target'].side_effect=RuntimeError('target not present')
+  with patch.object(entry.borrowed_runtime,'initialize_input') as init:
+   result=entry.run_connected_once(**args)
+  init.assert_not_called();args['close_target'].assert_not_called()
+  self.assertEqual(result['status'],'attention')
+
+ def test_preopen_cannot_use_an_original_controller_handoff(self):
+  for options in ({'gatt_lookup_reply':None},{'gatt_lookup_reply':{},'input_handoff_check':lambda:True}):
+   args,outputs,sink=self.fixture();args.update(open_before_input=True,**options)
+   with self.assertRaises(ValueError):entry.run_connected_once(**args)
+   args['open_target'].assert_not_called()
+
+
 if __name__=='__main__':unittest.main()

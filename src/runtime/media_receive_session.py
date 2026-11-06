@@ -30,5 +30,5 @@ def receive_with_media(session,outputs,fd,*,system_key_sink,worker_factory=Media
  resources=MediaResources(system_key_sink,worker_factory=worker_factory,screen_factory=screen_factory)
  try:
   resources.start()
-  return receive(session,outputs,fd,system_key_emit=resources.sink.pulse,**({"screen_control":resources.screen} if resources.screen is not None else {}),**kwargs)
+  return receive(session,outputs,fd,system_key_emit=resources.sink.pulse,system_key_ready=resources.sink.ready,**({"screen_control":resources.screen} if resources.screen is not None else {}),**kwargs)
  finally:resources.close()

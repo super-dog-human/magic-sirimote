@@ -11,6 +11,7 @@ METHODS={'device/getStatus':{'subscribe':False},'hid/getStatus':{'address':TARGE
 def read_status(method,*,spawn=subprocess.Popen,clock=time.monotonic,timeout=3):
  if method not in METHODS or not callable(spawn) or not callable(clock) or type(timeout) not in (int,float) or not 0<timeout<=5:raise ValueError('invalid status request')
  argv=['/usr/bin/luna-send-pub','-i','-f',BUS+method,json.dumps(METHODS[method],separators=(',',':'))]
+ output_limit=1024*1024 if method=='device/getStatus' else 65536
  p=None;sel=None;result=None;failure=None;stopped=False
  try:
   p=spawn(argv,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,close_fds=True)
@@ -28,7 +29,7 @@ def read_status(method,*,spawn=subprocess.Popen,clock=time.monotonic,timeout=3):
     except BlockingIOError:continue
     if not chunk:sel.unregister(key.fileobj);continue
     buf=out if key.data=='out' else err;buf.extend(chunk)
-    if len(out)>65536 or len(err)>4096:raise RuntimeError('status output limit')
+    if len(out)>output_limit or len(err)>4096:raise RuntimeError('status output limit')
    if out:
     try:
      text=out.decode('utf8');v,end=json.JSONDecoder().raw_decode(text.lstrip())

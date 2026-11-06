@@ -17,6 +17,10 @@ class ConnectNotDispatched(LunaCallError):
  """Known stale eligibility rejected before invoking the process boundary."""
 
 class ConnectClient(PumpingLunaClient):
+ def _stdout_limit(self,method):
+  # The TV retains discovered devices. Pretty-printed inventories can exceed
+  # the per-device response bound even with fewer than one hundred entries.
+  return 1024*1024 if method=='device/getStatus' else super()._stdout_limit(method)
  def __init__(self,*,pre_dispatch=lambda:True,**kwargs):
   spawn=kwargs.pop('spawn',subprocess.Popen)
   def checked_spawn(argv,**options):

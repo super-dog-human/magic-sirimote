@@ -67,6 +67,7 @@ class Tests(unittest.TestCase):
   args=dict(watch=watch,lease=lease,generation=2,paired_check=paired,
    external_feature_guard=lambda:True,record=lambda _:True,session_closed=lambda:True,
    gatt_lookup_reply={'returnValue':True,'address':TARGET,'adapterAddress':ADAPTER,'clientId':'5'},
+   notification_preparer=lambda *a,**k:{'beforeFlags':1,'writeAttempted':False},
    clock=lambda:10.,requester_factory=lambda **_:requester,reader_factory=Reader,
    activation_factory=lambda **_:SimpleNamespace(),stop_factory=lambda **_:lambda *a,**k:True)
   return args,view
@@ -80,6 +81,36 @@ class Tests(unittest.TestCase):
    else:
     with self.assertRaisesRegex(RuntimeError,'zero unconfirmed'):recover_owned_zero(**args)
    self.assertEqual(check.call_count,2)
+   view.close.assert_called_once()
+
+
+ def test_notifications_are_prepared_before_any_recovery_feature_access(self):
+  args,view=self.recovery(lambda:True);events=[]
+  def notification(*a,**k):
+   self.assertTrue(k['guard']());events.append('notification')
+   return {'beforeFlags':0,'writeAttempted':True}
+  factory=args['activation_factory']
+  def activation(**kwargs):
+   events.append('feature-client');return factory(**kwargs)
+  args.update(notification_preparer=notification,activation_factory=activation,
+              record=lambda event:events.append(event) or True)
+  result=recover_owned_zero(**args)
+  self.assertTrue(result['modeZeroVerified'])
+  self.assertLess(events.index('notification'),events.index('feature-client'))
+  record=next(e for e in events if isinstance(e,dict) and e['stage']=='recovery-notification-verified')
+  self.assertEqual(record['beforeFlags'],0);self.assertTrue(record['writeAttempted'])
+
+ def test_notification_failure_or_guard_loss_prevents_recovery_feature_access(self):
+  for fail in ('raise','guard','record'):
+   args,view=self.recovery(lambda:True)
+   def notification(*a,**k):
+    if fail=='raise':raise RuntimeError('notification-enable-unconfirmed')
+    if fail=='guard':args['watch'].snapshot.return_value=None
+    return {'beforeFlags':1,'writeAttempted':False}
+   def record(event):return not (fail=='record' and event['stage']=='recovery-notification-verified')
+   args.update(notification_preparer=notification,record=record,
+               activation_factory=lambda **_:self.fail('feature access after notification failure'))
+   with self.assertRaises(RuntimeError):recover_owned_zero(**args)
    view.close.assert_called_once()
 
 

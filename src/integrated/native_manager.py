@@ -528,6 +528,7 @@ def main(*, started_at=None):
             mark_startup('handoffCheckedMs')
             if not handoff: app.refresh_pairing()
             window_visible = not handoff
+            worker_finished = False
             # Input handoffs do not need an SDL surface. Create settings only
             # when the user opens the app, avoiding a foreground flash at boot.
             if not handoff:
@@ -565,6 +566,7 @@ def main(*, started_at=None):
                         # Home or another app hides this window. A later receiver
                         # failure must release its jail so recovery can replace it.
                         window_visible = False
+                        note('window-inactive', source='native-pause')
                     elif event == 'close':
                         stop_signal[0] = True
                 if canvas is not None:
@@ -590,13 +592,14 @@ def main(*, started_at=None):
                         try: data = os.read(worker.stdout.fileno(), 8192)
                         except BlockingIOError: break
                         if not data: break
-                        count = min(len(data), max(0, 65536 - logged))
+                        count = min(len(data), max(0, 1048576 - logged))
                         if count: os.write(log, data[:count]); logged += count
                     code = worker.poll()
                     if code is not None:
                         write_status('native-status.json', {'status': 'worker-ended', 'exitCode': code, 'pid': os.getpid(), 'workerPid': worker.pid})
                         worker.stdout.close(); worker.stdin.close(); worker = None; app.worker = None
-                        if closing or not (app.stop_requested or window_visible):
+                        worker_finished = True
+                        if closing or not (app.stop_requested or window_visible or programming):
                             break  # A hidden receiver can be replaced by a fresh jail.
                         app.resume_after_settings = True
                         app.message = ('Finishing input cleanup before opening settings.' if app.stop_requested
@@ -611,9 +614,19 @@ def main(*, started_at=None):
                 if app.settings_tick(canvas): app.draw(canvas)
                 if app.infrared is not None and app.infrared.tick(): app.draw(canvas)
                 for event in canvas.events():
+                    if event[0] == 'window-active':
+                        window_visible = event[1]
+                        note('window-active' if window_visible else 'window-inactive', source='sdl')
+                        continue
                     app.handle(event, canvas)
                     if app.done: break
                     app.draw(canvas)
+                # A Home/focus notification may follow the worker's exit.
+                # Release the old device namespace then as well; never stop a
+                # live receiver or interrupt an intentional settings operation.
+                programming = (app.reset is not None and app.reset.busy) or app.saving_assignments or app.infrared is not None and app.infrared.busy
+                if worker_finished and not window_visible and not app.stop_requested and not programming:
+                    break
                 if app.done:
                     if worker is not None:
                         app.done = False; window_visible = False

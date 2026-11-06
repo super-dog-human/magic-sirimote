@@ -46,7 +46,7 @@ def _context(*,run,controller_state,receiver_state,controller_app,receiver_app,r
  if not proof():raise RuntimeError('takeover proof unavailable')
  for name in ('recovery-controller-start.json','recovery-request.json',
               'receiver-recovery-start-'+run+'.json','receiver-recovery-result-'+run+'.json',
-              'recovery-'+run+'-1.json'):
+              'recovery-'+run+'-1.json','recovery-preio-pending-'+run):
   try:os.lstat(Path(receiver_state)/name)
   except FileNotFoundError:pass
   else:
@@ -77,6 +77,9 @@ def retire_unentered(**context):
  if not bundle.active():raise RuntimeError('previous recovery attempt retained')
  from unentered_recovery import retire
  proof,prior,_=_context(**context,check_attempt=False)
+ state=Path(context['receiver_state']);run=context['run']
+ if (state/('receiver-recovery-result-'+run+'.json')).exists() or (state/('recovery-preio-pending-'+run)).exists():
+  from preio_recovery import retire
  return retire(run=context['run'],controller_state=context['controller_state'],
   receiver_state=context['receiver_state'],controller_app=context['controller_app'],
   receiver_app=context['receiver_app'],proof=proof,prior=prior,

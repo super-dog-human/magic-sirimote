@@ -23,7 +23,7 @@ class SwipeClick:
     SWIPE_PULSE_SECONDS = .060
 
     def __init__(self, emit, regions, *, clock=time.monotonic,
-                 max_seconds=30, max_actions=16, session_policy=None, deferred_center=False):
+                 max_seconds=30, max_actions=16, session_policy=None, session_bounded_hold=False):
         if not callable(emit):
             raise ValueError('An injected semantic emitter is required')
         if not isinstance(regions, SurfaceRegions):
@@ -45,7 +45,7 @@ class SwipeClick:
             raise ValueError('Finite monotonic clock required')
         self.core = TouchClick(self._translate, max_seconds=max_seconds,
                                max_clicks=max_actions, clock=self._clock_proxy,
-                               session_policy=session_policy, deferred_output=deferred_center)
+                               session_policy=session_policy, session_bounded_hold=session_bounded_hold)
         self.max_actions = max_actions
         self.swipes = dict.fromkeys(('up', 'down', 'left', 'right'), 0)
         self.stats = {'physicalClicks': 0, 'semanticEvents': 0,
@@ -204,6 +204,29 @@ class SwipeClick:
             self.center_down_known = False
         return len(packet)
 
+    def begin_wake_press(self, generation):
+        self._sample_clock()
+        if self._clock_error:
+            self._handle_clock_error()
+            return False
+        if (generation != self.core.generation or self.core.closed
+                or self.pending_swipe is not None or self.center_down_known
+                or self.core.stats['pressAttempts'] != 0):
+            return False
+        self._cancel('button')
+        self.block_until_lift = self.button_blocked = True
+        self.button_release_seen = self.button_lift_seen = False
+        self._known_reject = False
+        result = self.core.begin_wake_press(generation)
+        if self._known_reject:
+            self.core.stats['pressesWritten'] -= 1
+            self.core.down = False
+            self.core.pressed_at = None
+            self.core.armed = False
+            return False
+        self._sync_known_center()
+        return result
+
     def bind(self, generation):
         self._cancel()
         self.last_frame_at = None
@@ -311,13 +334,22 @@ class SwipeClick:
             self.core.feed(generation, value)
             self._sync_known_center()
             return self.stats['semanticEvents'] != before_events
-        if self.last_frame_at is not None and now - self.last_frame_at > self.MAX_GAP_SECONDS:
+        mask = button_mask(value)
+        decoded = decode_touch(value)
+        # With motion disabled there are no periodic neutral reports. A new
+        # contact after a verified lift is not a gap inside an old gesture.
+        fresh_after_idle = (self.gesture is None and self.release_observed
+                            and self.core.armed and not self.core.down
+                            and not self.block_until_lift and not self.button_blocked
+                            and mask == 0 and decoded is not None
+                            and len(decoded['fingers']) == 1
+                            and decoded['fingers'][0]['state'] == 3)
+        if (self.last_frame_at is not None and now - self.last_frame_at > self.MAX_GAP_SECONDS
+                and not fresh_after_idle):
             self._cancel('gap')
             self.block_until_lift = True
         self.last_frame_at = now
 
-        mask = button_mask(value)
-        decoded = decode_touch(value)
         valid_button_only = type(value) in (bytes, bytearray) and len(value) == 2 and value[0] == 0
         touched = False
         lift = False

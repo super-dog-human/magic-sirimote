@@ -58,9 +58,11 @@ def diagnostic_code(exc):
 
 def run_connected_once(*,watch,lease,paired_check,external_feature_guard,record,
                        open_target,open_outputs,close_target,duration,abort,
-                       clock,receive_clock=None,read_fn=None,sleep_fn=None,on_ready=None,on_progress=None,open_system_keys=None,close_system_keys=None,input_handoff_check=None,gatt_lookup_reply=None):
+                       clock,receive_clock=None,read_fn=None,sleep_fn=None,on_ready=None,on_progress=None,open_system_keys=None,close_system_keys=None,input_handoff_check=None,gatt_lookup_reply=None,open_before_input=False):
  if not all(callable(x) for x in (paired_check,external_feature_guard,record,open_target,open_outputs,close_target,abort,clock)) or not callable(getattr(watch,'snapshot',None)) or (on_ready is not None and not callable(on_ready)) or (on_progress is not None and not callable(on_progress)) or (duration is not None and (type(duration) not in (int,float) or not math.isfinite(duration) or not 0<duration<=7200)):
   raise ValueError('missing receiver dependency')
+ if type(open_before_input) is not bool or (open_before_input and (input_handoff_check is not None or gatt_lookup_reply is None)):
+  raise ValueError('early target open requires local recovery connection')
  setup_started=clock();timings={}
  initial=watch.snapshot()
  if (type(initial) is not dict or type(initial.get('generation')) is not int or initial['generation']<=0
@@ -72,7 +74,21 @@ def run_connected_once(*,watch,lease,paired_check,external_feature_guard,record,
  try:
   prepared=_OutputPreparation(open_outputs,open_system_keys,clock)
   prepared.start();preparation=prepared
-  started=clock()
+  def acquire_input(*,early=False):
+   nonlocal fd,stage
+   stage='open-target';started=clock()
+   fd=open_target(**({'wait_for_target':False} if early else {}))
+   timings['targetOpenMs']=round((clock()-started)*1000)
+   if type(fd) is not int or fd<0:raise RuntimeError('target open unconfirmed')
+  # Preserve an already available queue before AF releases the wake response.
+  # An absent node may need input initialization before it can be opened.
+  # Only proven absence permits that fallback; identity/scan errors still fail.
+  if open_before_input:
+   try:acquire_input(early=True)
+   except RuntimeError as exc:
+    if str(exc)!='target not present':raise
+   if abort() is not False:raise RuntimeError('stopped before input start')
+  stage='input-start';started=clock()
   if input_handoff_check is None:
    input_start=borrowed_runtime.initialize_input(watch=watch,lease=lease,paired=True,external_feature_guard=external_feature_guard,record=record,clock=clock,gatt_lookup_reply=gatt_lookup_reply)
   else:
@@ -80,11 +96,7 @@ def run_connected_once(*,watch,lease,paired_check,external_feature_guard,record,
   timings['inputStartMs']=round((clock()-started)*1000)
   stage='after-input-start'
   if abort() is not False:raise RuntimeError('stopped after input start')
-  stage='open-target'
-  started=clock()
-  fd=open_target()
-  timings['targetOpenMs']=round((clock()-started)*1000)
-  if type(fd) is not int or fd<0:raise RuntimeError('target open unconfirmed')
+  if fd is None:acquire_input()
   started=clock();outputs,system_sink,system_fd=preparation.join()
   timings.update(preparation.timings);timings['outputJoinMs']=round((clock()-started)*1000)
   stage=preparation.stage
@@ -106,12 +118,12 @@ def run_connected_once(*,watch,lease,paired_check,external_feature_guard,record,
    from preborrow_guard import PreBorrowGuard
    from early_navigation import EarlyNavigation
    admission=PreBorrowGuard(watch,lease,generation=generation,external_feature_guard=external_feature_guard,clock=clock)
-   emitter=None;screen=None
+   emitter=None;screen=None;emit_ready=None
    if system_sink is not None:
     from media_receive_session import MediaResources
-    media=MediaResources(system_sink);media.start();emitter=media.sink.pulse;screen=media.screen
+    media=MediaResources(system_sink);media.start();emitter=media.sink.pulse;screen=media.screen;emit_ready=media.sink.ready
    early=EarlyNavigation(outputs,fd,generation=generation,guard=admission,abort=abort,
-                         clock=receive_clock or clock,read_fn=read_fn,system_key_emit=emitter,screen_control=screen)
+                         clock=receive_clock or clock,read_fn=read_fn,system_key_emit=emitter,screen_control=screen,system_key_ready=emit_ready)
    early.start();receive_started=True
    print(json.dumps({'stage':'navigation-input-ready','epochMs':int(__import__('time').time()*1000),'elapsedMs':round((clock()-setup_started)*1000)}),flush=True)
   def prepare():

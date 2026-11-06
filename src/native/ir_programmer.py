@@ -22,20 +22,16 @@ HID = '00001812-0000-1000-8000-00805f9b34fb'
 REPORT = '00002a4d-0000-1000-8000-00805f9b34fb'
 REFERENCE = '00002908-0000-1000-8000-00805f9b34fb'
 SERIAL = '00002a25-0000-1000-8000-00805f9b34fb'
-FIRMWARE = '00002a26-0000-1000-8000-00805f9b34fb'
-# Exact firmware identities: A1513 Main0241 and A1962 Main0116.
-# Both single-row formats were checked against their matching firmware images.
-SUPPORTED_FIRMWARE = b'01004102200070033000070131001800B000410240001508'
-A1962_FIRMWARE = b'B000750001001601300030022000040431001800C1000100'
+# Firmware revisions are not an eligibility condition. Verify the Bluetooth
+# vendor/product identity before accessing the configuration report.
 PNP = '00002a50-0000-1000-8000-00805f9b34fb'
-SUPPORTED_PROFILES = {
-    (0x0266, SUPPORTED_FIRMWARE),
-    (0x026d, A1962_FIRMWARE),
-}
+SUPPORTED_PRODUCTS = frozenset((0x0266, 0x026d))
 
-def validated_profile(pnp, firmware):
+
+def supported_product(pnp):
     return (len(pnp) == 7 and pnp[:3] == b'\x01\x4c\x00'
-            and (int.from_bytes(pnp[3:5], 'little'), firmware) in SUPPORTED_PROFILES)
+            and int.from_bytes(pnp[3:5], 'little') in SUPPORTED_PRODUCTS)
+
 
 BUTTONS = (('TV / Home', 1), ('Volume +', 2), ('Volume -', 4),
            ('Play / Pause', 8), ('Microphone', 16), ('MENU', 32), ('Surface click', 128))
@@ -143,8 +139,8 @@ def program(values, action, button, delay, code, call, record, idle=runtime_idle
         invoke('gatt/discoverServices', {'address': remote}, 8)
         if read(DIS, SERIAL) != values['remoteName'].encode():
             raise RuntimeError('The connected remote does not match the saved device name.')
-        if not validated_profile(read(DIS, PNP), read(DIS, FIRMWARE)):
-            raise RuntimeError('This remote firmware has not been validated for infrared programming.')
+        if not supported_product(read(DIS, PNP)):
+            raise RuntimeError('Only Siri Remote A1513 and A1962 are supported.')
         descriptor = invoke('gatt/readDescriptorValues', {
             'clientId': client, 'service': HID, 'characteristic': REPORT, 'descriptors': [REFERENCE]})
         if descriptor.get('service') != HID or _values(descriptor, 'descriptor', REFERENCE) != b'\xf0\x03':

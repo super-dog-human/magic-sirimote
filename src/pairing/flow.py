@@ -304,11 +304,8 @@ class PairingFlow:
                     raise ValueError('Product identity must be checked before firmware')
                 if not 1 <= len(firmware) <= 128 or any(b < 32 or b > 126 for b in firmware):
                     raise ValueError('Invalid firmware identification')
-                # A1962 pairing/basic unlock is supported by upstream evidence;
-                # its firmware is read, not falsely marked hardware-validated.
-                # Persistent IR programming retains its separate exact-FW gate.
-                if self.product == 0x0266 and firmware != b'01004102200070033000070131001800B000410240001508':
-                    raise ValueError('This remote firmware has not been validated')
+                # Retain the revision as diagnostic metadata, never as a
+                # model eligibility gate. Both supported products accept any version.
                 self.firmware = firmware.decode('ascii')
                 self.serial = self.pending_serial
                 if self.existing_only:

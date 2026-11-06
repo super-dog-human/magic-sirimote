@@ -48,7 +48,7 @@ def run_once(*,state_path,run,external_feature_guard=None,cooperative_only=False
     initial=pump.tracker.snapshot()
     if type(initial) is not dict or type(initial.get('generation')) is not int:raise RuntimeError('retry generation unavailable')
     retry_guard=make_guard(watch=pump.tracker,lease=lease,stop=stop,feature=external_feature_guard,generation=initial['generation'])
-    def open_with_retry():return open_target(allow_retry=retry_guard,wait=stop.wait)
+    def open_with_retry(**options):return open_target(allow_retry=retry_guard,wait=stop.wait,**options)
     output_ready=threading.Event();output_records=None;current_outputs=None
     def outputs():
      nonlocal output_records,current_outputs
@@ -76,6 +76,7 @@ def run_once(*,state_path,run,external_feature_guard=None,cooperative_only=False
     extra={}
     if input_handoff_check is not None:extra.update(input_handoff_check=input_handoff_check)
     if gatt_lookup_reply is not None:extra.update(gatt_lookup_reply=gatt_lookup_reply)
+    if resumed:extra['open_before_input']=True
     if system_buttons:
      from system_key_device import open_system_key_from_record
      def system_keys():

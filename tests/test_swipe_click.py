@@ -68,6 +68,32 @@ class SwipeClickTests(unittest.TestCase):
             self.swipe(direction)
             self.assertEqual(self.events, [(direction, True), (direction, False)])
 
+    def test_fresh_swipes_after_silent_released_idle_are_not_dropped(self):
+        for direction in ('right', 'left', 'up', 'down'):
+            self.clock.step(3)
+            self.recognizer.tick()
+            self.events.clear()
+            self.swipe(direction)
+            self.clock.step(.001)
+            self.recognizer.tick()
+            self.assertEqual(self.events, [(direction, True), (direction, False)])
+
+    def test_silent_gap_during_contact_still_requires_lift(self):
+        self.step_feed(touch(-80, 0, state=3))
+        self.clock.step(1)
+        self.recognizer.tick()
+        self.swipe('right')
+        self.assertEqual(self.events, [])
+        self.swipe('left')
+        self.assertEqual(self.events, [('left', True), ('left', False)])
+
+    def test_idle_does_not_turn_continuation_into_new_contact(self):
+        self.clock.step(3)
+        self.step_feed(touch(-80, 0, state=4))
+        self.step_feed(touch(0, 0, state=4))
+        self.step_feed(touch(0, 0, state=7))
+        self.assertEqual(self.events, [])
+
     def test_corner_trajectories_are_valid_swipes(self):
         self.step_feed(touch(-100, -100, state=3))
         self.step_feed(touch(-20, -100, state=4))

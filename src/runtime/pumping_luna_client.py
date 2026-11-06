@@ -124,6 +124,9 @@ class PumpingLunaClient:
 
     _shared_native_transport = True
 
+    def _stdout_limit(self, method):
+        return MAX_STDOUT
+
     def __init__(self, *, pump, guard, clock=time.monotonic, spawn=subprocess.Popen,
                  get_euid=os.geteuid, native_app=False):
         if (not callable(pump) or not callable(guard) or not callable(clock)
@@ -234,7 +237,7 @@ class PumpingLunaClient:
                         streams.pop(label, None)
                         continue
                     if label == "stdout":
-                        if len(stdout) + len(chunk) > MAX_STDOUT:
+                        if len(stdout) + len(chunk) > self._stdout_limit(method):
                             raise LunaCallError("Luna stdout exceeded bound")
                         stdout.extend(chunk)
                     else:

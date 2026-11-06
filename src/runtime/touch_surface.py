@@ -1,10 +1,13 @@
 """Touch geometry selected only after opening the verified paired HID device."""
 from position_press import SurfaceRegions
 
-# A1513 retains its original measured calibration. A1962 reached Y=-1065
-# locally; published captures span X=-1818..-182, Y=-1074..612. Include a
-# small edge margin: https://github.com/a-funk/open-appleremote/blob/main/docs/PROTOCOL.md
-BOUNDS = {0x0266: (-1768,-200,-1032,440), 0x026d: (-1850,-150,-1100,650)}
+# 2026-11-06: two perimeter/axis passes on each local remote reached the same
+# X=-1818..-182 and Y minimum=-1074; observed Y maxima were 598/597.
+# These are observed contact extents, not guaranteed hardware limits. Use the
+# previously working A1962 envelope (with edge margin) for BOTH models; the
+# old A1513 five-position calibration wrongly rejected valid outer contacts.
+COMMON_BOUNDS = (-1850,-150,-1100,650)
+BOUNDS = {0x0266: COMMON_BOUNDS, 0x026d: COMMON_BOUNDS}
 _product = None
 
 def bind_product(product):
@@ -16,6 +19,11 @@ def bind_product(product):
     _product=product
 
 def regions():
-    # The legacy A1513 and pure decoder tests retain their original geometry.
+    # Product binding still verifies identity; geometry is common to both.
     xmin,xmax,ymin,ymax=BOUNDS[0x0266 if _product is None else _product]
     return SurfaceRegions(x_min=xmin,x_max=xmax,y_min=ymin,y_max=ymax)
+
+
+def current_product():
+    """Return only the product verified while opening the paired HID device."""
+    return _product

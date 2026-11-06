@@ -5,9 +5,10 @@ independently identified target and must not accept an incomplete scan for any
 other reason. Nothing is deleted or written.
 """
 import errno,os,stat
+from hid_nodes import valid_index
 
 def unregistered(*,index,major,minor,lstat=os.lstat,stat_fn=os.stat):
- if any(type(x) is not int or x<0 for x in (index,major,minor)) or index>=32:return False
+ if any(type(x) is not int or x<0 for x in (index,major,minor)) or not valid_index(index):return False
  def absent(path):
   try:lstat(path)
   except OSError as e:

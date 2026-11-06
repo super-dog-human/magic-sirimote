@@ -9,7 +9,7 @@ from rolling_receiver import RollingReceiver
 from hid_input import receive_actions
 from receive_diagnostics import capture
 
-def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=300,read_fn=None,sleep_fn=None,stats=None,on_ready=None,system_key_emit=None,on_progress=None,screen_control=None,prepared_receiver=None):
+def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=300,read_fn=None,sleep_fn=None,stats=None,on_ready=None,system_key_emit=None,on_progress=None,screen_control=None,prepared_receiver=None,system_key_ready=None):
  if (type(session) is not BorrowedModeSession or session.state!='active' or type(fd) is not int or fd<0 or (duration is not None and (type(duration) not in (int,float) or not math.isfinite(duration) or not 0<duration<=7200)) or type(segment_seconds) not in (int,float) or not math.isfinite(segment_seconds) or not 30<segment_seconds<=7200 or not callable(abort) or not callable(clock) or (on_ready is not None and not callable(on_ready))):
   raise ValueError('invalid sustained session')
  if on_progress is not None and not callable(on_progress):raise ValueError('invalid progress callback')
@@ -32,7 +32,7 @@ def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=
    return False
  if prepared_receiver is not None:
   from early_navigation import EarlyNavigation
-  if type(prepared_receiver) is not EarlyNavigation or system_key_emit is not None or screen_control is not None:
+  if type(prepared_receiver) is not EarlyNavigation or system_key_emit is not None or screen_control is not None or system_key_ready is not None:
    raise ValueError('invalid prepared receiver')
   receiver=prepared_receiver.adopt(session,live=live,outputs=outputs,fd=fd)
   stats['earlyInput']=dict(prepared_receiver.stats)
@@ -41,9 +41,12 @@ def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=
   if system_key_emit is not None:
    if not callable(system_key_emit):raise ValueError('system key emitter invalid')
    from combined_controls import CombinedControls
-   receiver=CombinedControls(receiver,system_key_emit,screen_control=screen_control)
+   receiver=CombinedControls(receiver,system_key_emit,screen_control=screen_control,emit_ready=system_key_ready)
   receiver.start()
+ monitor=None
  try:
+  from cursor_visibility_probe import start as start_cursor_monitor
+  monitor=start_cursor_monitor()
   if on_ready is not None and on_ready() is not True:raise RuntimeError('ready marker unconfirmed')
   def should_abort():
    nonlocal end_reason
@@ -71,12 +74,15 @@ def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=
   if end_reason is None:end_reason='receive-exception'
   raise
  finally:
-  refresh=getattr(session,'battery_refresh',None)
-  if refresh is not None:refresh.close()
-  try:receiver.stop('receive-ended')
+  try:
+   if monitor is not None:monitor.close()
+   refresh=getattr(session,'battery_refresh',None)
+   if refresh is not None:refresh.close()
   finally:
-   # Retain the first failure before session.stop() changes the guard/view.
-   capture(stats,receiver.summary(),end_reason or 'duration-ended',control_failure)
+   try:receiver.stop('receive-ended')
+   finally:
+    # Retain the first failure before session.stop() changes the guard/view.
+    capture(stats,receiver.summary(),end_reason or 'duration-ended',control_failure)
  if outputs.verify_released() is not True:raise RuntimeError('output-release-unverified')
  clean_stop=duration is None and end_reason=='stop-requested' and live()
  if type(stats) is not dict or (stats.get('aborted') is not False and not clean_stop) or type(stats.get('bytesReceived')) is not int or (stats['bytesReceived']<=0 and not clean_stop):raise RuntimeError('receive-unconfirmed')

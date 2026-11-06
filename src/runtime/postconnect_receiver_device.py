@@ -9,6 +9,7 @@ from pathlib import Path
 import tv_bluetooth
 from hid_input import scan_devices,identity
 from hid_orphan import unregistered
+from hid_nodes import indexes,valid_index,MAX_NODES
 
 def paired_target(invoke=subprocess.Popen):
  reply=tv_bluetooth._call('device/getStatus',{'subscribe':False},invoke)
@@ -70,7 +71,7 @@ def _open_target_once(*,inventory=scan_devices,lstat=os.lstat,open_fn=os.open,fs
   # the complete inventory and prove their absence again before and after
   # opening the exact remote. An unknown or registering node keeps the delay.
   ids=first.get('targetCandidateIndexes')
-  fast=(type(ids) is list and len(ids)==1 and type(ids[0]) is int and 0<=ids[0]<32
+  fast=(type(ids) is list and len(ids)==1 and valid_index(ids[0])
         and all(type(x) is int for row in a for x in row)
         and all(orphan_check(index=i,major=ma,minor=mi) is True for i,ma,mi in a))
   if not fast:wait(.2)
@@ -87,7 +88,7 @@ def _open_target_once(*,inventory=scan_devices,lstat=os.lstat,open_fn=os.open,fs
  if type(ids) is not list:raise RuntimeError('target inventory invalid')
  if len(ids)==0:raise RuntimeError('target not present')
  if len(ids)!=1:raise RuntimeError('target ambiguous')
- if type(ids[0]) is not int or not 0<=ids[0]<32:raise RuntimeError('target inventory invalid')
+ if not valid_index(ids[0]):raise RuntimeError('target inventory invalid')
  path='/dev/hidraw'+str(ids[0]);before=lstat(path)
  if not stat.S_ISCHR(before.st_mode) or stat.S_ISLNK(before.st_mode):raise RuntimeError('target node invalid')
  fd=open_fn(path,os.O_RDONLY|os.O_NONBLOCK|os.O_NOFOLLOW|os.O_CLOEXEC)
@@ -105,7 +106,9 @@ def _open_target_once(*,inventory=scan_devices,lstat=os.lstat,open_fn=os.open,fs
 
 def _kernel_hid_nodes(root=Path('/sys/class/hidraw')):
  nodes=[]
- for index in range(32):
+ try:ids=indexes(root)
+ except OSError:return []
+ for index in ids:
   path=root/('hidraw'+str(index))
   try:
    major,minor=path.joinpath('dev').read_text().strip().split(':')
@@ -118,7 +121,7 @@ def _inventory_evidence(inv):
  # Whitelist numeric device IDs and error categories. Never copy HID names,
  # serial numbers, Bluetooth addresses or input reports into the log.
  result={'complete':inv.get('inventoryComplete') is True,'nodes':[]}
- for node in inv.get('nodes',[])[:32]:
+ for node in inv.get('nodes',[])[:MAX_NODES]:
   if type(node) is not dict:continue
   item={key:node[key] for key in ('index','rdevMajor','rdevMinor') if type(node.get(key)) is int}
   ident=node.get('targetIdentity')
@@ -135,7 +138,7 @@ def _report_inventory(inv,scans,outcome):
   print(json.dumps(value),flush=True)
  except Exception:pass
 
-def open_target(*,inventory=scan_devices,allow_retry=None,wait=time.sleep,clock=time.monotonic,report=_report_inventory,**kwargs):
+def open_target(*,inventory=scan_devices,allow_retry=None,wait=time.sleep,clock=time.monotonic,report=_report_inventory,wait_for_target=True,**kwargs):
  """Allow asynchronous HID registration after an acknowledged input start.
 
  Re-scan only a complete inventory with no matching device. Every attempt
@@ -143,6 +146,7 @@ def open_target(*,inventory=scan_devices,allow_retry=None,wait=time.sleep,clock=
  This does not resend input-start or keep a descriptor from a failed attempt.
  """
  if allow_retry is not None and not callable(allow_retry):raise ValueError('invalid retry guard')
+ if type(wait_for_target) is not bool:raise ValueError('invalid target wait policy')
  deadline=None;previous=None;last={};scans=0;outcome='failed'
  def scan(*,timeout):
   nonlocal last,scans
@@ -155,7 +159,7 @@ def open_target(*,inventory=scan_devices,allow_retry=None,wait=time.sleep,clock=
     fd=_open_target_once(inventory=scan,allow_retry=allow_retry,wait=wait,**kwargs)
     outcome='opened';return fd
    except RuntimeError as exc:
-    if str(exc)!='target not present' or allow_retry is None or attempt==40:raise
+    if str(exc)!='target not present' or not wait_for_target or allow_retry is None or attempt==40:raise
     now=clock()
     if (type(now) not in (int,float) or not math.isfinite(now)
         or (previous is not None and now<previous) or allow_retry() is not True):raise

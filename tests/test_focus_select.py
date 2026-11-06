@@ -30,9 +30,9 @@ class Tests(unittest.TestCase):
  def test_pointer_release_stays_on_original_device_after_mode_change(self):
   self.make();self.press(True);self.r.router.navigation.select_navigation(0.);self.press(False)
   self.assertEqual(self.keys(),[(2,BTN_LEFT,1),(2,BTN_LEFT,0)])
- def test_stop_cancels_pending_focused_center(self):
+ def test_stop_releases_focused_center(self):
   self.make();self.r.router.navigation.select_navigation(0.);self.press(True);self.r.stop()
-  self.assertEqual(self.keys(),[]);self.assertTrue(self.out.verify_released())
+  self.assertEqual(self.keys(),[(1,KEY_ENTER,1),(1,KEY_ENTER,0)]);self.assertTrue(self.out.verify_released())
  def test_partial_enter_down_attempts_release_and_fails_closed(self):
   self.make();original=self.out.write_fn;calls=[]
   def partial(fd,packet):
@@ -55,43 +55,43 @@ class Tests(unittest.TestCase):
    self.assertEqual(self.keys(),[])
 
 
- def test_surface_is_silent_until_physical_release(self):
+ def test_surface_sends_down_immediately_and_up_on_physical_release(self):
   for focus in (False,True):
    self.make()
    if focus:self.r.router.navigation.select_navigation(0.)
    self.press(True);self.now=1.;self.r.tick()
-   self.assertEqual(self.keys(),[])
-   self.press(False);self.press(False)
    code=KEY_ENTER if focus else BTN_LEFT;fd=1 if focus else 2
+   self.assertEqual(self.keys(),[(fd,code,1)])
+   self.press(False);self.press(False)
    self.assertEqual(self.keys(),[(fd,code,1),(fd,code,0)])
  def test_long_hold_waits_for_release_without_timeout_click(self):
   self.make();self.press(True);self.now=5.;self.r.tick()
-  self.assertEqual(self.keys(),[])
+  self.assertEqual(self.keys(),[(2,BTN_LEFT,1)])
   self.press(False)
   self.assertEqual(self.keys(),[(2,BTN_LEFT,1),(2,BTN_LEFT,0)])
- def test_another_button_cancels_pending_click(self):
+ def test_another_button_releases_held_click(self):
   self.make();self.press(True);self.r.router.press.feed(1,b'\0\x01');self.press(False)
-  self.assertEqual(self.keys(),[])
-  self.now=.3;self.press(True);self.press(False)
   self.assertEqual(self.keys(),[(2,BTN_LEFT,1),(2,BTN_LEFT,0)])
- def test_forced_release_stays_cancelled_while_queued_behind_motion(self):
+  self.now=.3;self.press(True);self.press(False)
+  self.assertEqual(self.keys(),[(2,BTN_LEFT,1),(2,BTN_LEFT,0)]*2)
+ def test_forced_release_is_delivered_after_queued_down(self):
   self.make();self.r.transport.motion(1,2,0)
   self.press(True);self.r.router.press.feed(1,b'\0\x01')
   self.now=.03;self.r.tick()
-  self.assertEqual(self.keys(),[])
+  self.assertEqual(self.keys(),[(2,BTN_LEFT,1),(2,BTN_LEFT,0)])
   self.assertIsNone(self.r.center_output)
   self.assertEqual(list(self.r.center_release_flags),[])
- def test_link_loss_cancels_without_click(self):
+ def test_link_loss_releases_held_button(self):
   self.make();self.press(True);self.r.router.press.unbind(1)
-  self.assertEqual(self.keys(),[])
+  self.assertEqual(self.keys(),[(2,BTN_LEFT,1),(2,BTN_LEFT,0)])
  def test_held_at_bind_and_duplicate_release_do_not_click(self):
   self.make();self.r.router.press.core.armed=False
   self.press(True);self.press(False);self.press(False)
   self.assertEqual(self.keys(),[])
- def test_deadline_cancels_pending_click(self):
+ def test_deadline_releases_held_button(self):
   self.make();self.press(True);self.now=31.
   with self.assertRaises(RuntimeError):self.r.tick()
-  self.assertEqual(self.keys(),[])
+  self.assertEqual(self.keys(),[(2,BTN_LEFT,1),(2,BTN_LEFT,0)])
  def test_failed_release_click_has_no_second_press_attempt(self):
   self.make();self.press(True);original=self.out.write_fn
   def partial(fd,packet):
@@ -101,5 +101,24 @@ class Tests(unittest.TestCase):
   with self.assertRaises((OSError,RuntimeError)):self.press(False)
   self.assertEqual(sum(value==1 for _,_,value in self.keys()),1)
   self.assertTrue(self.r.failed)
+
+class VisibilityRoutingTests(unittest.TestCase):
+ make=Tests.make
+ keys=Tests.keys
+ press=Tests.press
+ def test_hidden_cursor_clicks_focused_item_on_release(self):
+  self.make();self.out.cursor_visible=False
+  self.press(True);self.assertEqual(self.keys(),[(1,KEY_ENTER,1)])
+  self.out.cursor_visible=True;self.press(False)
+  self.assertEqual(self.keys(),[(1,KEY_ENTER,1),(1,KEY_ENTER,0)])
+ def test_visible_cursor_remains_pointer_when_visibility_changes_during_press(self):
+  self.make();self.out.cursor_visible=True;self.press(True)
+  self.out.cursor_visible=False;self.press(False)
+  self.assertEqual(self.keys(),[(2,BTN_LEFT,1),(2,BTN_LEFT,0)])
+ def test_unknown_visibility_preserves_existing_mode_without_creating_input(self):
+  self.make();self.out.cursor_visible=None;self.press(False)
+  self.assertEqual(self.keys(),[])
+  self.press(True);self.press(False)
+  self.assertEqual(self.keys(),[(2,BTN_LEFT,1),(2,BTN_LEFT,0)])
 
 if __name__=='__main__':unittest.main()

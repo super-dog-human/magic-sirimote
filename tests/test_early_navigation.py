@@ -131,7 +131,7 @@ class EntryIntegrationTests(unittest.TestCase):
    return BorrowedModeSession(SimpleNamespace(generation=7,close=lambda:None),read_mode=read_mode,read_stop_mode=lambda:mode[0],write_mode=write_mode,control_valid=lambda:True,record=lambda _:True)
   with patch('runtime_bundle.active',return_value=True),patch.object(entry.borrowed_runtime,'initialize_input',return_value=object()),patch.object(entry.borrowed_runtime,'prepare',side_effect=prepare):
    result=entry.run_connected_once(watch=watch,lease=lease,paired_check=lambda:True,external_feature_guard=lambda:True,record=lambda _:True,open_target=lambda:8,open_outputs=lambda:outputs,close_target=lambda _:None,duration=None,abort=lambda:stopped[0],clock=lambda:now[0],read_fn=read,sleep_fn=lambda _:None,on_ready=lambda _:active[0])
-  self.assertEqual(effects,[[(106,1),(106,0)]])
+  self.assertEqual(effects,[[(106,1),(106,0),(KEY_ENTER,1)]])
   keys=[(code,value) for _,events in device.writes for _,_,kind,code,value in events if kind==1]
   self.assertEqual(keys,[(106,1),(106,0),(KEY_ENTER,1),(KEY_ENTER,0)])
   self.assertEqual(result['status'],'complete',result)

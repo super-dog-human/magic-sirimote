@@ -16,7 +16,7 @@ class EarlyNavigation:
         self.pump()
 
     def __init__(self, outputs, fd, *, generation, guard, abort, clock,
-                 read_fn=None, system_key_emit=None, screen_control=None):
+                 read_fn=None, system_key_emit=None, screen_control=None, system_key_ready=None):
         if (type(fd) is not int or fd < 0 or type(generation) is not int or generation <= 0
                 or not all(callable(x) for x in (guard, abort, clock))):
             raise ValueError('initialized input and guarded descriptors required')
@@ -26,7 +26,7 @@ class EarlyNavigation:
         self.stats={'reads':0,'reports':0,'bytes':0,'motionEnabled':False}
         self.rolling=RollingReceiver(outputs,continuity=self.valid,mode_verified=lambda:False,
                                      navigation_verified=self.valid,clock=clock,seconds=300)
-        self.receiver=(CombinedControls(self.rolling,system_key_emit,screen_control=screen_control)
+        self.receiver=(CombinedControls(self.rolling,system_key_emit,screen_control=screen_control,emit_ready=system_key_ready)
                        if system_key_emit is not None else self.rolling)
 
     def valid(self):

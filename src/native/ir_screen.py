@@ -36,7 +36,7 @@ class InfraredScreen:
         self.draft = ''
         self.boxes = []
         self.message = 'Changes stay pending until ' + self.save_label + ' on the first screen.'
-        self.detail = 'Unconfigured cells default to Do nothing. Save and restart applies all displayed choices.'
+        self.detail = 'Unconfigured cells default to Do nothing. Only edited assignments are written when you save.'
         self.refresh_saved_tv()
 
     def refresh_saved_tv(self):

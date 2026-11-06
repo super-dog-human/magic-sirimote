@@ -77,6 +77,11 @@ class RollingReceiver:
         if self.closed or not self.paused:return
         if not self._live():raise RuntimeError('control-not-ready')
         self._new();self.paused=False;self.rotations+=1
+    def begin_wake_press(self):
+        if not self._advance() or self.paused:return False
+        # Reuse the normal click destination, budgets, release and cleanup.
+        self.receiver.router.pose._clear_tracking()
+        return self.receiver.router.press.begin_wake_press(self.generation)
     def feed_raw(self,generation,report):
         if type(generation) is not int or generation!=1:return False
         if not self._advance():return False
