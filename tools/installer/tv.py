@@ -106,6 +106,7 @@ def verify(expected):
 
 def dispatch(request):
     action=request['action']
+    if action=='removal-info':return {'appPresent': APP_DIR.exists() or SERVICE.exists()}
     if action=='probe':return probe()
     if action=='status':return status()
     if action=='maintenance':return maintenance(request['operation'],request['nonce'])

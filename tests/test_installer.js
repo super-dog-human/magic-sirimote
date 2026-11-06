@@ -4,7 +4,7 @@ const fs = require('node:fs'), os = require('node:os'), path = require('node:pat
 const {Installer, shellQuote, validPort, verifyFiles, jsonReply, run} = require('../tools/installer/main');
 const root = fs.mkdtempSync(path.join(os.tmpdir(),'sirimote-installer-test-'));
 fs.mkdirSync(path.join(root,'releases')); fs.mkdirSync(path.join(root,'tools/installer'),{recursive:true});
-fs.copyFileSync(path.join(__dirname,'../tools/installer/tv.py'),path.join(root,'tools/installer/tv.py'));
+for (const name of ['tv.py','guard_remove.py']) fs.copyFileSync(path.join(__dirname,'../tools/installer',name),path.join(root,'tools/installer',name));
 const data = 'package bytes', sha = crypto.createHash('sha256').update(data).digest('hex');
 const packagePath = path.join(root,'releases/org.magicsirimote.app_arm.ipk');
 fs.writeFileSync(packagePath,data);
@@ -13,7 +13,7 @@ fs.writeFileSync(path.join(root,'releases/manifest.json'),JSON.stringify({packag
 fs.cpSync(path.join(__dirname,'../tools/hid-guard'),path.join(root,'tools/hid-guard'),{recursive:true});
 const cases=[];
 function test(name,body) { cases.push([name,body]); }
-function fixture({answers=['192.168.1.20','9922','n'], devices=[], appPresent=false, missing=[], fail, state, verification} = {}) {
+function fixture({answers=['192.168.1.20','9922','n'], devices=[], appPresent=false, missing=[], fail, state, verification, guardState='absent', guardError} = {}) {
   const calls=[],logs=[]; const pending=[...answers];
   const instance=new Installer({root,find:tool=>tool,log:message=>logs.push(message),wait:async()=>{},
     prompt:async (question,fallback)=>{assert.ok(pending.length,'Unexpected prompt: '+question);const value=pending.shift();return value === '' ? fallback || '' : value;},
@@ -22,9 +22,13 @@ function fixture({answers=['192.168.1.20','9922','n'], devices=[], appPresent=fa
       const failure=fail?.(program,args,options,calls); if(failure) return failure;
       let output='';
       if(program==='ares-setup-device' && args.includes('--listfull')) output=JSON.stringify(devices);
+      if(program==='ares-install' && args.includes('--list')) output=appPresent?'org.magicsirimote.app\n':'';
+      if(program==='ares-install' && args.includes('--remove')) appPresent=false;
+      if(program==='ssh' && options.input && typeof options.input==='string') output=JSON.stringify(guardError?{error:guardError}:{state:options.input.includes('dispatch("remove")') && guardState==='installed'?'removed':guardState});
       if(program==='ares-novacom' && args.includes('--run')) {
         const code=args.at(-1);
         if(code.includes('"action\\":\\"probe')) output=JSON.stringify({missing,appPresent});
+        else if(code.includes('"action\\":\\"removal-info')) output=JSON.stringify({appPresent});
         else if(code.includes('"action\\":\\"verify')) output=JSON.stringify(verification || {verifiedFiles:1,mismatch:[]});
         else if(code.includes('"action\\":\\"status')) output=JSON.stringify(state || {returnValue:true,cleanStop:true,startup:{enabled:false},processes:{controller:[],receiver:[],native:[],legacy:[]}});
         else output=JSON.stringify({staged:true});
@@ -122,8 +126,53 @@ test('uninstall cancellation preserves app',async()=>{
   const f=fixture(); await f.instance.run('2'); assert.ok(!f.calls.some(c=>c.program==='ares-install'));
 });
 test('uninstall removes package only after stop',async()=>{
-  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','y','','n']}); await f.instance.run('2');
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','y','y','22','','']}); await f.instance.run('2');
   assert.ok(f.calls.some(c=>c.program==='ares-install' && c.args.includes('--remove')));
+});
+test('combined uninstall automatically removes an installed fix before the app',async()=>{
+  const f=fixture({appPresent:true,guardState:'installed',answers:['192.168.1.20','9922','y','y','22','','']});
+  await f.instance.run('2');
+  const remove=f.calls.findIndex(c=>typeof c.options.input==='string' && c.options.input.includes('dispatch("remove")'));
+  const app=f.calls.findIndex(c=>c.program==='ares-install' && c.args.includes('--remove'));
+  assert.ok(remove>=0 && app>remove); assert.ok(f.logs.some(s=>s.includes('Uninstall complete')));
+});
+test('absent fix needs no service restart',async()=>{
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','y','y','22','','']});
+  await f.instance.run('2');
+  assert.ok(!f.calls.some(c=>typeof c.options.input==='string' && c.options.input.includes('dispatch("remove")')));
+});
+test('fix is removed even when the app was already deleted',async()=>{
+  const f=fixture({guardState:'installed',answers:['192.168.1.20','9922','y','y','22','']});
+  await f.instance.run('2'); assert.ok(!f.calls.some(c=>c.program==='ares-launch'));
+  assert.ok(f.calls.some(c=>typeof c.options.input==='string' && c.options.input.includes('dispatch("remove")')));
+});
+test('missing root does not silently leave a fix behind',async()=>{
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','y','n','n']});
+  await assert.rejects(f.instance.run('2'),/Uninstall cancelled/);
+  assert.ok(!f.calls.some(c=>['ares-launch','ares-install'].includes(c.program)));
+});
+test('explicit app-only removal reports incomplete cleanup',async()=>{
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','y','n','y','']});
+  await assert.rejects(f.instance.run('2'),/App removed.*INCOMPLETE/);
+  assert.ok(f.calls.some(c=>c.args.includes('--remove')));
+  assert.ok(!f.logs.some(s=>s.includes('Uninstall complete')));
+});
+test('incomplete fix inspection fails before stopping or deleting app',async()=>{
+  const f=fixture({appPresent:true,guardError:'Incomplete fix',answers:['192.168.1.20','9922','y','y','22','','n']});
+  await assert.rejects(f.instance.run('2'),/Incomplete fix/);
+  assert.ok(!f.calls.some(c=>c.program==='ares-launch' || c.args.includes('--remove')));
+});
+test('fix removal failure preserves the app package',async()=>{
+  const f=fixture({appPresent:true,guardState:'installed',answers:['192.168.1.20','9922','y','y','22','',''],
+    fail:(p,a,o)=>typeof o.input==='string' && o.input.includes('dispatch("remove")')?{ok:true,output:'{"error":"restart failed"}'}:null});
+  await assert.rejects(f.instance.run('2'),/restart failed/);
+  assert.ok(!f.calls.some(c=>c.args.includes('--remove')));
+});
+test('app removal is not complete until registration disappears',async()=>{
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','y','y','22','',''],
+    fail:(p,a)=>p==='ares-install' && a.includes('--list')?{ok:true,output:'org.magicsirimote.app\n'}:null});
+  await assert.rejects(f.instance.run('2'),/not yet confirmed/);
+  assert.ok(!f.logs.some(s=>s.includes('Uninstall complete')));
 });
 test('remove fix only does not touch app',async()=>{
   const f=fixture({answers:['192.168.1.20','9922','22','']}); await f.instance.run('3');

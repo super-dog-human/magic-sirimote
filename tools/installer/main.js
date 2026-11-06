@@ -175,11 +175,12 @@ class Installer {
     return args;
   }
   async tvFix(action) {
-    const args = await this.rootAccess();
     if (action === 'remove') {
-      this.execute(this.find('ssh'), [...args, 'if [ -f /var/lib/magic-sirimote-hid-guard/rollback.py ]; then /usr/bin/python3 -I -B /var/lib/magic-sirimote-hid-guard/rollback.py; else printf "%s\\n" "No TV-side fix is installed."; fi'], {interactive:true, timeout:120000});
-      return;
+      const result = await this.guard('remove');
+      if (result.state === 'installed') throw Error('TV-side fix is still installed.');
+      return result;
     }
+    const args = await this.rootAccess();
     const directory = path.join(this.root, 'tools/hid-guard');
     verifyFiles(directory);
     const files = fs.readFileSync(path.join(directory,'SHA256SUMS'),'utf8').trim().split('\n').map(line => line.slice(66));
@@ -187,6 +188,54 @@ class Installer {
     const command = 'set -eu; umask 077; d=$(mktemp -d /tmp/sirimote-guard.XXXXXX); trap \'rm -rf "$d"\' EXIT; tar -xzf - -C "$d"; /usr/bin/python3 -I -B "$d/install.py" --check; /usr/bin/python3 -I -B "$d/install.py" --apply';
     // Authentication was checked interactively; fail instead of hiding another password prompt behind the pipe.
     this.execute(this.find('ssh'), ['-o','BatchMode=yes',...args,command], {input:packed, timeout:120000});
+  }
+  async guard(action) {
+    const args = await this.rootAccess();
+    const source = fs.readFileSync(path.join(this.root,'tools/installer/guard_remove.py'),'utf8') +
+      '\ntry:\n print(json.dumps(dispatch('+JSON.stringify(action)+')))'+
+      '\nexcept Exception as error:\n print(json.dumps({"error":str(error)+" "+(getattr(error,"stderr","") or "")[-600:]}))\n';
+    const result = this.execute(this.find('ssh'), ['-o','BatchMode=yes',...args,'/usr/bin/python3 -I -B -'], {input:source,timeout:65000});
+    const reply = jsonReply(result.output);
+    if (reply.error) throw Error(reply.error);
+    if (!['absent','installed','removed'].includes(reply.state)) throw Error('Could not verify the TV-side fix state.');
+    return reply;
+  }
+  appRegistered() {
+    const listing = this.cli('ares-install',['--device',this.device,'--list']).output;
+    return String(listing).split(/\r?\n/).some(line => line.trim().split(/\s/)[0] === APP);
+  }
+  async uninstall() {
+    this.log('This removes Magic Sirimote and its TV-side input-device fix if installed. Remote pairing and IR assignments are kept; use Reset app first to erase them.');
+    if (!await this.yes('Remove the app and its TV-side fix from this TV?')) return;
+    this.log('Developer Mode may hide TV-side system files. Root SSH is needed to check and remove the fix reliably.');
+    let guard;
+    try {
+      if (!await this.yes('Use an existing root SSH connection to check the TV-side fix?', 'y')) throw Error('TV-side fix was not checked.');
+      guard = await this.guard('inspect');
+    } catch (error) {
+      this.log('TV-side cleanup could not be prepared: '+error.message);
+      if (!await this.yes('Remove only the app and leave TV-side cleanup incomplete?')) throw Error('Uninstall cancelled; the app was not removed. '+error.message);
+    }
+    const info = this.remote({action:'removal-info'});
+    const present = info.appPresent || this.appRegistered();
+    if (info.appPresent) await this.stopInstalledApp();
+    if (guard?.state === 'installed') {
+      this.log('TV-side fix found. Removing it and restoring the input service...');
+      let removed;
+      try { removed = await this.guard('remove'); }
+      catch (error) { throw Error('TV-side cleanup failed; the app has not been removed. '+error.message); }
+      if (!['removed','absent'].includes(removed.state)) throw Error('TV-side fix remains installed. The app was not removed.');
+    } else if (guard) this.log('No TV-side fix is installed.');
+    if (present) this.cli('ares-install',['--device',this.device,'--remove',APP],{interactive:true,timeout:120000});
+    for (let attempt=0; attempt<15; attempt++) {
+      if (!this.appRegistered() && !this.remote({action:'removal-info'}).appPresent) {
+        if (!guard) throw Error('App removed. TV-side cleanup is INCOMPLETE: its presence could not be verified. Run sh uninstall.sh again when root SSH is available.');
+        this.log('Uninstall complete: app removed; TV-side fix removed or confirmed absent. The TV was not rebooted.');
+        return;
+      }
+      await this.wait(1000);
+    }
+    throw Error('App removal is not yet confirmed. Wait for the TV to finish, then run sh uninstall.sh again.');
   }
   cleanup() {
     try {
@@ -199,24 +248,16 @@ class Installer {
     try { return await this.steps(mode); } finally { this.cleanup(); }
   }
   async steps(mode) {
-    this.log('Magic Sirimote installer\n');
+    this.log(mode === '2' ? 'Magic Sirimote uninstaller\n' : 'Magic Sirimote installer\n');
     await this.prerequisites();
-    mode = mode || await this.prompt('1: Install/update app   2: Remove app   3: Remove TV-side fix only', '1');
+    mode = mode || await this.prompt('1: Install/update app   2: Remove app and TV-side fix   3: Remove TV-side fix only', '1');
     if (!['1','2','3','check'].includes(mode)) throw Error('Choose 1, 2, or 3.');
     await this.connect();
     if (mode === '3') { await this.tvFix('remove'); this.log('TV-side cleanup complete. The TV was not rebooted.'); return; }
+    if (mode === '2') return this.uninstall();
     const info = this.remote({action:'probe'});
     if (['1','check'].includes(mode) && info.missing?.length) throw Error('The TV is missing capabilities needed by this package:\n- '+info.missing.join('\n- ')+'\nNo model or firmware allowlist is used.');
     if (mode === 'check') { this.log('Required runtime libraries and architecture are available. No app or TV-side fix was changed.'); return; }
-    if (mode === '2') {
-      this.log('Removing the app keeps its TV pairing and remote IR assignments. Use Reset app on the TV first if you also want to erase those.');
-      if (!await this.yes('Remove Magic Sirimote from this TV?')) return;
-      if (info.appPresent) await this.stopInstalledApp();
-      if (await this.yes('Remove the optional TV-side fix using root SSH too?')) await this.tvFix('remove');
-      if (info.appPresent) this.cli('ares-install', ['--device',this.device,'--remove',APP], {interactive:true,timeout:120000});
-      this.log('App removal complete. If you skipped TV-side cleanup, an installed TV-side fix remains active.');
-      return;
-    }
     verifyFiles(path.join(this.root,'releases'));
     const manifest = JSON.parse(fs.readFileSync(path.join(this.root,'releases/manifest.json'),'utf8'));
     if (checksum(path.join(this.root,'releases/org.magicsirimote.app_arm.ipk')) !== manifest.package.packageSha256) throw Error('The package and manifest do not match. Download again.');
@@ -241,9 +282,9 @@ class Installer {
 }
 if (require.main === module) {
   const args = process.argv.slice(2);
-  if (args.includes('--help')) { console.log('Usage: sh install.sh [--check]\nRun without options to install/update or remove. --check checks the connection and TV runtime only.'); }
-  else if (args.some(arg => arg !== '--check')) { console.error('Unknown option. Use sh install.sh --help.'); process.exitCode = 1; }
-  else if (!process.stdin.isTTY) { console.error('Run this interactive installer in Terminal: sh install.sh'); process.exitCode = 1; }
-  else new Installer().run(args.includes('--check') ? 'check' : undefined).catch(error => { console.error('\n'+error.message); process.exitCode = 1; });
+  if (args.includes('--help')) { console.log(args.includes('--uninstall') ? 'Usage: sh uninstall.sh\nInteractively remove the app and its TV-side fix if installed.' : 'Usage: sh install.sh [--check | --uninstall]\nRun without options to install/update or remove. --check checks the connection and TV runtime only.'); }
+  else if (args.some(arg => !['--check','--uninstall'].includes(arg)) || (args.includes('--check') && args.includes('--uninstall'))) { console.error('Unknown option. Use sh install.sh --help.'); process.exitCode = 1; }
+  else if (!process.stdin.isTTY) { console.error('Run this interactive tool in Terminal: sh '+(args.includes('--uninstall')?'uninstall.sh':'install.sh')); process.exitCode = 1; }
+  else new Installer().run(args.includes('--uninstall') ? '2' : args.includes('--check') ? 'check' : undefined).catch(error => { console.error('\n'+error.message); process.exitCode = 1; });
 }
 module.exports = {Installer, executable, shellQuote, jsonReply, validPort, verifyFiles, run};

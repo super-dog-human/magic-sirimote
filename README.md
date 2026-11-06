@@ -74,7 +74,7 @@ During installation, you can also apply the **TV-side input-device fix**. This p
 
 The fix changes LG's handling of A1513/A1962 outside this app as well; other remote models pass through. Applying or removing it briefly restarts the input service, **not the TV**. It checks the service's interfaces and storage rather than requiring a particular TV model or firmware. Without the fix, the repeated-reconnection problem may recur. See [Reset or uninstall](#reset-or-uninstall) to remove it.
 
-When installation finishes, Magic Sirimote opens on the TV. The installer does not reboot the TV. You can run the same `sh install.sh` again to update or uninstall.
+When installation finishes, Magic Sirimote opens on the TV. The installer does not reboot the TV. Run `sh install.sh` again to update, or use [uninstall.sh](#reset-or-uninstall) to remove the app and TV-side fix.
 
 ### 4. Pair Siri Remote with the TV
 
@@ -259,13 +259,18 @@ To start over:
 
 </details>
 
-To uninstall Magic Sirimote:
+To uninstall Magic Sirimote and its TV-side fix, run this on the Mac:
 
-1. If you also want to remove its remote pairing and infrared assignments, complete **Reset app** first.
-2. Run `sh install.sh` on the Mac and choose **Remove app**. It also offers to remove the TV-side fix using your root SSH connection.
+```sh
+curl --fail --location --output uninstall.sh https://raw.githubusercontent.com/super-dog-human/magic-sirimote/main/uninstall.sh && sh uninstall.sh
+```
 
-You can instead delete Magic Sirimote using **Edit App List → Delete** on the TV's Home screen. Wait for deletion to finish before reinstalling.
+Use the same [Mac tools](#1-install-the-mac-tools) as for installation. Enter the TV's IP address and confirm removal. The uninstaller checks for the TV-side fix and removes it automatically if present, then removes the app and verifies the result. It also works if you already deleted the app from the Home screen.
 
-**Deleting or resetting the app does not remove the TV-side fix:** the app's uninstall process cannot perform its root cleanup. To remove it separately, run `sh install.sh` and choose **Remove TV-side fix only**, even if you already deleted the app. Only the input service is restarted; the TV is not rebooted.
+**Checking and removing the TV-side fix requires an existing root SSH connection.** Developer Mode can hide its system files, so the uninstaller asks for the root SSH port and optional key file. Without root, you can explicitly choose app-only removal; it reports TV-side cleanup as **incomplete**, not successful. If the fix's files have changed or cleanup fails, it stops and explains what remains.
+
+If you also want to erase the remote's pairing and infrared assignments, complete **Reset app** before uninstalling. Uninstalling alone preserves those assignments.
+
+You can still delete just the app using **Edit App List → Delete** on the TV's Home screen. This does not remove the TV-side fix; run `sh uninstall.sh` afterwards to clean it up. Removing the fix briefly restarts only the input service, not the TV.
 
 Uninstalling the app alone should not be treated as unpairing the remote or deleting its stored IR settings. Reset clears the active configuration but may retain inactive local recovery records; it is not secure erasure of diagnostic history.
