@@ -10,7 +10,7 @@ This is an experimental community project with limited hardware testing. Reconne
 
 - [Compatibility and requirements](#compatibility-and-requirements)
 - [Set up from a Mac](#set-up-from-a-mac)
-- [Troubleshooting](docs/troubleshooting.md)
+- [Troubleshooting](#troubleshooting)
 - [Reset or uninstall](#reset-or-uninstall)
 
 ## Compatibility and requirements
@@ -165,6 +165,10 @@ If saving fails partway through, some assignments may already have changed. Read
 ![Discarding unsaved changes](assets/screenshots/discard.png)
 
 </details>
+
+## Troubleshooting
+
+[Troubleshooting guide](docs/troubleshooting.md)
 
 ## Reset or uninstall
 
