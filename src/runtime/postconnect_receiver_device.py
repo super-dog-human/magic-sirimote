@@ -4,12 +4,11 @@ Uses existing bounded inventory and identity checks. No calls are made on
 import. This does not initiate a connection or send an input/sensor command.
 """
 from runtime_device import registered_name_matches
-import json,math,os,stat,subprocess,time
-from pathlib import Path
+import math,os,stat,subprocess,time
 import tv_bluetooth
 from hid_input import scan_devices,identity
 from hid_orphan import unregistered
-from hid_nodes import indexes,valid_index,MAX_NODES
+from hid_nodes import valid_index
 
 def paired_target(invoke=subprocess.Popen):
  reply=tv_bluetooth._call('device/getStatus',{'subscribe':False},invoke)
@@ -104,41 +103,7 @@ def _open_target_once(*,inventory=scan_devices,lstat=os.lstat,open_fn=os.open,fs
  except BaseException:
   close_fn(fd);raise
 
-def _kernel_hid_nodes(root=Path('/sys/class/hidraw')):
- nodes=[]
- try:ids=indexes(root)
- except OSError:return []
- for index in ids:
-  path=root/('hidraw'+str(index))
-  try:
-   major,minor=path.joinpath('dev').read_text().strip().split(':')
-   nodes.append({'index':index,'major':int(major),'minor':int(minor)})
-  except FileNotFoundError:pass
-  except (OSError,ValueError):nodes.append({'index':index,'unreadable':True})
- return nodes
-
-def _inventory_evidence(inv):
- # Whitelist numeric device IDs and error categories. Never copy HID names,
- # serial numbers, Bluetooth addresses or input reports into the log.
- result={'complete':inv.get('inventoryComplete') is True,'nodes':[]}
- for node in inv.get('nodes',[])[:MAX_NODES]:
-  if type(node) is not dict:continue
-  item={key:node[key] for key in ('index','rdevMajor','rdevMinor') if type(node.get(key)) is int}
-  ident=node.get('targetIdentity')
-  item['matches']=type(ident) is dict and ident.get('matches') is True
-  error=node.get('inspectionErrno')
-  if error in ('ENODEV','ENOENT','EACCES','EPERM','EIO'):item['error']=error
-  result['nodes'].append(item)
- return result
-
-def _report_inventory(inv,scans,outcome):
- try:
-  value={'stage':'receiver-hid-visibility','pid':os.getpid(),'uptime':round(time.monotonic(),3),
-         'scans':scans,'outcome':outcome,'visible':_inventory_evidence(inv),'registered':_kernel_hid_nodes()}
-  print(json.dumps(value),flush=True)
- except Exception:pass
-
-def open_target(*,inventory=scan_devices,allow_retry=None,wait=time.sleep,clock=time.monotonic,report=_report_inventory,wait_for_target=True,**kwargs):
+def open_target(*,inventory=scan_devices,allow_retry=None,wait=time.sleep,clock=time.monotonic,wait_for_target=True,**kwargs):
  """Allow asynchronous HID registration after an acknowledged input start.
 
  Re-scan only a complete inventory with no matching device. Every attempt
@@ -147,29 +112,21 @@ def open_target(*,inventory=scan_devices,allow_retry=None,wait=time.sleep,clock=
  """
  if allow_retry is not None and not callable(allow_retry):raise ValueError('invalid retry guard')
  if type(wait_for_target) is not bool:raise ValueError('invalid target wait policy')
- deadline=None;previous=None;last={};scans=0;outcome='failed'
+ deadline=None;previous=None
  def scan(*,timeout):
-  nonlocal last,scans
   if deadline is not None:timeout=min(timeout,max(.01,deadline-clock()))
-  last=inventory(timeout=timeout);scans+=1
-  return last
- try:
-  for attempt in range(41):
-   try:
-    fd=_open_target_once(inventory=scan,allow_retry=allow_retry,wait=wait,**kwargs)
-    outcome='opened';return fd
-   except RuntimeError as exc:
-    if str(exc)!='target not present' or not wait_for_target or allow_retry is None or attempt==40:raise
-    now=clock()
-    if (type(now) not in (int,float) or not math.isfinite(now)
-        or (previous is not None and now<previous) or allow_retry() is not True):raise
-    if deadline is None:deadline=now+2
-    if now>=deadline:raise
-    previous=now;wait(min(.05,deadline-now));after=clock()
-    if (type(after) not in (int,float) or not math.isfinite(after)
-        or after<previous or after>=deadline or allow_retry() is not True):raise
-    previous=after
- finally:
-  if callable(report) and type(last) is dict:
-   try:report(last,scans,outcome)
-   except Exception:pass
+  return inventory(timeout=timeout)
+ for attempt in range(41):
+  try:
+   return _open_target_once(inventory=scan,allow_retry=allow_retry,wait=wait,**kwargs)
+  except RuntimeError as exc:
+   if str(exc)!='target not present' or not wait_for_target or allow_retry is None or attempt==40:raise
+   now=clock()
+   if (type(now) not in (int,float) or not math.isfinite(now)
+       or (previous is not None and now<previous) or allow_retry() is not True):raise
+   if deadline is None:deadline=now+2
+   if now>=deadline:raise
+   previous=now;wait(min(.05,deadline-now));after=clock()
+   if (type(after) not in (int,float) or not math.isfinite(after)
+       or after<previous or after>=deadline or allow_retry() is not True):raise
+   previous=after

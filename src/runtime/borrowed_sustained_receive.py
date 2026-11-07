@@ -3,7 +3,7 @@
 The caller supplies an exact verified target fd/output and is responsible
 for sensor stop and all device closes. No device is opened on import.
 """
-import math
+import errno,math,os
 from borrowed_mode_session import BorrowedModeSession
 from rolling_receiver import RollingReceiver
 from hid_input import receive_actions
@@ -43,6 +43,16 @@ def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=
    from combined_controls import CombinedControls
    receiver=CombinedControls(receiver,system_key_emit,screen_control=screen_control,emit_ready=system_key_ready)
   receiver.start()
+ # The bundled startup path adopts an already-running navigation pipeline.
+ # Install the same recovery on both that path and the ordinary receive path.
+ screen=getattr(receiver,'screen',None)
+ recovery=None
+ if screen is not None and callable(getattr(screen,'resume_sequence',None)):
+  from screen_resume_mode import ScreenResumeMode
+  recovery=ScreenResumeMode(screen,session,live=live,abort=abort,clock=clock)
+  rolling=receiver.rolling
+  rolling.mode_verified=lambda:live() and recovery.ready
+  rolling.navigation_verified=live
  monitor=None
  try:
   from cursor_visibility_probe import start as start_cursor_monitor
@@ -61,6 +71,7 @@ def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=
    def tick(self):
     if should_abort():receiver.stop('receive-aborted')
     else:
+     if recovery is not None:recovery.tick(pump_resume)
      refresh=getattr(session,'battery_refresh',None)
      if refresh is not None:refresh.tick()
      receiver.tick()
@@ -69,6 +80,29 @@ def receive_sustained(session,outputs,fd,*,duration,abort,clock,segment_seconds=
     if should_abort():receiver.stop('receive-aborted');return False
     if type(gen) is not int or gen!=generation:return False
     return receiver.feed_raw(1,report)
+  def pump_resume():
+   # Mode requests must not starve the input queue or replay old motion when
+   # they finish. Continue navigation with motion gated until readback succeeds.
+   from receive_diagnostics import record_shape
+   if should_abort() or not live():raise RuntimeError('screen-resume-control-lost')
+   receiver.tick()
+   read=os.read if read_fn is None else read_fn
+   for _ in range(64):
+    if should_abort() or not live():raise RuntimeError('screen-resume-control-lost')
+    stats['readCalls']+=1
+    try:data=read(fd,4096)
+    except OSError as error:
+     if error.errno in (errno.EAGAIN,errno.EWOULDBLOCK) or isinstance(error,BlockingIOError):
+      stats['wouldBlockReads']+=1;break
+     if error.errno==errno.EINTR or isinstance(error,InterruptedError):
+      stats['interruptedReads']+=1;break
+     raise
+    if not data:stats['emptyReads']+=1;break
+    stats['nonemptyReads']+=1;stats['bytesReceived']+=len(data);record_shape(stats,data)
+    if should_abort() or not live():raise RuntimeError('screen-resume-control-lost')
+    receiver.feed_raw(1,data)
+   receiver.tick()
+  pump_resume.poll_interval=.005
   stats=receive_actions(fd,Guarded(),generation=generation,duration=duration,read_fn=read_fn,clock=clock,sleep_fn=sleep_fn,abort_fn=should_abort,stats=stats)
  except BaseException:
   if end_reason is None:end_reason='receive-exception'

@@ -59,8 +59,8 @@ class DeferredTests(unittest.TestCase):
   self.owner._managed_key_down.return_value=True;d.poll(self.owner)
   self.assertIsNone(self.owner.mouse_fd);self.verify.assert_not_called()
   self.owner._managed_key_down.return_value=False
-  with patch('deferred_mouse._report') as report:d.poll(self.owner);d.poll(self.owner)
-  self.assertEqual((self.owner.mouse_fd,self.owner.spare_key_fd),(12,11));report.assert_called_once()
+  d.poll(self.owner);d.poll(self.owner)
+  self.assertEqual((self.owner.mouse_fd,self.owner.spare_key_fd),(12,11));self.verify.assert_called_once()
   d.close();self.candidate.close.assert_not_called();self.assertTrue(self.candidate.closed)
   self.assertIsNone(self.candidate.mouse_fd)
  def test_cancellation_joins_scan_and_closes_late_candidate(self):
@@ -75,7 +75,7 @@ class DeferredTests(unittest.TestCase):
   d=self.make();dev=MemoryDevices()
   owner=VerifiedOutputs(1,None,allow_missing_mouse=True,ioctl_fn=dev.ioctl)
   owner.mouse_provider=d;d.start();d.thread.join(2)
-  with patch('deferred_mouse._report'):self.assertTrue(owner.pointer_ready)
+  self.assertTrue(owner.pointer_ready)
   closed=[];owner.close(close_fn=closed.append);owner.close(close_fn=closed.append)
   self.assertEqual(closed,[12,1,11]);self.candidate.close.assert_not_called()
  def test_guard_loss_cannot_adopt(self):

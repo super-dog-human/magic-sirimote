@@ -107,6 +107,9 @@ def receiver_settings():
 def main(role, *, started_at=None):
     began = time.monotonic() if started_at is None else started_at
     def timing(stage):
+        # The service reads these events for the controller's startup status.
+        if role != 'controller':
+            return
         print(json.dumps({'stage': 'runtime-startup-timing', 'role': role,
             'step': stage, 'pid': os.getpid(), 'epochMs': int(time.time() * 1000),
             'elapsedMs': round((time.monotonic() - began) * 1000)}, separators=(',', ':')), flush=True)

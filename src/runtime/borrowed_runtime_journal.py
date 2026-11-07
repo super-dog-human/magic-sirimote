@@ -11,6 +11,9 @@ from pathlib import Path
 MAX_ENTRIES=4096
 
 TRANSITIONS={None:{'f0af-intent','gatt-lookup-intent','prelaunch-input-intent'},'prelaunch-input-intent':{'prelaunch-input-ack'},'prelaunch-input-ack':{'gatt-lookup-intent'},'f0af-intent':{'f0af-ack','f0af-unknown'},'f0af-ack':{'gatt-lookup-intent'},'gatt-lookup-intent':{'gatt-lookup-unknown','borrowed-view-obtained'},'borrowed-view-obtained':{'sensor-enable-intent','notification-config-intent'},'notification-config-intent':{'notification-enabled'},'notification-enabled':{'sensor-enable-intent'},'sensor-enable-intent':{'sensor-enable-ack','sensor-stop-intent'},'sensor-enable-ack':{'sensor-stop-intent','session-recovered'},'sensor-stop-intent':{'sensor-zero-confirmed','session-recovered'},'session-recovered':{'f0af-intent'}}
+TRANSITIONS['sensor-enable-ack'].add('sensor-resume-intent')
+TRANSITIONS['sensor-resume-intent']={'sensor-resume-intent','sensor-resume-ack','sensor-stop-intent','session-recovered'}
+TRANSITIONS['sensor-resume-ack']={'sensor-resume-intent','sensor-stop-intent','session-recovered'}
 
 class BorrowedRuntimeJournal:
  def __init__(self,directory,run,*,state_uid=5999,group=5000):

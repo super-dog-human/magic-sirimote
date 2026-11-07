@@ -5,7 +5,6 @@ manager is listened to; set_cursor_visibility is deliberately not described.
 """
 import ctypes as C
 import errno
-import json
 import os
 import select
 import threading
@@ -122,7 +121,7 @@ def current_visibility():return _state.current()
 def observe(*,factory=VisibilityClient,clock=time.monotonic,emit=None,state=None,duration=180,max_events=64,stop_event=None):
     if (duration is None and stop_event is None) or (duration is not None and not 0<duration<=600):raise ValueError("observer lifetime required")
     if type(max_events) is not int or not 1<=max_events<=256:raise ValueError("bounded diagnostics required")
-    emit=emit or (lambda value:print(json.dumps({'stage':'cursor-visibility-probe',**value}),flush=True))
+    emit=emit or (lambda value:None)
     client=None;start=clock();last=None;rows=0
     try:
         client=factory();emit({'event':'connected','uptime':round(start,6)})

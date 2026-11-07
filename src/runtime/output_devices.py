@@ -1,5 +1,5 @@
 """Strict bounded discovery/open for the two existing input output sinks."""
-import copy,errno,fcntl,json,os,re,stat,time
+import copy,errno,fcntl,os,re,stat,time
 from output_sysfs import InventoryUnavailable
 from pathlib import Path
 from output_bridge import VerifiedOutputs
@@ -9,9 +9,6 @@ KEY_NAME='LGE RCU'
 MOUSE_NAME='ClickableMouse'
 MAX_EVENT_NODES=128
 KEY_BYTES=96
-def _report(value):
- try:print(json.dumps(value),flush=True)
- except OSError:pass
 
 class OutputCloseError(RuntimeError):
  pass
@@ -171,24 +168,18 @@ def open_verified_outputs(root='/dev/input',*,allow_retry=None,wait=time.sleep,
  for index in range(13):
   if allow_retry is not None and allow_retry() is not True:raise RuntimeError('output-startup-guard-lost')
   try:
-   result=attempt(root,clock=clock,timeout=min(timeout,max(.01,deadline-clock())) if allow_retry is not None else timeout,**kwargs)
-   _report({'stage':'output-discovery-ready','attempts':index+1,'elapsedMs':round((clock()-started)*1000),'inventorySource':result[2].get('inventorySource','unknown') if type(result) is tuple and len(result)==3 and type(result[2]) is dict else 'unknown'})
-   return result
+   return attempt(root,clock=clock,timeout=min(timeout,max(.01,deadline-clock())) if allow_retry is not None else timeout,**kwargs)
   except OutputCloseError:raise
   except (OSError,RuntimeError) as exc:
    now=clock()
    if allow_retry is None or index==12 or now<previous or now>=deadline or allow_retry() is not True:raise
-   report={'stage':'output-discovery-retry','attempt':index+1,'elapsedMs':round((now-started)*1000),'reason':failure_code(exc)}
-   if isinstance(exc,OutputInventoryIncomplete):report['inventory']=exc.details
-   _report(report)
    previous=now
    delay=min(1.,deadline-now)
    if (attempt_fn is None and isinstance(exc,OutputInventoryIncomplete)
        and exc.details['complete'] is True
        and exc.details['counts']=={KEY_NAME:1,MOUSE_NAME:0}):
     from output_sysfs import wait_for_mouse
-    if wait_for_mouse(delay,wait=wait,guard=allow_retry,clock=clock):
-     _report({'stage':'pointer-kernel-ready-hint','elapsedMs':round((clock()-started)*1000)})
+    wait_for_mouse(delay,wait=wait,guard=allow_retry,clock=clock)
    else:wait(delay)
    now=clock()
    if now<previous or now>=deadline or allow_retry() is not True:raise exc

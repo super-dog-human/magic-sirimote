@@ -61,6 +61,9 @@ class ScreenPowerWorker:
   self.factory=client_factory;self.clock=clock;self.interval=interval
   self.lock=threading.Lock();self.stop_event=threading.Event();self.wake=threading.Event();self.thread=None
   self.state=None;self.sampled=None;self.pending=False;self.requested=False
+  self.off_observed=False;self.resume_count=0
+ def resume_sequence(self):
+  with self.lock:return self.resume_count
  def blocked(self):
   with self.lock:
    return self.pending or self.state not in ('Active','Screen Saver') or self.sampled is None or not 0<=self.clock()-self.sampled<=3
@@ -86,12 +89,19 @@ class ScreenPowerWorker:
   # No output can resume while a toggle is in flight, even when this read
   # observes Active before the subsequent screen-off write.
   state=self._state(client.call('getPowerState'))
+  observed_off=state=='Screen Off'
   if requested and not self.stop_event.is_set():
    method={'Active':'turnOffScreen','Screen Saver':'turnOnScreen','Screen Off':'turnOnScreen'}.get(state)
    if method is not None:
     client.call(method)  # one attempt for this physical press
     state=self._state(client.call('getPowerState'))
   with self.lock:
+   # Include the read immediately before a turn-on command, even if the
+   # preceding poll was unavailable or the screen was turned off elsewhere.
+   if observed_off:self.off_observed=True
+   if state=='Screen Off':self.off_observed=True
+   elif state in ('Active','Screen Saver') and self.off_observed:
+    self.resume_count+=1;self.off_observed=False
    self.state=state;self.sampled=self.clock()
    if requested:self.pending=False
  def _run(self):

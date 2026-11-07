@@ -1,6 +1,6 @@
 """Prepare a late pointer sink while verified navigation is already usable."""
-import os,stat,threading,time
-from output_devices import open_verified_outputs,_report,OutputCloseError
+import os,stat,threading
+from output_devices import open_verified_outputs,OutputCloseError
 from output_sysfs import wait_for_mouse
 
 
@@ -73,7 +73,6 @@ class DeferredMouse:
    owner.mouse_fd=candidate.mouse_fd;owner.spare_key_fd=candidate.key_fd
    candidate.mouse_fd=candidate.key_fd=None;candidate.closed=True
    self.pending=None;self.adopted=True
-   _report({'stage':'pointer-output-ready','pid':os.getpid(),'epochMs':int(time.time()*1000)})
  def close(self):
   if self.closed:return
   self.closed=True;self.cancel.set()

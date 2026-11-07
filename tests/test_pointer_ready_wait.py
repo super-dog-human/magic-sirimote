@@ -42,13 +42,13 @@ class PointerReadyWaitTests(unittest.TestCase):
         missing=devices.OutputInventoryIncomplete(complete=True,counts={'LGE RCU':1,'ClickableMouse':0},errors={},unavailable=1)
         success=(object(),[],{'inventorySource':'sysfs-verified'})
         scan=Mock(side_effect=[missing,success]);hint=Mock(return_value=True)
-        with patch.object(devices,'_open_with_sysfs',scan),patch('output_sysfs.wait_for_mouse',hint),patch.object(devices,'_report'):
+        with patch.object(devices,'_open_with_sysfs',scan),patch('output_sysfs.wait_for_mouse',hint):
             result=devices.open_verified_outputs(allow_retry=lambda:True,clock=lambda:self.now,wait=self.wait)
         self.assertIs(result,success);self.assertEqual(scan.call_count,2)
         hint.assert_called_once();self.assertEqual(self.waits,[])
     def test_incomplete_inventory_never_uses_hint(self):
         missing=devices.OutputInventoryIncomplete(complete=False,counts={'LGE RCU':1,'ClickableMouse':0},errors={'EACCES':1},unavailable=1)
-        with patch.object(devices,'_open_with_sysfs',side_effect=missing),patch('output_sysfs.wait_for_mouse') as hint,patch.object(devices,'_report'):
+        with patch.object(devices,'_open_with_sysfs',side_effect=missing),patch('output_sysfs.wait_for_mouse') as hint:
             with self.assertRaises(devices.OutputInventoryIncomplete):
                 devices.open_verified_outputs(allow_retry=lambda:True,clock=lambda:self.now,wait=self.wait,retry_window=1)
         hint.assert_not_called();self.assertEqual(self.waits,[1.])

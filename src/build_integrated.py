@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 APP = 'org.magicsirimote.app'
 NATIVE_SOURCES = ('entry.py', 'settings.py', 'graphics.py', 'ir_screen.py',
                   'ir_programmer.py', 'native_luna.py', 'tv_assignments.py')
-VERSION = '0.4.0'
+VERSION = '0.5.0'
 ROLES = ('controller', 'receiver')
 
 
@@ -45,7 +45,6 @@ def build(output, *, bytecode_python=None):
         service[name] = (ROOT / 'integrated' / name).read_bytes()
     service['power-client.js'] = (ROOT / 'integrated/power-client.js').read_bytes()
     service['power-read.py'] = (ROOT / 'integrated/power-read.py').read_bytes()
-    service['bundle_inspect.py'] = (ROOT / 'integrated/bundle_inspect.py').read_bytes()
     service['package.json'] = packaging.js({'name': APP + '.service', 'version': VERSION, 'main': 'service_entry.js'})
     service['services.json'] = packaging.js({'id': APP + '.service', 'services': [{'name': APP + '.service'}],
                                            'requiredACG': ['bluetooth.query', 'application.launcher', 'activity.operation', 'activity.query', 'configurator.callbacks']})

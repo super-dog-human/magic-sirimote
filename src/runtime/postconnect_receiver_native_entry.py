@@ -74,9 +74,7 @@ def main():
  def verify(rec):
   if rec!=record:return False
   current=controller_stop_proof(rec,controller_app=str(bundle.role_path('controller',ROOT/CONTROLLER)),controller_package=str(bundle.package_path(PKG/CONTROLLER)),pin=pin,allow_exe_permission_denied=True)
-  if current!=accepted:return False
-  print(json.dumps({'stage':'controller-stop-attestation','executableVerified':current['executableVerified']},separators=(',',':')),flush=True)
-  return True
+  return current==accepted
  ipc=StopEvent(stop,lambda:read_stop(state,run,record,verify))
  result=run_from_state(state_path=bundle.role_path('receiver',ROOT/APP)/'state',controller_app=str(bundle.role_path('controller',ROOT/CONTROLLER)),controller_package=str(bundle.package_path(PKG/CONTROLLER)),controller_pin=controller_pin(),cooperative_only=True,allow_exe_permission_denied=True,duration=None,stop_event=ipc,system_buttons=True)
  return 0 if result.get('status')=='complete' and ipc.ipc_error is None else 2

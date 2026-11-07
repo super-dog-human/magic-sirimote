@@ -1,5 +1,4 @@
 import errno,unittest
-from unittest.mock import patch
 import output_devices as devices
 from test_rcu_output_device import Inventory
 
@@ -41,17 +40,5 @@ class NameDiscoveryTests(unittest.TestCase):
    self.assertTrue(raised.exception.details['complete'])
    self.assertEqual(raised.exception.details['counts'],{'LGE RCU':2 if duplicate else 1,'ClickableMouse':1 if duplicate else 0})
    self.assertEqual(f.rw,[])
- def test_retry_record_contains_fixed_inventory_metadata_only(self):
-  f=Inventory();del f.names[9];now=[0.];calls=[0]
-  def attempt(*args,**kwargs):
-   calls[0]+=1
-   if calls[0]==2:f.names[9]='ClickableMouse'
-   return f.run()
-  with patch.object(devices,'_report') as report:
-   outputs,_,_=devices.open_verified_outputs(attempt_fn=attempt,allow_retry=lambda:True,clock=lambda:now[0],wait=lambda delay:now.__setitem__(0,now[0]+delay))
-  retry=next(c.args[0] for c in report.call_args_list if c.args[0]['stage']=='output-discovery-retry')
-  self.assertEqual(retry['inventory']['counts'],{'LGE RCU':1,'ClickableMouse':0})
-  self.assertEqual(set(retry['inventory']),{'complete','counts','errors','unavailableEventSlots'})
-  outputs.close(close_fn=f.close)
 
 if __name__=='__main__':unittest.main()

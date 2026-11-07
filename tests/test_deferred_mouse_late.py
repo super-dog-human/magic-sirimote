@@ -104,8 +104,7 @@ class LateMouseTests(unittest.TestCase):
 
         provider = DeferredMouse(key, lambda: True, scan=scan, verify=Mock())
         owner.mouse_provider = provider
-        with patch('deferred_mouse.wait_for_mouse', readiness, create=True), \
-             patch('deferred_mouse._report'), patch('output_devices._report'):
+        with patch('deferred_mouse.wait_for_mouse', readiness, create=True):
             provider._prepare()
             self.assertIsNone(provider.error)
             self.assertTrue(owner.pointer_ready)
