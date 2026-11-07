@@ -91,7 +91,7 @@ The app shows **Pair a Siri Remote**. If it opens the settings screen instead, c
 1. On the TV, choose **Start pairing** with the LG remote.
 2. Wait until the app starts searching. **Start the search before pressing the pairing buttons.**
 3. Hold Siri Remote near the TV. Press and hold **MENU and Volume Up (+) together for about five seconds**, then release both.
-4. The app automatically pairs with the first available supported Siri Remote it finds. **Put only the remote you want to use into pairing mode.** If this app already has a saved remote, the search stays restricted to that remote. No **Pair selected remote** step is needed in v0.4.0.
+4. The app automatically pairs with the first available supported Siri Remote it finds. **Put only the remote you want to use into pairing mode.** If this app already has a saved remote, the search stays restricted to that remote.
 5. Wait while the app verifies the remote and prepares input. On success, it saves the connection information and closes the window to start reception. If the search expires, choose **Search again** and repeat the pairing-button sequence.
 6. Press Siri Remote's touch surface once to wake it. Try swiping to move the TV's selection, then pressing and releasing the surface to select an item.
 
@@ -103,8 +103,6 @@ The app shows **Pair a Siri Remote**. If it opens the settings screen instead, c
 ![Searching for a Siri Remote](assets/screenshots/searching.png)
 
 ![Automatic pairing and verification](assets/screenshots/automatic-pairing.png)
-
-These pairing illustrations are rendered from the v0.4.0 UI code.
 
 </details>
 
