@@ -1,5 +1,7 @@
 # Magic Sirimote
 
+https://github.com/user-attachments/assets/53afcba6-bafb-4899-95ed-cc63cad6117a
+
 **This project was developed through Vibe Coding:** an AI coding agent wrote and revised the code, with a human directing the work and testing it on real hardware.
 
 Thank you to the open-source Siri Remote and LG webOS communities for the tools, code and discoveries that made this possible. In particular, this project owes much to [open-appleremote](https://github.com/a-funk/open-appleremote), [SiriRemote-Linux](https://github.com/Yanndroid/SiriRemote-Linux), [Clean Your TV](https://github.com/Razdva122/clean-your-tv-lg-webos), [webOSbrew](https://www.webosbrew.org/), and the temporary LS2 access research in [webos-ls2-root](https://github.com/bbo76/webos-ls2-root).
