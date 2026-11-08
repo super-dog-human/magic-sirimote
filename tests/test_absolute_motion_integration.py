@@ -2,6 +2,8 @@ import unittest
 from test_absolute_pointer import Kernel
 from grouped_prefix_output import GroupedPrefixOutput
 from output_bridge import EVENT, BTN_LEFT, KEY_ENTER
+from test_navigation_mode import report, shake
+from absolute_pointer import SHOW
 
 
 class AbsoluteMotionIntegrationTests(unittest.TestCase):
@@ -51,6 +53,27 @@ class AbsoluteMotionIntegrationTests(unittest.TestCase):
   self.output.write_fn=lambda *_:0
   with self.assertRaises(RuntimeError):self.tick((10,5))
   self.assertTrue(self.receiver.closed);self.assertTrue(self.output.failed)
+
+ def shake_after_swipe(self,amplitude=.15,pitch=False):
+  self.receiver.router.navigation.select_navigation(self.now)
+  del self.kernel.writes[:]
+  for i in range(80):
+   self.now+=.01;a=shake(i*.01,amplitude=amplitude)
+   self.receiver.feed_raw(1,report(0.,pitch=a) if pitch else report(a));self.receiver.tick()
+ def test_shake_after_a_swipe_shows_the_pointer_at_the_screen_center(self):
+  self.kernel.positions=[100,900]
+  self.shake_after_swipe()
+  self.assertEqual(self.receiver.router.navigation.mode,'pointer')
+  first=[v[2:] for v in EVENT.iter_unpack(self.kernel.writes[0][1])]
+  self.assertEqual(self.kernel.writes[0][0],3)
+  self.assertEqual(first[:2],[(1,SHOW,1),(1,SHOW,0)])
+  self.assertEqual(first[-2][1:],(1,540));self.assertEqual(first[-3][1:],(0,960))
+  self.assertEqual(sum(1 for _,p in self.kernel.writes for e in EVENT.iter_unpack(p) if e[2:4]==(1,SHOW) and e[4]==1),1)
+ def test_vertical_shake_after_a_swipe_leaves_the_pointer_hidden(self):
+  self.kernel.positions=[100,900]
+  self.shake_after_swipe(amplitude=.5,pitch=True)
+  self.assertEqual(self.receiver.router.navigation.mode,'navigation')
+  self.assertEqual(self.kernel.writes,[]);self.assertEqual(self.kernel.positions,[100,900])
 
 
 if __name__=='__main__':unittest.main()

@@ -61,6 +61,10 @@ class GroupedPrefixOutput(PrefixOutputCandidate):
  def _check_transport(self,ok):
   if not ok and self.transport.closed:
    raise RuntimeError('grouped transport closed: '+str(self.transport.reason))
+ def _center_pointer(self):
+  # Unsent cursor motion belongs to the old position.
+  self._check_transport(self.transport.discard_queued_motion(self.transport_token))
+  super()._center_pointer()
  def _discard_untracked(self):
   if self.router.pose.last_pose is None and self.transport.queue:
    self._check_transport(self.transport.discard_queued_motion(self.transport_token))

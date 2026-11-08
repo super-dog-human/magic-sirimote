@@ -79,6 +79,14 @@ class AbsoluteOutputs(VerifiedOutputs):
    self._write_exact(self.mouse_fd,visible_frame(*target,self.limits));self.motion_writes+=1
    self.motion_remainder=remainder;self.last_target=target
   except BaseException:self.failed=True;raise
+ def center_pointer(self):
+  """Show the cursor at the middle of the screen (used when motion re-activates it)."""
+  if self.failed or self.closed:raise RuntimeError('output-bridge-not-active')
+  try:
+   target=[(low+high)//2 for low,high in self.limits]
+   self._write_exact(self.mouse_fd,visible_frame(*target,self.limits));self.motion_writes+=1
+   self.motion_remainder=[0,0];self.last_target=target
+  except BaseException:self.failed=True;raise
  @property
  def cursor_visible(self):
   from cursor_visibility_probe import current_visibility

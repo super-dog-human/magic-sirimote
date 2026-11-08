@@ -14,6 +14,12 @@ class PrefixOutputCandidate(CombinedReceiver):
   self.gyro_enabled=cursor_preferences()[0]
   self.router=AdaptivePrefixRouter(self._emit,clock=clock,motion_enabled=sensor_input_verified and self.gyro_enabled,session_policy=session_policy,max_actions=max_actions,session_bounded_hold=True)
   self.prefix_sensor_verified=sensor_input_verified
+  self.router.on_pointer_resume=self._center_pointer
+ def _center_pointer(self):
+  # Only an absolute-coordinate output can place the cursor; relative-only
+  # hardware keeps wherever the TV has it.
+  center=getattr(self.outputs,'center_pointer',None)
+  if center is not None and self.bridge.sensor_input_verified:center()
  def feed_raw(self,generation,report):
   if self.closed or self.failed or generation != self.generation or self.generation is None:return False
   try:

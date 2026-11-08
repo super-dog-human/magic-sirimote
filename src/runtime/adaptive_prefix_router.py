@@ -11,7 +11,7 @@ class AdaptivePrefixRouter:
  def __init__(self, emit, *, clock, motion_enabled=True, session_policy=None, max_actions=12, session_bounded_hold=False):
   if type(motion_enabled) is not bool:raise ValueError('explicit motion gate required')
   self.motion_enabled=motion_enabled;self.clock=clock;self.pose=AdaptivePrefixPose(sensitivity=cursor_preferences()[1]);self.generation=None;self.closed=False
-  self.navigation=NavigationMode();self.emit=emit
+  self.navigation=NavigationMode();self.emit=emit;self.on_pointer_resume=None
   seconds=30. if session_policy is None else session_policy.seconds
   self.press=SwipeClick(self._semantic,surface_regions(),clock=clock,max_seconds=seconds,max_actions=max_actions,session_policy=session_policy,session_bounded_hold=session_bounded_hold)
  def _semantic(self,action,down):
@@ -31,7 +31,11 @@ class AdaptivePrefixRouter:
   self.press.feed(generation,sample['touch_value'])
   if self.press.core.closed:self.pose.stop();return False
   now=self.clock()
-  if self.navigation.observe(sample if self.motion_enabled else None,now):self.pose._clear_tracking()
+  if self.navigation.observe(sample if self.motion_enabled else None,now):
+   # Back from navigation: the cursor reappears at the screen center and
+   # tracks relative to the pose held now.
+   self.pose._clear_tracking()
+   if self.on_pointer_resume is not None:self.on_pointer_resume()
   self.pose.feed(sample if self.motion_enabled else None,now)
   if self.navigation.mode=='navigation':self.pose._clear_tracking()
   return True

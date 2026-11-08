@@ -59,7 +59,7 @@ Without root access, a full TV restart is a temporary recovery option: when the 
 
 ## Swipes work but the pointer does not
 
-Check that Gyro cursor is on and saved. Lift your finger completely off the touch surface and move the remote more deliberately. If movement is misdirected, lay the remote flat with its touch surface up and front end toward the TV. Choose **Reset cursor orientation**, confirm **Restart**, and leave the remote still until reception resumes. A working swipe does not necessarily mean orientation setup has completed yet.
+Check that Gyro cursor is on and saved. Lift your finger completely off the touch surface. After a swipe, the pointer returns when you shake the remote from side to side, turning around twice within about half a second; it then appears at the center of the screen. Shaking mostly up and down does nothing. If movement is misdirected, lay the remote flat with its touch surface up and front end toward the TV. Choose **Reset cursor orientation**, confirm **Restart**, and leave the remote still until reception resumes. A working swipe does not necessarily mean orientation setup has completed yet.
 
 <details>
 <summary>Cursor orientation reset confirmation</summary>

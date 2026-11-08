@@ -1,3 +1,4 @@
+import math
 import os
 import tempfile
 import unittest
@@ -333,7 +334,7 @@ class ReceiveIntegrationTests(unittest.TestCase):
             if queue: return queue.popleft()
             if api.mode == 1 and now[0] >= next_frame[0]:
                 next_frame[0] = now[0] + .009
-                return report(max(0, now[0] - .15) * .8)
+                return report(.15 * math.sin(max(0, now[0] - .15) * 21))  # side-to-side shake: turns around every ~0.15 s
             raise BlockingIOError()
         def pump():
             during.append(outputs.motion_writes); advance(.02)
