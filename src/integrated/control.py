@@ -8,6 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path[:0] = [str(ROOT / 'runtime'), str(ROOT / 'native')]
 import runtime_bundle as bundle
+import state_permissions
 from control_processes import processes, require_no_other_input, clean_state
 from settings import load, save, validate, _unique
 
@@ -108,7 +109,7 @@ def retire_unstarted():
         b = os.open(receiver / 'state', os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
         for fd in (c, b):
             info = os.fstat(fd)
-            if info.st_uid != 5999 or info.st_gid != 5000 or stat.S_IMODE(info.st_mode) not in (0o770, 0o775):
+            if info.st_uid != 5999 or info.st_gid != 5000 or stat.S_IMODE(info.st_mode) not in state_permissions.directory_modes():
                 raise RuntimeError('Unsafe runtime directory')
         intent, info = _read(c, 'receiver-launch-intent.json', os.getuid(), 5000, 0o640, historical=True)
         import re

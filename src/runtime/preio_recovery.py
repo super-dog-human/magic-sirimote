@@ -3,6 +3,7 @@
 Keep the uncertain original session intact. A subsequent attempt must obtain
 fresh connection information and independently read/stop the sensor.
 """
+import state_permissions
 import os
 import stat
 import time
@@ -31,7 +32,7 @@ def retire(*, run, controller_state, receiver_state, controller_app,
     try:
         for fd in (c, b):
             s = os.fstat(fd)
-            if s.st_uid != state_uid or s.st_gid != group or stat.S_IMODE(s.st_mode) not in (0o770, 0o775):
+            if s.st_uid != state_uid or s.st_gid != group or stat.S_IMODE(s.st_mode) not in state_permissions.directory_modes():
                 raise RuntimeError('unsafe recovery archive directory')
         try:
             archive = os.open(pending, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=b)
@@ -39,7 +40,7 @@ def retire(*, run, controller_state, receiver_state, controller_app,
             pass
         if archive is not None:
             s = os.fstat(archive)
-            if s.st_uid != owner or s.st_gid != group or stat.S_IMODE(s.st_mode) != 0o750:
+            if s.st_uid != owner or s.st_gid != group or stat.S_IMODE(s.st_mode) not in state_permissions.retained_modes(0o750, legacy_widened=False):
                 raise RuntimeError('unsafe preio archive')
         rows = []
         def row(fd, prefix, name, mode, optional=False, expected_owner=None):

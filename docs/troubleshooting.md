@@ -99,12 +99,26 @@ and its startup record to `0600`, including the observed `0777` case. A request
 timeout also keeps the error screen open instead of invalidating native
 lifecycle notifications. Uncertain state-changing requests are not repeated.
 
-`Session directory unavailable` during pairing/setup is a separate check on
-the package-owned shared state directories. On the tested TV these directories
-were widened to `0777` during installation. The installer now checks the five
-shared directories (app state, service state, sessions, controller state and
-receiver state), and uses temporary maintenance access when needed to restore
-`0770` after confirming the runtime is stopped. Only the expected package owner
-UID 5999 and group 5000 are accepted. The repair does not recurse into saved
-settings, pairing records, journals or archives; runtime ownership and mode
-checks remain in place.
+## Input stops working after a TV reboot (fixed in v0.6.2)
+
+The affected TV changed developer-app shared state directories and retained
+files to `0777` during a full boot. Automatic startup ran, but the controller
+exited with `Session directory unavailable` before reconnecting the remote.
+The v0.6.1 install-time permission repair did not survive the next boot.
+
+v0.6.2 handles the observed `0777` mode throughout the integrated runtime's
+shared directories and explicitly historical records. It still checks expected
+owners/groups, file types, links, record schemas, device/process identities,
+expiry and recovery evidence. Newly created live requests and receipts keep
+their exact permissions; widened historical records cannot authorize a new
+live request. The service repairs only its own empty supervisor lock after
+acquiring it and verifying its inode. It does not need root access at boot.
+
+Install v0.6.2, then use **Save and restart** if reception was stopped for the
+update. Saved pairing and button assignments are retained. Confirm operation
+again after turning the TV off and on; checking only immediately after
+installation does not reproduce the original failure.
+
+This is compatibility with the TV's observed permission policy, not protection
+against other TV software with access to the same developer-app storage. No
+sensor-stop success is inferred from a changed mode or an old journal alone.

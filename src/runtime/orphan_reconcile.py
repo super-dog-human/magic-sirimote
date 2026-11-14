@@ -4,6 +4,7 @@ No launch, sensor write, or successful input result is invented here. An active
 uncertain sensor journal still requires B's existing real recovery path.
 Call only while holding the exclusive supervisor lease.
 """
+import state_permissions
 import runtime_bundle as bundle
 import json, os, re, stat
 from pathlib import Path
@@ -27,7 +28,7 @@ def _read(d,name,owner,group,mode,*,historical=False):
  f=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=d)
  try:
   before=os.fstat(f)
-  if not stat.S_ISREG(before.st_mode) or before.st_nlink!=1 or before.st_uid!=owner or before.st_gid!=group or stat.S_IMODE(before.st_mode) not in ((mode,0o775) if historical is True else (mode,)) or before.st_size>4096:raise RuntimeError('unsafe recovery evidence')
+  if not stat.S_ISREG(before.st_mode) or before.st_nlink!=1 or before.st_uid!=owner or before.st_gid!=group or stat.S_IMODE(before.st_mode) not in (state_permissions.retained_modes(mode) if historical is True else (mode,)) or before.st_size>4096:raise RuntimeError('unsafe recovery evidence')
   raw=os.read(f,4097)
   if len(raw)!=before.st_size or _identity(before)!=_identity(os.fstat(f)):raise RuntimeError('recovery evidence changed')
   obj=json.loads(raw,object_pairs_hook=_unique)
@@ -211,7 +212,7 @@ def reconcile(*,controller_state,receiver_state,controller_app,receiver_app,rece
   for path in (controller_state,receiver_state):
    d=os.open(path,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC);fds.append(d)
    s=os.fstat(d)
-   if s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe reconciliation directory')
+   if s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe reconciliation directory')
   c,b=fds
   try:intent,intent_stat=_read(c,'receiver-launch-intent.json',owner,group,0o640,historical=True)
   except FileNotFoundError:return {'status':'clear'}

@@ -130,6 +130,7 @@
   "scan_wake_provider.py",
   "screen_power.py",
   "screen_resume_mode.py",
+  "state_permissions.py",
   "stop_request.py",
   "supervisor_lease.py",
   "swipe_click.py",

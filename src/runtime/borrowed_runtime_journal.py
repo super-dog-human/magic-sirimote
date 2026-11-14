@@ -5,6 +5,7 @@ files or a pre-existing run require recovery, never automatic reuse. This
 journal does not itself recover a sensor, authenticate other processes, or
 prove the target filesystem survives a power cycle.
 """
+import state_permissions
 import json,os,re,stat
 from pathlib import Path
 
@@ -21,7 +22,7 @@ class BorrowedRuntimeJournal:
   self.run=run;self.fd=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC);self.sequence=0;self.stage=None;self.generation=None
   try:
    s=os.fstat(self.fd)
-   if not stat.S_ISDIR(s.st_mode) or s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe journal directory')
+   if not stat.S_ISDIR(s.st_mode) or s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe journal directory')
    self.identity=(s.st_dev,s.st_ino,s.st_uid,s.st_gid,stat.S_IMODE(s.st_mode));self.owner=os.getuid();self.group=group
    if any(n.startswith('borrowed-') for n in os.listdir(self.fd)):raise RuntimeError('journal already exists or prior run requires recovery')
   except BaseException:os.close(self.fd);self.fd=None;raise
@@ -61,7 +62,7 @@ def inspect_journal(directory,run,*,owner_uid,state_uid=5999,group=5000,historic
  d=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   ds=os.fstat(d)
-  if ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe journal directory')
+  if ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe journal directory')
   prefix='borrowed-'+run+'-';names=[n for n in os.listdir(d) if n.startswith(prefix)];stages=[];generation=None
   if any(not re.fullmatch(re.escape(prefix)+r'[0-9]{2,4}\.json',n) for n in names):raise RuntimeError('journal filename invalid')
   names.sort(key=lambda n:int(n[len(prefix):-5]))
@@ -71,7 +72,7 @@ def inspect_journal(directory,run,*,owner_uid,state_uid=5999,group=5000,historic
    fd=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=d)
    try:
     s=os.fstat(fd)
-    if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_uid!=owner_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in ((0o640,0o775) if historical is True else (0o640,)) or s.st_size>4096:raise RuntimeError('journal file invalid')
+    if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_uid!=owner_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (state_permissions.retained_modes(0o640) if historical is True else (0o640,)) or s.st_size>4096:raise RuntimeError('journal file invalid')
     raw=os.read(fd,4097)
     if len(raw)!=s.st_size:raise RuntimeError('incomplete journal read')
    finally:os.close(fd)

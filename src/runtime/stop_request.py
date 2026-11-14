@@ -3,6 +3,7 @@
 The producer must publish a complete file atomically in the controller state
 folder. This reads only; the caller owns cleanup and must prove safe exit.
 """
+import state_permissions
 import json, os, re, stat, threading
 
 def request_name(instance):
@@ -65,7 +66,7 @@ def publish_request(dirfd, *, pid, start_ticks, instance, owner_uid=5415, group_
     if os.getuid() != owner_uid or type(pid) is not int or pid <= 0 or type(start_ticks) is not int or start_ticks < 0 or type(instance) is not str or re.fullmatch('[0-9a-f]{32}', instance) is None:
         raise ValueError('invalid publisher or identity')
     d = os.fstat(dirfd)
-    if not stat.S_ISDIR(d.st_mode) or d.st_gid != group_gid or stat.S_IMODE(d.st_mode) not in (0o770, 0o775):
+    if not stat.S_ISDIR(d.st_mode) or d.st_gid != group_gid or stat.S_IMODE(d.st_mode) not in state_permissions.directory_modes():
         raise ValueError('invalid state directory')
     name = '.developer-stop-'+secrets.token_hex(16)+'.tmp'
     raw = (json.dumps({'schema':1,'action':'stop','pid':pid,'startTicks':start_ticks,'instance':instance},separators=(',',':'))+'\n').encode()

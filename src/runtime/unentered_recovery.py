@@ -4,6 +4,7 @@ The original uncertain sensor journal remains for the ordinary recovery path.
 A recovery-controller record is the last archived file, so an interrupted
 archive resumes using the same process-bound destination names.
 """
+import state_permissions
 import os
 import stat
 import time
@@ -40,7 +41,7 @@ def retire(*, run, controller_state, receiver_state, controller_app,
         for fd in (c, b):
             info = os.fstat(fd)
             if (not stat.S_ISDIR(info.st_mode) or info.st_uid != state_uid or
-                    info.st_gid != group or stat.S_IMODE(info.st_mode) not in (0o770, 0o775)):
+                    info.st_gid != group or stat.S_IMODE(info.st_mode) not in state_permissions.directory_modes()):
                 raise RuntimeError('unsafe recovery archive directory')
 
         def absent():

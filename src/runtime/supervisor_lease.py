@@ -1,4 +1,5 @@
 """Keep at most one experimental resident supervisor active per app state."""
+import state_permissions
 import fcntl,os,stat
 from pathlib import Path
 
@@ -8,16 +9,16 @@ class SupervisorLease:
   self.dirfd=os.open(Path(state_path),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC);self.fd=None
   try:
    s=os.fstat(self.dirfd)
-   if (s.st_uid,s.st_gid)!=(state_uid,group) or stat.S_IMODE(s.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe supervisor directory')
+   if (s.st_uid,s.st_gid)!=(state_uid,group) or stat.S_IMODE(s.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe supervisor directory')
    self.directory_identity=(s.st_dev,s.st_ino,s.st_uid,s.st_gid,stat.S_IMODE(s.st_mode))
    fd=os.open(self.NAME,os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW|os.O_CLOEXEC,0o600,dir_fd=self.dirfd);self.fd=fd
    info=os.fstat(fd)
-   if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1 or info.st_uid!=os.getuid() or info.st_gid!=group or info.st_size!=0 or stat.S_IMODE(info.st_mode) not in (0o600,0o775):raise RuntimeError('unsafe supervisor lock')
+   if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1 or info.st_uid!=os.getuid() or info.st_gid!=group or info.st_size!=0 or stat.S_IMODE(info.st_mode) not in state_permissions.retained_modes(0o600):raise RuntimeError('unsafe supervisor lock')
    fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
    # Confirm the open descriptor still names the expected path.
    current=os.stat(self.NAME,dir_fd=self.dirfd,follow_symlinks=False)
    if (current.st_dev,current.st_ino)!=(info.st_dev,info.st_ino):raise RuntimeError('supervisor lock replaced')
-   if stat.S_IMODE(info.st_mode)==0o775:
+   if stat.S_IMODE(info.st_mode)!=0o600:
     # webOS can widen app-tree files during a full boot. Repair only our
     # exact empty lock, after obtaining the lock and checking its identity.
     os.fchmod(fd,0o600)

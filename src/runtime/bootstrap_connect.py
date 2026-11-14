@@ -4,6 +4,7 @@ GATT 106 is unknown, never a connected/disconnected proof. An uncertain
 durable intent remains until both target profiles are independently
 confirmed.
 """
+import state_permissions
 from runtime_device import registered_name_matches
 from runtime_device import connect_intent
 import math,os,stat,time,uuid
@@ -53,7 +54,7 @@ def retire_confirmed_intent(lease,*,group=5000):
  except FileNotFoundError:return False
  try:
   s=os.fstat(fd);expected=connect_intent()
-  if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_uid!=os.getuid() or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (0o640,0o775) or s.st_size!=len(expected):raise RuntimeError('unsafe bootstrap intent')
+  if not stat.S_ISREG(s.st_mode) or s.st_nlink!=1 or s.st_uid!=os.getuid() or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in state_permissions.retained_modes(0o640) or s.st_size!=len(expected):raise RuntimeError('unsafe bootstrap intent')
   if os.read(fd,len(expected)+1)!=expected:raise RuntimeError('bootstrap intent content changed')
   current=os.stat(name,dir_fd=lease.dirfd,follow_symlinks=False)
   if (s.st_dev,s.st_ino)!=(current.st_dev,current.st_ino) or lease.held() is not True:raise RuntimeError('bootstrap intent replaced')

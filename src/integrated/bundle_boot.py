@@ -1,4 +1,5 @@
 """Bind each role to an immutable controller session before runtime imports."""
+import state_permissions
 import json
 import os
 import stat
@@ -9,12 +10,12 @@ from runtime_device import configure
 from settings import validate, load, _unique
 
 
-def _read(path, owner):
+def _read(path, owner, *, historical=False):
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
     try:
         before = os.fstat(fd)
         if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_uid != owner
-                or before.st_gid != 5000 or stat.S_IMODE(before.st_mode) not in (0o640, 0o775)
+                or before.st_gid != 5000 or stat.S_IMODE(before.st_mode) not in (state_permissions.retained_modes(0o640) if historical else (0o640, 0o775))
                 or not 0 < before.st_size <= 4096):
             raise RuntimeError('Session settings unavailable')
         raw = os.read(fd, 4097)
@@ -32,7 +33,7 @@ def _save_session(path, values):
     raw = (json.dumps(validate(values), sort_keys=True, separators=(',', ':')) + '\n').encode()
     parent = Path(path).parent
     info = parent.lstat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 5999 or info.st_gid != 5000 or stat.S_IMODE(info.st_mode) not in (0o770, 0o775):
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != 5999 or info.st_gid != 5000 or stat.S_IMODE(info.st_mode) not in state_permissions.directory_modes():
         raise RuntimeError('Session directory unavailable')
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o640)
     try:
@@ -49,7 +50,11 @@ def _save_session(path, values):
         os.close(parent_fd)
 
 
-def bind_device(directory, values, *, read=_read, write=_save_session):
+def _read_binding(path, owner):
+    return _read(path, owner, historical=True)
+
+
+def bind_device(directory, values, *, read=_read_binding, write=_save_session):
     """Never apply a different target to retained controller/receiver journals.
 
     Switching remotes needs a separate verified migration of both role states.

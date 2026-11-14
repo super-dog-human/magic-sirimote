@@ -3,6 +3,7 @@
 This record does not prove a launch outcome and has no automatic reclamation.
 Caller must hold the supervisor lease. Existing records block a new attempt.
 """
+import state_permissions
 import json,os,re,stat
 from pathlib import Path
 class ReceiverLaunchIntent:
@@ -12,7 +13,7 @@ class ReceiverLaunchIntent:
   self.run=run;self.fd=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC);self.used=False
   try:
    s=os.fstat(self.fd)
-   if not stat.S_ISDIR(s.st_mode) or s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe state directory')
+   if not stat.S_ISDIR(s.st_mode) or s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe state directory')
    self.identity=(s.st_dev,s.st_ino,s.st_uid,s.st_gid,stat.S_IMODE(s.st_mode));self.owner=os.getuid();self.group=group
   except BaseException:os.close(self.fd);self.fd=None;raise
  def __call__(self,event):

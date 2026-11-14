@@ -3,6 +3,7 @@
 No raw HID reports are written. A receipt is a self-report, not proof of
 process identity, process exit, storage persistence, or sensor state today.
 """
+import state_permissions
 import runtime_bundle as bundle
 import json,os,re,stat
 from pathlib import Path
@@ -59,7 +60,7 @@ def write_receipt(directory,run,result,*,state_uid=5999,group=5000,process_info=
  fd=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   d=os.fstat(fd)
-  if not stat.S_ISDIR(d.st_mode) or d.st_uid!=state_uid or d.st_gid!=group or stat.S_IMODE(d.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe receipt directory')
+  if not stat.S_ISDIR(d.st_mode) or d.st_uid!=state_uid or d.st_gid!=group or stat.S_IMODE(d.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe receipt directory')
   name='receiver-result-'+run+'.json';f=os.open(name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o640,dir_fd=fd)
   try:
    os.fchmod(f,0o640);s=os.fstat(f)
@@ -81,7 +82,7 @@ def write_start(directory,run,*,state_uid=5999,group=5000,process_info=None):
  d=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   ds=os.fstat(d)
-  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe receipt directory')
+  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe receipt directory')
   f=os.open('receiver-start-'+run+'.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o640,dir_fd=d)
   try:
    os.fchmod(f,0o640);s=os.fstat(f)

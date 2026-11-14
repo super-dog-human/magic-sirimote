@@ -5,6 +5,7 @@ folder after a crash blocks a new session and is never removed
 automatically. The parent directory and files are not authenticated against
 hostile peers.
 """
+import state_permissions
 import os,re,stat
 from pathlib import Path
 from borrowed_runtime_journal import BorrowedRuntimeJournal,inspect_journal
@@ -17,7 +18,7 @@ class AtomicSessionDirectory:
   self.parentfd=os.open(Path(parent),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC);created_identity=None
   try:
    s=os.fstat(self.parentfd)
-   if not stat.S_ISDIR(s.st_mode) or s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe parent directory')
+   if not stat.S_ISDIR(s.st_mode) or s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe parent directory')
    self.parent_identity=(s.st_dev,s.st_ino,s.st_uid,s.st_gid,stat.S_IMODE(s.st_mode))
    os.mkdir(self.ACTIVE,0o770,dir_fd=self.parentfd)
    made=os.stat(self.ACTIVE,dir_fd=self.parentfd,follow_symlinks=False)

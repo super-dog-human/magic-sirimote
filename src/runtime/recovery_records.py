@@ -1,4 +1,5 @@
 """Distinct durable recovery records; preserves prior uncertain journal bytes."""
+import state_permissions
 import json,os,stat,re
 from pathlib import Path
 from borrowed_runtime_journal import inspect_journal
@@ -7,7 +8,7 @@ class RecoveryRecords:
  def __init__(self,directory,run,*,state_uid=5999,group=5000):
   self.run=run;self.sequence=0;self.fd=os.open(directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
   s=os.fstat(self.fd)
-  if s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (0o770,0o775):
+  if s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in state_permissions.directory_modes():
    self.close();raise RuntimeError('unsafe recovery state')
  def __call__(self,event):
   # O_EXCL first record is the cross-restart no-retry latch.
@@ -24,9 +25,9 @@ def archive_uncertain(directory,run,*,owner_uid,proof,state_uid=5999,group=5000)
  d=os.open(directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   ds=os.fstat(d)
-  if ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe recovery parent')
+  if ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe recovery parent')
   before=os.stat('borrowed-active',dir_fd=d,follow_symlinks=False)
-  if not stat.S_ISDIR(before.st_mode) or before.st_uid!=owner_uid or before.st_gid!=group or stat.S_IMODE(before.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe uncertain session')
+  if not stat.S_ISDIR(before.st_mode) or before.st_uid!=owner_uid or before.st_gid!=group or stat.S_IMODE(before.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe uncertain session')
   activefd=os.open('borrowed-active',os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=d)
   try:
    names=os.listdir(activefd)

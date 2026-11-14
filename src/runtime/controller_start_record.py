@@ -3,6 +3,7 @@
 The reader must independently validate the sender package and live PID before
 trusting this record. No launch or device operation occurs here.
 """
+import state_permissions
 import json,os,re,stat
 from pathlib import Path
 from receiver_request_auth import CONTROLLER
@@ -15,7 +16,7 @@ def write_record(directory,run,process,*,state_uid=5999,group=5000,name='control
  d=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   s=os.fstat(d)
-  if not stat.S_ISDIR(s.st_mode) or s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe controller destination')
+  if not stat.S_ISDIR(s.st_mode) or s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe controller destination')
   f=os.open(name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o660,dir_fd=d)
   try:
    os.fchmod(f,0o660);x=os.fstat(f)
@@ -34,9 +35,9 @@ def read_record(directory,run=None,*,state_uid=5999,group=5000,name='controller-
  d=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   ds=os.fstat(d)
-  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe controller destination')
+  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe controller destination')
   before=os.stat(name,dir_fd=d,follow_symlinks=False)
-  if not stat.S_ISREG(before.st_mode) or before.st_nlink!=1 or before.st_gid!=group or before.st_uid<=0 or stat.S_IMODE(before.st_mode) not in ((0o660,0o775) if historical is True else (0o660,)) or before.st_size>4096:raise RuntimeError('unsafe controller record')
+  if not stat.S_ISREG(before.st_mode) or before.st_nlink!=1 or before.st_gid!=group or before.st_uid<=0 or stat.S_IMODE(before.st_mode) not in (state_permissions.retained_modes(0o660) if historical is True else (0o660,)) or before.st_size>4096:raise RuntimeError('unsafe controller record')
   f=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=d)
   try:
    s=os.fstat(f);raw=os.read(f,4097)

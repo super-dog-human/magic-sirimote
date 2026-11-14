@@ -4,6 +4,7 @@ Caller independently verifies the receiver completed and exited, and holds the
 supervisor lease. File renames are individually atomic, not a transaction;
 failures retain the launch intent for recovery and must not trigger a retry.
 """
+import state_permissions
 import json,os,re,stat
 from pathlib import Path
 from receiver_result_receipt import APP
@@ -14,7 +15,7 @@ def archive(directory,run,*,owner_uid,state_uid=5999,group=5000):
  d=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   ds=os.fstat(d)
-  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe handoff directory')
+  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe handoff directory')
   originals={}
   for name,app in (('request.json',APP),('controller-start.json',CONTROLLER)):
    b=os.stat(name,dir_fd=d,follow_symlinks=False)

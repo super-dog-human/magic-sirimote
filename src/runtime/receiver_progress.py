@@ -4,6 +4,7 @@ This self-report does not authorize input or prove visible cursor movement.
 At most 25 snapshots, five seconds apart; no periodic writes after two minutes.
 Diagnostic failures disable further snapshots without interrupting input.
 """
+import state_permissions
 import json,math,os,re,stat,time
 from pathlib import Path
 from borrowed_mode_session import BorrowedModeSession
@@ -57,7 +58,7 @@ def write_progress(directory,run,session,value,*,state_uid=5999,group=5000,clock
  name='receiver-progress-'+run+'.json';temp=name+'.tmp';created=False
  try:
   ds=os.fstat(d)
-  if ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe progress directory')
+  if ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe progress directory')
   try:
    st=os.stat(name,dir_fd=d,follow_symlinks=False)
    if not stat.S_ISREG(st.st_mode) or st.st_nlink!=1 or st.st_uid!=os.getuid() or st.st_gid!=group or stat.S_IMODE(st.st_mode)!=0o640:raise RuntimeError('unsafe progress destination')

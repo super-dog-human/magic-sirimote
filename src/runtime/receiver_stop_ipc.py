@@ -1,4 +1,5 @@
 """Run-bound cooperative stop marker. Local filesystem tests are not TV ACL proof."""
+import state_permissions
 import json, math, os, re, secrets, stat, threading, time
 from pathlib import Path
 
@@ -9,7 +10,7 @@ def _name(run):
 def _directory(path,state_uid,group):
  fd=os.open(path,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  s=os.fstat(fd)
- if s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in (0o770,0o775):
+ if s.st_uid!=state_uid or s.st_gid!=group or stat.S_IMODE(s.st_mode) not in state_permissions.directory_modes():
   os.close(fd);raise RuntimeError('unsafe stop directory')
  return fd
 

@@ -3,6 +3,7 @@
 Independent app-package/process and lifecycle verification is still required
 before treating a receipt as proof or permitting another launch.
 """
+import state_permissions
 import json,os,re,stat
 from pathlib import Path
 from receiver_result_receipt import APP
@@ -12,9 +13,9 @@ def read_recovery_receipt(directory,run,*,state_uid=5999,group=5000,historical=F
  d=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   ds=os.fstat(d)
-  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe receipt directory')
+  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe receipt directory')
   name='receiver-recovery-result-'+run+'.json';before=os.stat(name,dir_fd=d,follow_symlinks=False)
-  if not stat.S_ISREG(before.st_mode) or before.st_nlink!=1 or before.st_gid!=group or stat.S_IMODE(before.st_mode) not in ((0o640,0o775) if historical is True else (0o640,)) or before.st_size>4096:raise RuntimeError('unsafe receipt')
+  if not stat.S_ISREG(before.st_mode) or before.st_nlink!=1 or before.st_gid!=group or stat.S_IMODE(before.st_mode) not in (state_permissions.retained_modes(0o640) if historical is True else (0o640,)) or before.st_size>4096:raise RuntimeError('unsafe receipt')
   f=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=d)
   try:
    s=os.fstat(f);raw=os.read(f,4097)
@@ -54,9 +55,9 @@ def read_recovery_start(directory,run,*,state_uid=5999,group=5000,historical=Fal
  d=os.open(Path(directory),os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
  try:
   ds=os.fstat(d)
-  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in (0o770,0o775):raise RuntimeError('unsafe receipt directory')
+  if not stat.S_ISDIR(ds.st_mode) or ds.st_uid!=state_uid or ds.st_gid!=group or stat.S_IMODE(ds.st_mode) not in state_permissions.directory_modes():raise RuntimeError('unsafe receipt directory')
   name='receiver-recovery-start-'+run+'.json';before=os.stat(name,dir_fd=d,follow_symlinks=False)
-  if not stat.S_ISREG(before.st_mode) or before.st_nlink!=1 or before.st_gid!=group or stat.S_IMODE(before.st_mode) not in ((0o640,0o775) if historical is True else (0o640,)) or before.st_size>4096:raise RuntimeError('unsafe receipt')
+  if not stat.S_ISREG(before.st_mode) or before.st_nlink!=1 or before.st_gid!=group or stat.S_IMODE(before.st_mode) not in (state_permissions.retained_modes(0o640) if historical is True else (0o640,)) or before.st_size>4096:raise RuntimeError('unsafe receipt')
   f=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=d)
   try:
    s=os.fstat(f);raw=os.read(f,4097)

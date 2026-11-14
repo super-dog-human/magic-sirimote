@@ -304,7 +304,8 @@ class Installer {
     this.cli('ares-install', ['--device',this.device,path.join(this.root,'releases/org.magicsirimote.app_arm.ipk')], {interactive:true, timeout:120000});
     const verified = this.remote({action:'verify', files:manifest.package.files});
     if (!Array.isArray(verified.mismatch) || verified.mismatch.length || verified.verifiedFiles !== Object.keys(manifest.package.files).length) throw Error('Installed-file verification failed. Run the installer again; the app was not launched.');
-    await require('./private-idle').normalizeStateDirectories(this);
+    // v0.6.2 reads the observed cold-boot shared-directory modes directly.
+    // An install-time chmod is not durable across the next TV boot.
     this.verifyInstalledService();
     this.log('App installed and verified.');
     this.log('\nOptional: prevent input loss after repeated Bluetooth reconnections. This changes LG\'s handling of A1513/A1962 outside the app and briefly restarts the input service, not the TV.');
