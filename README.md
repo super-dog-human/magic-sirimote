@@ -1,19 +1,22 @@
 # Magic Sirimote
 
-https://github.com/user-attachments/assets/53afcba6-bafb-4899-95ed-cc63cad6117a
-
-**This project was developed through Vibe Coding:** an AI coding agent wrote and revised the code, with a human directing the work and testing it on real hardware.
-
-Thank you to the open-source Siri Remote and LG webOS communities for the tools, code and discoveries that made this possible. In particular, this project owes much to [open-appleremote](https://github.com/a-funk/open-appleremote), [SiriRemote-Linux](https://github.com/Yanndroid/SiriRemote-Linux), [Clean Your TV](https://github.com/Razdva122/clean-your-tv-lg-webos), [webOSbrew](https://www.webosbrew.org/), and the temporary LS2 access research in [webos-ls2-root](https://github.com/bbo76/webos-ls2-root).
-
 Magic Sirimote lets a first-generation Siri Remote control an LG webOS TV. Install one app on the TV, pair the remote in that app, and choose your button assignments. **Your Mac does not need to stay on after setup. No Apple TV is needed.**
+
+- Move the TV pointer by turning the remote with **gyro pointer control**.
+- Swipe the touch surface to navigate up, down, left, or right, and press it to select.
+- Assign separate press and hold actions to six buttons, including infrared power and volume, media controls, and screen off / restore.
+
+https://github.com/user-attachments/assets/53afcba6-bafb-4899-95ed-cc63cad6117a
 
 This is an experimental community project with limited hardware testing. Reconnection and recovery are still being improved. Keep the original LG remote available.
 
 - [Compatibility and requirements](#compatibility-and-requirements)
 - [Set up from a Mac](#set-up-from-a-mac)
+- [Using the remote](#using-the-remote)
 - [Troubleshooting](#troubleshooting)
+- [Optional firmware update](#optional-firmware-update)
 - [Reset or uninstall](#reset-or-uninstall)
+- [Development and acknowledgments](#development-and-acknowledgments)
 
 ## Compatibility and requirements
 
@@ -26,17 +29,24 @@ This is an experimental community project with limited hardware testing. Reconne
 | webOS platform version | **11.2.0** (`sdkVersion`) |
 | TV firmware | **43.21.96** |
 
-These are tested examples, not a model or firmware allowlist. The app and TV-side fix do not require these specific LG versions. The installer checks the runtime features needed by the supplied package and explains any missing requirement. This ARM package currently needs a 32-bit ARM Python 3.10+ runtime, Luna Service 2, GLib, SDL2 and SDL2_ttf on the TV; input also depends on the TV's Bluetooth and input-device APIs. Other webOS environments may need a matching build or platform support.
+These are tested examples, not a model or firmware allowlist. The app and TV-side fix do not require these specific LG versions. The installer checks compatibility and explains any missing requirement.
 
 The webOS platform version and TV firmware version are different values. You do not need to look up the remote's firmware before starting; the app verifies its identity during setup.
 
 Both models have been tested for pairing, infrared assignments, swipes, touch-surface clicks, and gyro pointer control. Later, silver Siri Remote generations are not supported.
 
+<details>
+<summary>Technical requirements on the TV</summary>
+
+This ARM package currently needs a 32-bit ARM Python 3.10+ runtime, Luna Service 2, GLib, SDL2 and SDL2_ttf on the TV; input also depends on the TV's Bluetooth and input-device APIs. Other webOS environments may need a matching build or platform support.
+
+</details>
+
 ## Set up from a Mac
 
 **Use Magic Sirimote to pair the remote. The TV's standard Bluetooth device settings cannot complete the Siri Remote pairing used by this app.**
 
-Do not pair Siri Remote with the Mac. The Mac installs the app; the TV app pairs directly with Siri Remote. You will enter the TV's network IP address on the Mac.
+For TV app setup, do not pair Siri Remote with the Mac. The Mac installs the app; the TV app pairs directly with Siri Remote. You will enter the TV's network IP address on the Mac. The optional firmware updater has its own connection procedure.
 
 ### 1. Install the Mac tools
 
@@ -168,11 +178,25 @@ If saving fails partway through, some assignments may already have changed. Read
 
 </details>
 
+## Using the remote
+
+With **Gyro cursor** enabled, keep your finger off the touch surface and turn the remote to move the pointer. Press and release the touch surface to select the item under the pointer.
+
+Swiping switches to directional navigation. Subsequent swipes move the TV's selection, and pressing the surface selects the focused item. To return to pointer control, lift your finger and shake the remote side to side; an up-and-down shake does not switch modes.
+
+To change button assignments, toggle **Gyro cursor**, or adjust pointer sensitivity, reopen Magic Sirimote from the TV's Home screen with the LG remote. Choose **Save and restart** to apply changes.
+
 ## Troubleshooting
 
 [Troubleshooting guide](docs/troubleshooting.md)
 
+## Optional firmware update
+
+Remote firmware updating is separate from installing or updating the TV app and is not required for setup. The [experimental macOS firmware updater](docs/firmware-update.md) supports only the documented **A1513** version transition. **A1962, the black remote with a white ring around MENU, is not supported by the updater**, even though the TV app supports both models. Read the separate guide before using it.
+
 ## Reset or uninstall
+
+### Reset pairing and assignments
 
 **Reset app is destructive.** It removes this remote's TV pairing, the app's active settings, and all short- and long-press infrared assignments on the remote, including power and volume. It also clears the surface-click IR entries, which are not exposed in the six-row editor. It does not reset the TV or remove other Bluetooth devices. It is not a factory-firmware reset of Siri Remote.
 
@@ -191,6 +215,8 @@ To start over:
 
 </details>
 
+### Uninstall the app and TV-side fix
+
 To uninstall Magic Sirimote and its TV-side fix, run this on the Mac:
 
 ```sh
@@ -206,3 +232,9 @@ If you also want to erase the remote's pairing and infrared assignments, complet
 You can still delete just the app using **Edit App List → Delete** on the TV's Home screen. This does not remove the TV-side fix; run `sh uninstall.sh` afterwards to clean it up. Removing the fix briefly restarts only the input service, not the TV.
 
 Uninstalling the app alone should not be treated as unpairing the remote or deleting its stored IR settings. Reset clears the active configuration but may retain inactive local recovery records; it is not secure erasure of diagnostic history.
+
+## Development and acknowledgments
+
+**This project was developed through Vibe Coding:** an AI coding agent wrote and revised the code, with a human directing the work and testing it on real hardware.
+
+Thank you to the open-source Siri Remote and LG webOS communities for the tools, code and discoveries that made this possible. In particular, this project owes much to [open-appleremote](https://github.com/a-funk/open-appleremote), [SiriRemote-Linux](https://github.com/Yanndroid/SiriRemote-Linux), [Clean Your TV](https://github.com/Razdva122/clean-your-tv-lg-webos), [webOSbrew](https://www.webosbrew.org/), and the temporary LS2 access research in [webos-ls2-root](https://github.com/bbo76/webos-ls2-root).
