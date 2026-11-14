@@ -41,12 +41,23 @@ async function main() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sirimote-boot-'));
   try {
     const saved = {schema: 1, token: 'a'.repeat(48), enabled: true, phase: 'ready'};
-    fs.chmodSync(dir, 0o775);
-    fs.writeFileSync(path.join(dir, 'startup.json'), JSON.stringify(saved), {mode: 0o775});
-    fs.chmodSync(path.join(dir, 'startup.json'), 0o775);
-    assert.deepEqual(disk(dir).read(), saved);
-    assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
-    assert.equal(fs.statSync(path.join(dir, 'startup.json')).mode & 0o777, 0o600);
+    // Reproduce the TV's 0777 directory and 0600 record, then both paths
+    // widened at boot. Registration data and disabled startup must survive.
+    for (const [dirMode,fileMode] of [[0o775,0o775],[0o777,0o600],[0o777,0o777]]) {
+      fs.chmodSync(dir,dirMode);
+      fs.writeFileSync(path.join(dir,'startup.json'),JSON.stringify(saved));
+      fs.chmodSync(path.join(dir,'startup.json'),fileMode);
+      assert.deepEqual(disk(dir).read(),saved);
+      assert.equal(fs.statSync(dir).mode & 0o777,0o700);
+      assert.equal(fs.statSync(path.join(dir,'startup.json')).mode & 0o777,0o600);
+    }
+    fs.chmodSync(dir,0o777);
+    const originalStat=fs.fstatSync;
+    fs.fstatSync=(...args)=>{const info=originalStat(...args);info.uid=process.getuid()+1;return info;};
+    try {assert.throws(()=>disk(dir),/unavailable/);}
+    finally {fs.fstatSync=originalStat;}
+    assert.equal(fs.statSync(dir).mode & 0o777,0o777,'Another owner must never be chmodded');
+    disk(dir);
     fs.chmodSync(path.join(dir, 'startup.json'), 0o666);
     assert.throws(() => disk(dir).read(), /unavailable/);
     fs.unlinkSync(path.join(dir, 'startup.json'));

@@ -205,7 +205,7 @@ To start over:
 1. Have the original LG remote ready, then press Siri Remote's touch surface once to wake it.
 2. Open Magic Sirimote and choose **Reset app**.
 3. Read the confirmation. Choose **Cancel** to leave things unchanged, or **Reset everything** to proceed.
-4. Let the reset finish. If it stops partway through, read the error; reopening the app may offer **Continue reset** to finish the remaining steps. Some IR assignments may already be deleted.
+4. Let the reset finish. If it stops partway through, read the error and choose **Continue reset** to finish the remaining steps. Keep Siri Remote awake and disconnect it from any Mac used for a firmware update. If the TV retains a bond that no longer connects, the app can remove that saved bond and search for the same remote: when instructed, hold **MENU + Volume Up** for about five seconds. It verifies the saved address and serial before continuing IR deletion. Until deletion is acknowledged, it keeps the reset pending and does not report success. Some IR assignments may already be deleted.
 5. When **Start pairing** appears, follow [Pair Siri Remote with the TV](#4-pair-siri-remote-with-the-tv), then configure and save your button assignments again.
 
 <details>

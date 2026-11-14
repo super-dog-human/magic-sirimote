@@ -16,6 +16,7 @@ class ResetScreen:
         self.focus = 0; self.boxes = []; self.phase = 'confirm'; self.lock = None
         self.results = queue.Queue(); self.next_check = 0; self.deadline = 0
         self.message = ''; self.value = None; self.can_resume = False
+        self.recovery = None; self.recovery_bus = None
         try:
             self.value = reset_remote.load(app.state)
             self.phase = 'failed'; self.message = self.value['message'] or 'A previous reset did not finish.'
@@ -35,16 +36,47 @@ class ResetScreen:
                 raise RuntimeError('Reset lock unavailable')
             fcntl.flock(self.lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             self.value = reset_remote.create(self.app.state)
-            self.app.stop_runtime()
-            self.busy = True; self.phase = 'stopping'; self.deadline = time.monotonic() + 30
+            if self.app.pairing is not None:
+                self.app.pairing.close(); self.app.pairing = None
+            self.app.done = False
+            self.busy = True; self.phase = 'preparing'; self.deadline = time.monotonic() + 30
             self.next_check = 0; self.message = 'Stopping remote control. Keep Siri Remote awake...'
         except Exception as error:
             self.fail(error)
 
+    def close_recovery(self):
+        if self.recovery_bus is not None:
+            self.recovery_bus.__exit__(None, None, None)
+            self.recovery_bus = None
+        self.recovery = None
+
+    def start_work(self):
+        # Keep the verified GATT client alive until IR deletion has finished.
+        # Dropping it here could undo the connection just restored for reset.
+        self.phase = 'working'
+        threading.Thread(target=self.worker, name='reset-remote', daemon=False).start()
+
+    def start_recovery(self):
+        from pairing_transport import BluetoothBus
+        from reset_recovery import ResetRecovery
+        self.recovery_bus = BluetoothBus().__enter__()
+        self.recovery = ResetRecovery(self.recovery_bus, self.app.state, self.value)
+        self.phase = 'reconnecting'
+        self.message = self.recovery.message
+
     def fail(self, error):
+        self.close_recovery()
         self.phase = 'failed'; self.busy = False
         self.can_resume = self.value is not None and self.value['phase'] == 'stopping'
-        self.message = str(error)[:240]; self.release()
+        self.message = str(error)[:240]
+        if self.value is not None:
+            from reset_state import write
+            self.value['message'] = self.message
+            try: write(self.app.state / reset_remote.FILE, self.value)
+            except (OSError, ValueError, RuntimeError):
+                self.message = (self.message[:180] + ' Progress could not be saved; reopen the app.')
+            finally: self.release()
+        else: self.release()
 
     def worker(self):
         try:
@@ -64,6 +96,7 @@ class ResetScreen:
             self.results.put(('error', str(error)))
 
     def finish(self):
+        self.close_recovery()
         from native_manager import accepted
         values = self.value['settings']
         reply = accepted(self.app.bus.request('reset', {'resetId': self.value['id'],
@@ -84,6 +117,25 @@ class ResetScreen:
     def tick(self):
         if not self.visible or not self.busy: return False
         try:
+            if self.phase == 'preparing':
+                from native_manager import accepted
+                value = accepted(self.app.bus.request('status', {}))
+                # An interrupted reset may already have stopped everything.
+                # Do not restart reception or send another stop in that case.
+                clean = (value.get('cleanStop') is True and not value.get('processes', {}).get('legacy')
+                         and value.get('startup', {}).get('enabled') is False)
+                if not clean: self.app.stop_runtime(reset=self)
+                self.app.stop_requested = True
+                self.phase = 'stopping'
+                return True
+            if self.phase == 'reconnecting':
+                before = self.message
+                self.recovery.tick()
+                self.message = self.recovery.message
+                if self.recovery.phase == 'success': self.start_work(); return True
+                if self.recovery.phase in ('failed', 'scanned'):
+                    self.fail(self.message + ' Choose Continue reset to try again.'); return True
+                return self.message != before
             if self.phase == 'stopping' and time.monotonic() >= self.next_check:
                 from native_manager import accepted
                 self.next_check = time.monotonic() + 1
@@ -91,8 +143,9 @@ class ResetScreen:
                 if value.get('cleanStop') is True and not value.get('processes', {}).get('legacy') and value.get('startup', {}).get('enabled') is False:
                     if self.value['unpaired']:
                         self.finish(); return True
-                    self.phase = 'working'
-                    threading.Thread(target=self.worker, name='reset-remote', daemon=False).start()
+                    if len(self.value['completed']) < len(reset_remote.SLOTS): self.start_recovery()
+                    else: self.start_work()
+                    return True
                 elif time.monotonic() >= self.deadline:
                     raise RuntimeError('Input cleanup did not finish. Resume remote control, wake Siri Remote, and try again.')
             changed = False
@@ -144,9 +197,11 @@ class ResetScreen:
                  'Remove this remote\'s TV pairing and reset all Magic Sirimote settings.',
                  'Power and volume IR control will stop. Pair and configure the remote again.',
                  'Other TV settings and other Bluetooth devices are not reset.',
-                 'Wake Siri Remote before confirming. Use the LG remote during reset.']
+                 'Keep Siri Remote awake and disconnect it from the Mac. Use the LG remote.']
         for i,line in enumerate(lines): canvas.text(line,66,150+i*45,23,max_width=1148)
-        if self.message: canvas.text(self.message,66,400,21,max_width=1148)
+        if self.phase == 'reconnecting':
+            canvas.text('If searching: hold Siri Remote MENU + Volume Up for about 5 seconds.',66,370,21,max_width=1148)
+        if self.message: canvas.text(self.message,66,410,21,max_width=1148)
         canvas.text('IR deletion uses delivery acknowledgements; the remote cannot read back its saved entries.',66,453,19,max_width=1148)
         labels = ('Cancel', 'Reset everything') if self.phase == 'confirm' else (
             'Resume remote control' if self.can_resume else 'Close', 'Continue reset')

@@ -41,6 +41,7 @@ class NativeBus:
         self.queue = deque()
         self.ready = False
         self.failed = False
+        self.request_failed = False
         self.error = None
 
     def __enter__(self):
@@ -134,7 +135,7 @@ class NativeBus:
     def request(self, method, params, timeout=8):
         if method not in ('status', 'configure', 'reset', 'start', 'stop', 'drain', 'resume', 'startupPrepare', 'startupBind', 'startupDisable', 'startupRepair', 'startupCancelled'):
             raise ValueError('Unsupported application request')
-        return self._request_uri('luna://' + APP + '.service/' + method, params, timeout)
+        return self._request_uri('luna://' + APP + '.service/' + method, params, timeout, read_only=method == 'status')
 
     def show_home(self):
         return self._request_uri('luna://com.webos.applicationManager/launch',
@@ -166,11 +167,19 @@ class NativeBus:
                          'callback': {'method': 'luna://' + APP + '.service/startupTick', 'params': {'token': token}}},
             'start': True, 'subscribe': False, 'replace': False}, 8)
 
-    def _request_uri(self, uri, params, timeout):
+    def _request_uri(self, uri, params, timeout, *, read_only=False):
         if type(params) is not dict or type(timeout) not in (int, float) or not 0 < timeout <= 10:
             raise ValueError('Unsupported application request')
         if self.failed or not self.handle.value:
             raise RuntimeError('Native application bus unavailable')
+        # A service timeout is not a failure of native lifecycle registration.
+        # Keep pumping Home/close/relaunch events so the error stays visible.
+        # An uncertain mutation still blocks further mutations until reopening.
+        home = uri == 'luna://com.webos.applicationManager/launch' and params == {'id': 'com.webos.app.home'}
+        if self.request_failed and not read_only and not home:
+            raise RuntimeError('Previous application request is uncertain. Close and reopen the app.')
+        if len(self.callbacks) >= 64:
+            raise RuntimeError('Too many unanswered requests. Close and reopen the app.')
         raw = json.dumps(params, separators=(',', ':')).encode()
         if len(raw) > 8192:
             raise ValueError('Application request is too large')
@@ -190,7 +199,9 @@ class NativeBus:
         while not replies and time.monotonic() < deadline:
             self.pump(); time.sleep(.005)
         if len(replies) != 1 or type(replies[0]) is not dict:
-            self.failed = True
+            if read_only:
+                raise RuntimeError('App status service did not respond. Please try again.')
+            self.request_failed = True
             raise RuntimeError('Application request outcome is unknown; it was not repeated')
         # OneReply has returned through the GLib pump; its callback can now be released.
         self.callbacks.remove(receive)

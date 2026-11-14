@@ -5,13 +5,13 @@ const APP = 'org.magicsirimote.app', NAME = APP + '.startup';
 const HEX = /^[a-f0-9]{48}$/;
 function disk(directory) {
   try { fs.mkdirSync(directory, {mode: 0o700}); } catch (error) { if (error.code !== 'EEXIST') throw error; }
-  // webOS restores developer-app paths to 0775 at cold boot. Only our own
+  // Observed webOS boot/install permissions include 0775 and 0777. Only our own
   // exact directory/file may be tightened again; links/other owners fail closed.
   const dirfd = fs.openSync(directory, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
   try {
     const info = fs.fstatSync(dirfd);
-    if (!info.isDirectory() || info.uid !== process.getuid() || ![0o700, 0o775].includes(info.mode & 0o777)) throw Error('Startup directory unavailable');
-    if ((info.mode & 0o777) === 0o775) fs.fchmodSync(dirfd, 0o700);
+    if (!info.isDirectory() || info.uid !== process.getuid() || ![0o700, 0o775, 0o777].includes(info.mode & 0o777)) throw Error('Startup directory unavailable');
+    if ((info.mode & 0o777) !== 0o700) fs.fchmodSync(dirfd, 0o700);
   } finally { fs.closeSync(dirfd); }
   return {
     read() {
@@ -20,8 +20,8 @@ function disk(directory) {
       catch (error) { if (error.code === 'ENOENT') return null; throw error; }
       try {
         const s = fs.fstatSync(fd);
-        if (!s.isFile() || s.uid !== process.getuid() || s.nlink !== 1 || ![0o600, 0o775].includes(s.mode & 0o777) || s.size > 4096) throw Error('Startup state unavailable');
-        if ((s.mode & 0o777) === 0o775) fs.fchmodSync(fd, 0o600);
+        if (!s.isFile() || s.uid !== process.getuid() || s.nlink !== 1 || ![0o600, 0o775, 0o777].includes(s.mode & 0o777) || s.size > 4096) throw Error('Startup state unavailable');
+        if ((s.mode & 0o777) !== 0o600) fs.fchmodSync(fd, 0o600);
         const value = JSON.parse(fs.readFileSync(fd, 'utf8'));
         if (value.schema !== 1 || !HEX.test(value.token) || typeof value.enabled !== 'boolean' || !['prepared', 'ready', 'completing', 'attention', 'cancel-pending'].includes(value.phase)) throw Error('Startup state invalid');
         return value;

@@ -150,11 +150,42 @@ class NativeLifecycleTests(unittest.TestCase):
         with patch('native_bus.time.monotonic', side_effect=[0, 20]):
             with self.assertRaises(RuntimeError):
                 bus.request('start', {})
-        self.assertTrue(bus.failed)
+        self.assertFalse(bus.failed)
+        self.assertTrue(bus.request_failed)
         self.assertEqual(len(bus.callbacks), 1)
         with self.assertRaises(RuntimeError):
             bus.request('start', {})
         self.assertEqual(len(calls), 1)
+
+    def test_status_timeout_keeps_lifecycle_alive_and_manual_read_retry_works(self):
+        bus,calls=self.bus()
+        with patch('native_bus.time.monotonic',side_effect=[0,20]):
+            with self.assertRaisesRegex(RuntimeError,'status service did not respond'):
+                bus.request('status',{})
+        self.assertFalse(bus.failed);self.assertFalse(bus.request_failed)
+        bus.context=C.c_void_p(1);bus.iterate=Mock(return_value=0)
+        NativeBus.pump(bus)  # This previously raised and terminated the TV window.
+        self.assertEqual(len(calls),1)
+        # The late reply from the timed-out read must not satisfy a new request.
+        self.assertEqual(bus.request('status',{}),{'returnValue':True})
+        self.assertEqual(len(calls),2)
+
+    def test_uncertain_mutation_keeps_close_and_status_available_but_blocks_writes(self):
+        bus,calls=self.bus()
+        with patch('native_bus.time.monotonic',side_effect=[0,20]):
+            with self.assertRaises(RuntimeError):bus.request('reset',{})
+        bus.context=C.c_void_p(1);bus.iterate=Mock(return_value=0)
+        NativeBus.pump(bus)
+        with self.assertRaises(RuntimeError):bus.request('start',{})
+        self.assertEqual(bus.request('status',{}),{'returnValue':True})
+        self.assertEqual(bus.show_home(),{'returnValue':True})
+        self.assertEqual(len(calls),3)
+
+    def test_repeated_missing_read_replies_are_bounded(self):
+        bus,calls=self.bus();bus.callbacks=[object()]*64
+        with self.assertRaisesRegex(RuntimeError,'Too many unanswered'):
+            bus.request('status',{})
+        self.assertFalse(calls);self.assertFalse(bus.failed)
 
     def test_failed_startup_cancel_uses_one_exact_activity_id(self):
         import json

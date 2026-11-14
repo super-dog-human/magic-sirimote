@@ -30,7 +30,8 @@ function fixture({answers=['192.168.1.20','9922','n'], devices=[], appPresent=fa
         if(code.includes('"action\\":\\"probe')) output=JSON.stringify({missing,appPresent});
         else if(code.includes('"action\\":\\"removal-info')) output=JSON.stringify({appPresent});
         else if(code.includes('"action\\":\\"verify')) output=JSON.stringify(verification || {verifiedFiles:1,mismatch:[]});
-        else if(code.includes('"action\\":\\"status')) output=JSON.stringify(state || {returnValue:true,cleanStop:true,startup:{enabled:false},processes:{controller:[],receiver:[],native:[],legacy:[]}});
+        else if(code.includes('"action\\":\\"state-directories')) output=JSON.stringify({directories:['app/state','service/state','service/state/sessions','controller/state','receiver/state'].map(path=>({path,mode:0o770}))});
+        else if(code.includes('"action\\":\\"status')) output=JSON.stringify(state || {returnValue:true,cleanStop:true,startup:{enabled:false},processes:{controller:[],receiver:[],ui:[],legacy:[]}});
         else if(code.includes('"action\\":\\"maintenance-result')) output=JSON.stringify({status:'accepted',action:'stop'});
         else output=JSON.stringify({staged:true});
       }
@@ -110,6 +111,15 @@ test('cold app launch retries only unreceived maintenance with the same nonce',a
   const launches=f.calls.filter(c=>c.program==='ares-launch' && c.args.includes('--params'));
   assert.equal(launches.length,2);assert.equal(launches[0].args.at(-1),launches[1].args.at(-1));assert.ok(installed(f));
 });
+test('status is not requested until cold-launch maintenance is accepted',async()=>{
+  let replies=0;
+  const f=fixture({appPresent:true,answers:['192.168.1.20','9922','','n'],fail:(p,a)=>{
+    if(p==='ares-novacom' && a.at(-1).includes('"action\\":\\"maintenance-result'))
+      return {ok:true,output:JSON.stringify(++replies<3?{status:'not-received'}:{status:'accepted',action:'stop'})};
+    if(p==='ares-novacom' && a.at(-1).includes('\"action\\\":\\\"status')) assert.ok(replies>=3,'premature status query');
+  }});
+  await f.instance.run('1');assert.ok(installed(f));
+});
 test('pending maintenance is not submitted again',async()=>{
   let replies=0;
   const f=fixture({appPresent:true,answers:['192.168.1.20','9922','','n'],fail:(p,a)=>{
@@ -128,6 +138,20 @@ test('maintenance rejection stops before changing the package',async()=>{
 test('update failure to stop leaves existing package untouched',async()=>{
   const f=fixture({appPresent:true,answers:['192.168.1.20','9922',''],state:{returnValue:true,cleanStop:false,startup:{enabled:true}}});
   await assert.rejects(f.instance.run('1'),/No package was replaced/); assert.ok(!installed(f));
+});
+test('post-install service check requires a live stopped service',()=>{
+  const f=fixture();
+  f.instance.remote=()=>({returnValue:true,cleanStop:true,startup:{enabled:false},processes:{controller:[],receiver:[],legacy:[],ui:[]}});
+  assert.equal(f.instance.verifyInstalledService().returnValue,true);
+  for(const state of [{returnValue:false},{returnValue:true,cleanStop:true,startup:{enabled:false},processes:{}},
+    {returnValue:true,cleanStop:true,startup:{enabled:true},processes:{controller:[],receiver:[],legacy:[],ui:[]}},
+    {returnValue:true,cleanStop:true,startup:{enabled:false},processes:{controller:[],receiver:[{pid:1}],legacy:[],ui:[]}}]) {
+    f.instance.remote=()=>state;
+    assert.throws(()=>f.instance.verifyInstalledService(),/not confirm/);
+  }
+  f.instance.remote=()=>{throw Error('The app did not answer its status check');};
+  assert.throws(()=>f.instance.verifyInstalledService(),/did not answer/);
+  assert.ok(!installed(f));
 });
 test('installed file mismatch prevents launch and TV fix',async()=>{
   const f=fixture({verification:{verifiedFiles:0,mismatch:['bad']}});

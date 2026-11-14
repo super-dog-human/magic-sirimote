@@ -71,3 +71,40 @@ Check that Gyro cursor is on and saved. Lift your finger completely off the touc
 ## Voice input
 
 Voice input is not supported.
+
+## Continue reset after a firmware update or lost connection
+
+A TV can retain a paired entry even when Siri Remote no longer connects to it.
+If an interrupted **Reset app** shows **Continue reset**, use the LG remote to
+select it. Disconnect Siri Remote from the Mac and keep it awake. An already
+stopped runtime stays stopped; the app checks the saved remote's connection.
+If connection establishment fails, it removes only that remote's saved TV bond
+and searches for the same address. Hold **MENU + Volume Up** for about five
+seconds when the search instructions appear. The app checks its model and saved
+serial before resuming the full reset. This temporary pairing is removed again
+after IR deletion is acknowledged, then the normal **Start pairing** screen opens.
+
+Removing the stale TV bond is not proof that the remote's infrared assignments
+were erased. The app retains its settings and pending-reset record until the
+remaining steps finish. If discovery times out, wake the remote and choose
+**Continue reset** again. A mismatch or uncertain reply stops the attempt and
+keeps the error on screen and in the reset record; another remote is never
+selected automatically. Previously acknowledged IR deletion is not repeated.
+
+If **Continue reset** reports an app-status timeout, pairing has not started.
+A startup failure was traced on the tested TV to `startup-private` becoming
+mode `0777`; the service previously accepted only `0700` or `0775`. The service
+now checks ownership and file type, then restores its own directory to `0700`
+and its startup record to `0600`, including the observed `0777` case. A request
+timeout also keeps the error screen open instead of invalidating native
+lifecycle notifications. Uncertain state-changing requests are not repeated.
+
+`Session directory unavailable` during pairing/setup is a separate check on
+the package-owned shared state directories. On the tested TV these directories
+were widened to `0777` during installation. The installer now checks the five
+shared directories (app state, service state, sessions, controller state and
+receiver state), and uses temporary maintenance access when needed to restore
+`0770` after confirming the runtime is stopped. Only the expected package owner
+UID 5999 and group 5000 are accepted. The repair does not recurse into saved
+settings, pairing records, journals or archives; runtime ownership and mode
+checks remain in place.

@@ -17,7 +17,7 @@ def load(state):
     token(value['id']); settings.validate(value['settings'])
     allowed = ['%02X:%02X' % slot for slot in SLOTS]
     if (type(value['completed']) is not list or value['completed'] != allowed[:len(value['completed'])]
-            or type(value['unpaired']) is not bool or value['phase'] not in ('stopping', 'ir', 'unpair', 'clear', 'failed')
+            or type(value['unpaired']) is not bool or value['phase'] not in ('stopping', 'reconnecting', 'ir', 'unpair', 'clear', 'failed')
             or type(value['message']) is not str or len(value['message']) > 240):
         raise ValueError('Invalid reset progress')
     if value['unpaired'] and len(value['completed']) != len(SLOTS):

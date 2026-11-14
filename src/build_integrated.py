@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent
 APP = 'org.magicsirimote.app'
 NATIVE_SOURCES = ('entry.py', 'settings.py', 'graphics.py', 'ir_screen.py',
                   'ir_programmer.py', 'native_luna.py', 'tv_assignments.py')
-VERSION = '0.6.0'
+VERSION = '0.6.1'
 ROLES = ('controller', 'receiver')
 
 
@@ -26,7 +26,7 @@ def build(output, *, bytecode_python=None):
     # One copy of the native sources is visible to both native and service UIDs.
     service.update({'native/' + name: (ROOT / 'native' / name).read_bytes() for name in NATIVE_SOURCES})
     service['native/battery_status.py'] = (ROOT / 'native/battery_status.py').read_bytes()
-    for name in ('native_bus.py', 'native_manager.py', 'pairing_screen.py', 'reset_state.py', 'reset_remote.py', 'reset_screen.py'):
+    for name in ('native_bus.py', 'native_manager.py', 'pairing_screen.py', 'reset_state.py', 'reset_remote.py', 'reset_screen.py', 'reset_recovery.py'):
         service['native/' + name] = (ROOT / 'integrated' / name).read_bytes()
     service['native/pairing_flow.py'] = (ROOT / 'pairing/flow.py').read_bytes()
     service['native/pairing_transport.py'] = (ROOT / 'pairing/transport.py').read_bytes()

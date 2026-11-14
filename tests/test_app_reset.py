@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'src/integrated'),str(ROOT/'src/native'),str(ROOT/'src/runtime')]
 import settings
@@ -181,6 +181,7 @@ class ScreenTests(unittest.TestCase):
         self.bus.request.return_value={'returnValue':True,'status':'stop-requested'}
         screen.choose(1);self.addCleanup(screen.release)
         self.assertTrue(screen.busy);self.assertTrue(self.app.controls_disabled)
+        screen.tick()
         self.assertEqual(self.bus.request.call_args.args[0],'stop')
         self.bus.request.return_value={'returnValue':True,'cleanStop':False,'startup':{'enabled':False}}
         with patch('reset_screen.threading.Thread') as thread:
@@ -189,7 +190,7 @@ class ScreenTests(unittest.TestCase):
     def test_timeout_preserves_all_settings_and_offers_resume(self):
         self.app.choose(9,Mock());screen=self.app.reset
         self.bus.request.return_value={'returnValue':True,'status':'stop-requested'}
-        screen.choose(1);screen.deadline=0
+        screen.choose(1);screen.tick();screen.deadline=0
         self.bus.request.return_value={'returnValue':True,'cleanStop':False,'startup':{'enabled':False}}
         screen.tick();self.assertTrue(screen.can_resume);self.assertFalse(screen.busy)
         self.assertEqual(settings.load(self.state),VALUES)
@@ -201,6 +202,54 @@ class ScreenTests(unittest.TestCase):
         self.assertIsInstance(self.app.reset,ResetScreen)
         self.assertIsNone(self.app.pairing)
         with self.assertRaises(RuntimeError):self.app.start_saved()
+    def test_continue_stale_stopping_skips_stop_and_enters_connection_recovery(self):
+        reset.create(self.state); self.app.refresh_pairing(); screen=self.app.reset
+        self.app.done=True
+        self.bus.request.return_value={'returnValue':True,'cleanStop':True,
+            'processes':{'legacy':[]},'startup':{'enabled':False}}
+        screen.choose(1); self.addCleanup(screen.release)
+        self.assertFalse(self.app.done)
+        self.assertTrue(screen.busy)
+        self.bus.request.assert_not_called()  # Render progress before service calls.
+        screen.tick()
+        with patch.object(screen,'start_recovery') as recover, patch('reset_screen.threading.Thread') as worker:
+            self.assertTrue(screen.tick()); recover.assert_called_once(); worker.assert_not_called()
+        self.assertTrue(all(c.args[0]=='status' for c in self.bus.request.call_args_list))
+        self.assertEqual(settings.load(self.state),VALUES)
+
+    def test_recovery_success_continues_ir_without_activating_input(self):
+        self.app.reset=screen=ResetScreen(self.app); screen.value=reset.create(self.state)
+        screen.busy=True; screen.phase='reconnecting'
+        screen.recovery=Mock(phase='success',message='Verified')
+        screen.recovery_bus=MagicMock()
+        with patch('reset_screen.threading.Thread') as worker:
+            self.assertTrue(screen.tick()); worker.return_value.start.assert_called_once()
+        self.assertEqual(screen.phase,'working')
+        screen.recovery_bus.__exit__.assert_not_called()
+        screen.fail('IR reply lost')
+        self.assertIsNone(screen.recovery_bus)
+        self.bus.request.assert_not_called()
+
+    def test_search_timeout_preserves_reset_and_error_across_reopen(self):
+        self.app.reset=screen=ResetScreen(self.app); screen.value=reset.create(self.state)
+        screen.value['phase']='reconnecting';screen.busy=True;screen.phase='reconnecting'
+        screen.recovery=Mock(phase='scanned',message='No available Siri Remote found.')
+        screen.recovery_bus=MagicMock()
+        self.assertTrue(screen.tick());self.assertFalse(screen.busy);self.assertFalse(screen.can_resume)
+        reopened=ResetScreen(self.app)
+        self.assertIn('Continue reset',reopened.message)
+        self.assertEqual(settings.load(self.state),VALUES)
+        self.assertFalse(reopened.value['unpaired']);self.assertEqual(reopened.value['completed'],[])
+
+    def test_acknowledged_ir_is_not_reconnected_or_repeated(self):
+        value=reset.create(self.state);value['completed']=['%02X:%02X'%s for s in reset.SLOTS]
+        value['phase']='unpair';reset_state.write(self.state/reset.FILE,value)
+        self.app.refresh_pairing();screen=self.app.reset
+        self.bus.request.return_value={'returnValue':True,'cleanStop':True,'startup':{'enabled':False}}
+        screen.choose(1);self.addCleanup(screen.release);screen.tick()
+        with patch.object(screen,'start_recovery') as recover,patch.object(screen,'start_work') as worker:
+            screen.tick();recover.assert_not_called();worker.assert_called_once()
+
     def test_finish_uses_real_native_request_route_before_retiring_local_settings(self):
         from native_bus import NativeBus, APP
         service=self.state/'service'
@@ -209,7 +258,7 @@ class ScreenTests(unittest.TestCase):
         settings.save(service/'state',VALUES)
         reset_state.write(service/'state/device-binding.json',VALUES)
         self.app.bus=NativeBus()
-        def transport(uri,params,timeout):
+        def transport(uri,params,timeout,**options):
             self.assertEqual(uri,'luna://'+APP+'.service/reset')
             self.assertTrue((self.state/'settings.json').exists())
             return reset_state.reset_service(service,params,lambda:None)

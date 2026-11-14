@@ -200,9 +200,9 @@ class RuntimeSetup(Setup):
     def start_saved(self):
         self.apply({'schema': 1, **self.saved_values})
 
-    def stop_runtime(self):
+    def stop_runtime(self, *, reset=None):
         """Stop for installer maintenance or an explicitly confirmed app reset."""
-        if self.reset is not None and self.reset.busy:
+        if self.reset is not None and self.reset.busy and not (reset is self.reset and reset.phase == 'preparing'):
             raise RuntimeError('Wait for reset to finish before updating.')
         if self.saving_assignments or self.infrared is not None and self.infrared.busy:
             raise RuntimeError('Wait for the infrared operation to finish before updating.')
@@ -648,5 +648,6 @@ def main(*, started_at=None):
                 pass
         if worker is not None and worker.stdin is not None: worker.stdin.close()
         if log is not None: os.close(log)
+        if app is not None and app.reset is not None: app.reset.close_recovery()
         if app is not None and app.pairing is not None: app.pairing.close()
         if canvas is not None: canvas.close()

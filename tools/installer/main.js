@@ -146,8 +146,12 @@ class Installer {
       // Retry only an unreceived request, with the same nonce so it executes once.
       if (receipt.status === 'not-received' && i > 0)
         this.cli('ares-launch', ['--device',this.device,APP,'--params',JSON.stringify({installerRequest:nonce})]);
-      const state = this.remote({action:'status'});
-      if (receipt.status === 'accepted' && receipt.action === 'stop' && state.returnValue && state.cleanStop && state.startup?.enabled === false) { stopped = true; break; }
+      // A cold launch does not consume the request until relaunch. Poll its
+      // receipt first; a slow status call must not prevent that relaunch.
+      if (receipt.status === 'accepted' && receipt.action === 'stop') {
+        const state = this.remote({action:'status'});
+        if (state.returnValue && state.cleanStop && state.startup?.enabled === false) { stopped = true; break; }
+      }
       await this.wait(2000);
     }
     if (!stopped) throw Error('The app has not finished stopping. Wake Siri Remote and try again. No package was replaced.');
@@ -160,6 +164,18 @@ class Installer {
     }
     throw Error('An app process is still active. No package was replaced; wait and try again.');
   }
+  verifyInstalledService() {
+    // Hash verification alone cannot prove that the JS service starts or that
+    // its private state remains usable after an in-place package replacement.
+    const state = this.remote({action:'status'});
+    const roles = ['controller','receiver','legacy','ui'];
+    if (state.returnValue !== true || state.cleanStop !== true || state.startup?.enabled !== false ||
+        !state.processes || roles.some(role => !Array.isArray(state.processes[role]) || state.processes[role].length))
+      throw Error('Installed service did not confirm a clean stopped state. App was not launched.');
+    this.log('Installed service responded successfully; input remains stopped.');
+    return state;
+  }
+
   async rootAccess() {
     if (this.rootConnection) return this.rootConnection;
     if (!this.find('ssh')) throw Error('OpenSSH is missing. Install the SSH client to use the optional TV-side fix.');
@@ -284,10 +300,12 @@ class Installer {
     const manifest = JSON.parse(fs.readFileSync(path.join(this.root,'releases/manifest.json'),'utf8'));
     if (checksum(path.join(this.root,'releases/org.magicsirimote.app_arm.ipk')) !== manifest.package.packageSha256) throw Error('The package and manifest do not match. Download again.');
     this.log('Package download verified.');
-    if (info.appPresent) await this.stopInstalledApp();
+    if (info.appPresent) await require('./private-idle').stopWithPrivateVerification(this);
     this.cli('ares-install', ['--device',this.device,path.join(this.root,'releases/org.magicsirimote.app_arm.ipk')], {interactive:true, timeout:120000});
     const verified = this.remote({action:'verify', files:manifest.package.files});
     if (!Array.isArray(verified.mismatch) || verified.mismatch.length || verified.verifiedFiles !== Object.keys(manifest.package.files).length) throw Error('Installed-file verification failed. Run the installer again; the app was not launched.');
+    await require('./private-idle').normalizeStateDirectories(this);
+    this.verifyInstalledService();
     this.log('App installed and verified.');
     this.log('\nOptional: prevent input loss after repeated Bluetooth reconnections. This changes LG\'s handling of A1513/A1962 outside the app and briefly restarts the input service, not the TV.');
     let fix = 'not requested (an existing fix, if any, was left unchanged)';

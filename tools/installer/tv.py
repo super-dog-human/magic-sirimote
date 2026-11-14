@@ -123,11 +123,25 @@ def verify(expected):
     return {'verifiedFiles':len(expected)-len(bad),'mismatch':bad}
 
 
+def state_directories():
+    paths = [APP_DIR/'state', SERVICE/'state', SERVICE/'state/sessions',
+             SERVICE/'roles/controller/state', SERVICE/'roles/receiver/state']
+    result = []
+    for path in paths:
+        info = path.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != 5999 or info.st_gid != 5000
+                or stat.S_IMODE(info.st_mode) not in (0o770,0o775,0o777)):
+            raise RuntimeError('Shared state directory owner/type/mode differs: '+str(path))
+        result.append({'path':str(path),'mode':stat.S_IMODE(info.st_mode)})
+    return {'directories':result}
+
+
 def dispatch(request):
     action=request['action']
     if action=='removal-info':return {'appPresent': APP_DIR.exists() or SERVICE.exists()}
     if action=='probe':return probe()
     if action=='status':return status()
+    if action=='state-directories':return state_directories()
     if action=='maintenance':return maintenance(request['operation'],request['nonce'])
     if action=='maintenance-result':return maintenance_result(request['nonce'])
     if action=='verify':return verify(request['files'])
